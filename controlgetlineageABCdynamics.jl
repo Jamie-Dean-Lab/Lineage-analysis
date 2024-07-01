@@ -14,23 +14,7 @@ function controlgetlineageABCdynamics()
     t1::DateTime = DateTime(now())                  # for timer
     @printf( " Info - controlgetlineageABCdynamics: Start now %1.3f sec\n", (DateTime(now())-t1)/Millisecond(1000) ); flush(stdout)
 
-    #trunkfilename::String = "C:/Users/eplam/Documents/UCL/Work/Fluo-N2DL-HeLa/02_GT/TRA";   filename::String = "man_track_cropped"; comment::String = "HeLa_crop"
-    #trunkfilename::String = "Fluo-N2DL-HeLa";   filename::String = "man_track_combined"; comment::String = "HeLa_cropcomb"
-    #trunkfilename::String = "C:/Users/eplam/Documents/UCL/Work/Lowe/ground_truth_lineage_trees"; filename::String = "Combined_wo27_corr(non-simultaneous-birth,label-duplicates)"; comment::String = "Lowe"
-    #trunkfilename::String = "";     filename::String = "2024-02-29_00-53-46_Simulation2_cells=153,model=4,pars=[ +4.52000e+02 +5.00000e+00 +3.00000e+03 +2.00000e+00 +2.50000e-01 +6.50000e-01 -"; comment::String = "for_m4sim-data"
-    #trunkfilename::String = "";     filename::String = "2023-12-03_13-15-33_Simulation2_cells=335,model=3,pars=[ +4.52000e+02 +5.00000e+00 +3.00000e+03 +2.00000e+00 +9.00000e-01 +1.00000e-01 ]"; comment::String = "for_m3sim-data"
-    #trunkfilename::String = "";     filename::String = "2024-02-29_00-52-28_Simulation2_cells=157,model=2,pars=[ +4.52000e+02 +5.00000e+00 +3.00000e+03 +2.00000e+00 +5.00000e-01 +2.88000e+02 +"; comment::String = "for_m2sim-data"
-    #trunkfilename::String = "";     filename::String = "2024-02-29_00-58-01_Simulation2_cells=162,model=1,pars=[ +4.52000e+02 +5.00000e+00 +3.00000e+03 +2.00000e+00 ]"; comment::String = "for_m1sim-data"
-    #trunkfilename::String = "";     filename::String = "2024-06-17_17-45-20_Simulation2_cells=161,model=14,pars=[ +5.20000e+01 +1.00000e+01 +9.70000e-01 +2.50000e-01 +6.50000e-01 -7.00000e-01 "; comment::String = "for_m14sim-data"
-    #trunkfilename::String = "";     filename::String = "2024-06-17_17-42-45_Simulation2_cells=158,model=13,pars=[ +5.20000e+01 +1.00000e+01 +9.70000e-01 +7.00000e-01 +2.00000e-01 ]"; comment::String = "for_m13sim-data"
-    #trunkfilename::String = "";     filename::String = "2024-06-17_17-23-16_Simulation2_cells=177,model=12,pars=[ +5.20000e+01 +1.00000e+01 +9.70000e-01 +5.00000e-01 +2.88000e+02 +0.00000e+00 "; comment::String = "for_m12sim-data"
-    #trunkfilename::String = "";     filename::String = "2024-06-17_17-20-43_Simulation2_cells=152,model=11,pars=[ +5.20000e+01 +1.00000e+01 +9.70000e-01 ]"; comment::String = "for_m11sim-data"
-    #trunkfilename::String = "";     filename::String = "Kenzo_manualtracked_cells=201_JSQH176_fates_all_zerosforunknownmothers"; comment::String = "Kenzo"
-    #trunkfilename::String = "C:/Users/eplam/Documents/UCL/Work/Data used in Hughes et al/from Chakrabarti et al"; filename::String = "Chakrabarti_HCT116_inventss_aftercisplatintreatment"; comment::String = "Chakrabarti_inventss_bef"
-    #trunkfilename::String = "";     filename::String = "Martins_cyanobacteria_45min_delkaiBC_sub3"; comment::String = "Martins_delkaiBC_sub3"
-    #trunkfilename::String = "";     filename::String = "Martins_cyanobacteria_45min_WT_sub11s"; comment::String = "Martins_WT_sub11s"
-    trunkfilename::String = "";     filename::String = "2024-03-25_11-48-14_Simulation2_cells=21,model=2,pars=[ +4.52000e+02 +5.00000e+00 +3.00000e+03 +2.00000e+00 +5.00000e-01 +2.88000e+02 +0"; comment::String = "for_m2smalltestdata"
-    #trunkfilename::String = "";     filename::String = "2024-04-08_13-03-47_Simulation2_cells=3,model=2,pars=[ +4.52000e+02 +5.00000e+00 +3.00000e+03 +2.00000e+00 +5.00000e-01 +2.88000e+02 +0."; comment::String = "for_m2extrasmalltestdata"
+    trunkfilename::String = "";     filename::String = "2024-04-08_13-03-47_Simulation2_cells=3,model=2,pars=[ +4.52000e+02 +5.00000e+00 +3.00000e+03 +2.00000e+00 +5.00000e-01 +2.88000e+02 +0."; comment::String = "for_m2extrasmalltestdata"
     #trunkfilename::String = "";     filename::String = ""; comment::String = "for_sim-data"    # for simulation
     if( !isempty(filename) )                        # read existing file, if filename is meaningful
         (fullfilename,lineagedata) = readlineagefile(trunkfilename,filename)
@@ -69,18 +53,9 @@ function controlgetlineageABCdynamics()
     nogenpercell::Array{UInt64,1} = getnumberofgenerations( mylineagetree ); maxgen::UInt64 = maximum(nogenpercell)
     nounknownmothercells::UInt64 = sum(mylineagetree.datawd[:,4].<=0)   # number of cells with unknown mother
     @printf( " Info - controlgetlineageABCdynamics: Number of cells in dataset: %d, number of generations: %d (%d times), cells with unknown mother: %d.\n", Int64(nocells), Int64(maxgen), sum(nogenpercell.==maxgen), nounknownmothercells ); flush(stdout)
-    #outputvalues(mylineagetree)
-    #ploteventtimes(mylineagetree, pars_glob_sim)
-    #drawlineagetree(mylineagetree)#; sleep(1000)
-    #getcrossgenerationstatistics(mylineagetree, UInt64(2),true,false)
-    #getcrossgenerationstatistics(mylineagetree, UInt64(4))
-    #getcrossgenerationstatistics(mylineagetree, UInt64(6))
-    #basiclineagefit(mylineagetree, 4.0/60, UInt64(1))
-    #basiclineagefit(mylineagetree, 4.0/60, UInt64(2))
-    #@printf( " Info - controlgetlineageABCdynamics: Sleep now.\n" ); sdfsdf;sleep(100)
     
-    nochains::UInt64 = UInt64(3)                    # number of independent chains for convergence statistic
-    model::UInt64 = UInt64(12)                       # '1' for FrechWeib-model with global paramters, '2' for FrechWeib-model with clock, '3' for FrechWeib-model with rw-inheritance, '4' for FrechWeib-model with 2d rw-inheritance, '11' fr GammaExponential with global parameters, '12' for GammaExponential with clock, '13' for GammaExponential with rw-inheritance, '14' for GammaExponential with 2d rw-inheritance
+    nochains::UInt64 = UInt64(2)                    # number of independent chains for convergence statistic
+    model::UInt64 = UInt64(11)                       # '1' for FrechWeib-model with global paramters, '2' for FrechWeib-model with clock, '3' for FrechWeib-model with rw-inheritance, '4' for FrechWeib-model with 2d rw-inheritance, '11' fr GammaExponential with global parameters, '12' for GammaExponential with clock, '13' for GammaExponential with rw-inheritance, '14' for GammaExponential with 2d rw-inheritance
     timeunit::Float64 = 4.0/60                      # for getting priors right; in relation to hours
     if( model==1 )                                  # simple FrechetWeibull model
         comment = @sprintf( "simple-model_%s", comment )
