@@ -7,7 +7,6 @@ include("Lineagetree.jl")
 include("mydistributions.jl")
 include("LineageMCmodel2.jl")
 include("LineageABCmodel.jl")
-#include("basiclineagefit.jl")
 #plotlyjs()
 
 function controlgetlineageABCdynamics()
@@ -83,7 +82,7 @@ function controlgetlineageABCdynamics()
     subsample::UInt64 = UInt64(2)                  # subsampling frequency
     nomothersamples::UInt64 = UInt64(3e2)           # number of samples for sampling empirically from unknownmotherdistribution
     nomotherburnin::UInt64 = UInt64(5)              # burnin for sampling empirically from unknownmotherdistribution
-    nolevels::UInt64 = UInt64(40)                   # number of levels before posterior, first one is prior
+    nolevels::UInt64 = UInt64(3)                   # number of levels before posterior, first one is prior
     notreeparticles::UInt64 = UInt64(1e2)           # number of particles to estimate effect of nuisance parameters
     auxiliaryfoldertrunkname::String = "Auxfiles"   # trunkname of folder, where auxiliary files are saved, if useRAM is 'false'
     useRAM::Bool = true                             # 'true' for saving variables into workspace, 'false' for saving in external textfiles

@@ -84,7 +84,7 @@ function CUDAinvincompletegamma( a::Float32, x::Float32 )::Float32
 
     # set auxiliary parameters:
     MAXLOG::Float32 = Float32(88.722)
-    maxno::Float32 = prevfloat(Inf32)/10            # largest Float32 below Inf32 (ca 1e38); division due to problems when ca a = 88.6591, x = 88.821
+    maxno::Float32 = prevfloat(Inf32)/2             # largest Float32 below Inf32 (ca 1e38); division due to problems when ca a = 88.6591, x = 88.821
     invmaxno::Float32 = 1/maxno                     # (approximate) inverse of maxno
 
     if( x==Inf32 )
@@ -121,6 +121,17 @@ function CUDAinvincompletegamma( a::Float32, x::Float32 )::Float32
         yc::Float32 = y*c
         pk::Float32 = pkm1*z - pkm2*yc
         qk::Float32 = qkm1*z - qkm2*yc
+        if( !((abs(pk)<maxno) & (abs(qk)<maxno)) )  # rescale
+            pkm2 *= invmaxno
+            pkm1 *= invmaxno
+            qkm2 *= invmaxno
+            qkm1 *= invmaxno
+            pk = pkm1*z - pkm2*yc
+            qk = qkm1*z - qkm2*yc
+            if( !((abs(pk)<maxno) & (abs(qk)<maxno)) )  # rescale
+                @cuprintf( " Warning - CUDAinvincompletegamma: pk = %+1.5e,qk = %+1.5e still no small enough for maxno = %+1.5e (inv %+1.5e), pkm = %+1.5e, %+1.5e, qkm = %+1.5e, %+1.5e, z = %+1.5e, y = %+1.5e, c = %+1.5e, yc = %+1.5e.\n", pk,qk, maxno,invmaxno, pkm1,pkm2, qkm1,qkm2, z,y,c,yc )
+            end     # end if still too large
+        end     # end if exceeding maximal nontrivial number
         if( qk!=zero(Float32) )
             r = pk/qk
             t = abs( (ans - r)/r )
@@ -135,12 +146,6 @@ function CUDAinvincompletegamma( a::Float32, x::Float32 )::Float32
         pkm1 = deepcopy(pk)
         qkm2 = deepcopy(qkm1)
         qkm1 = deepcopy(qk)
-        if( (abs(pk)>maxno) | (abs(qk)>maxno) )     # rescale
-            pkm2 *= invmaxno
-            pkm1 *= invmaxno
-            qkm2 *= invmaxno
-            qkm1 *= invmaxno
-        end     # end if exceeding maximal nontrivial number
     end     # end of while need more terms
     return max(zero(Float32),min(one(Float32),ans*ax))
 end     # end of CUDAinvincompletegamma function
@@ -231,7 +236,7 @@ function CUDAloginvGammaExponential_cdf( par::Union{Array{Float32,1},MArray,CuAr
         # get division-only accumulated distribution:
         value::Float32 = log1mexp( log1mexp( CUDAloginvGamma_cdf( par[1],par[2], data ) ) + log(par[3]) )     # log(1-int(P_div,0..t))
         if( fate==1 )                               # death; subtract divisions-cdf from full cdf
-            value = log1mexp( logsubexp( CUDAloginvGammaExponential_cdf( par,data ),value ) )
+            value = log1mexp( logsubexp( CUDAloginvGammaExponential_cdf( par,data ), value ) )
         end     # end if death
     end     # end if pathological
     return value
@@ -248,7 +253,7 @@ function CUDAsampleexponential( par1::Float32, timebounds::Union{Array{Float32,1
     ybound1::Float32 = CUDAloginvexponential_cdf( par1, timebounds[1] )
     ybound2::Float32 = CUDAloginvexponential_cdf( par1, timebounds[2] )
     if( ybound2>ybound1 )
-        @cuprintf( " Warning - CUDAsampleexponential: Too small y-interval for timebounds = [%+1.5e, %+1.5e], par = [ %+1.5e ]: [%+1.10e, %+1.10e]=%+1.5e vs %+1.5e.\n", timebounds[1],timebounds[2], par1, ybound2,ybound1, ybound1-ybound2, eps(Float32) )
+        #@cuprintf( " Warning - CUDAsampleexponential: Too small y-interval for timebounds = [%+1.5e, %+1.5e], par = [ %+1.5e ]: [%+1.10e, %+1.10e]=%+1.5e vs %+1.5e.\n", timebounds[1],timebounds[2], par1, ybound2,ybound1, ybound1-ybound2, eps(Float32) )
         timesample[1] = timebounds[1] + rand(Float32,)*(timebounds[2]-timebounds[1])        # uniform, as no information in loginvGamma_cdf anyways
         return nothing
     end     # end if wrong order
@@ -309,7 +314,7 @@ function CUDAsampleGamma( par1::Float32,par2::Float32, timebounds::Union{Array{F
     ybound1::Float32 = CUDAloginvGamma_cdf(par1,par2, timebounds[1])
     ybound2::Float32 = CUDAloginvGamma_cdf(par1,par2, timebounds[2])
     if( ybound2>ybound1 )
-        @cuprintf( " Warning - CUDAsampleGamma: Too small y-interval for timebounds = [%+1.5e, %+1.5e], par = [ %+1.5e,%+1.5e ]: [%+1.10e, %+1.10e]=%+1.5e vs %+1.5e.\n", timebounds[1],timebounds[2], par1,par2, ybound2,ybound1, ybound1-ybound2, eps(Float32) )
+        #@cuprintf( " Warning - CUDAsampleGamma: Too small y-interval for timebounds = [%+1.5e, %+1.5e], par = [ %+1.5e,%+1.5e ]: [%+1.10e, %+1.10e]=%+1.5e vs %+1.5e.\n", timebounds[1],timebounds[2], par1,par2, ybound2,ybound1, ybound1-ybound2, eps(Float32) )
         timesample[1] = timebounds[1] + rand(Float32,)*(timebounds[2]-timebounds[1])        # uniform, as no information in loginvGamma_cdf anyways
         return nothing
     end     # end if wrong order
@@ -472,7 +477,7 @@ function CUDAsampleGammaExponential( par::Union{Array{Float32,1},MArray,CuArray,
     ybound1::Float32 = CUDAloginvGammaExponential_cdf( par, timebounds[1], fate )
     ybound2::Float32 = CUDAloginvGammaExponential_cdf( par, timebounds[2], fate )
     if( ybound2>ybound1 )
-        @cuprintf( " Warning - CUDAsampleGammaExponential: Too small y-interval for timebounds = [%+1.5e, %+1.5e], par = [ %+1.5e,%+1.5e, %+1.5e]: [%+1.10e, %+1.10e]=%+1.5e vs %+1.5e.\n", timebounds[1],timebounds[2], par[1],par[2],par[3], ybound2,ybound1, ybound1-ybound2, eps(Float32) )
+        @cuprintf( " Warning - CUDAsampleGammaExponential: Too small y-interval for timebounds = [%+1.5e, %+1.5e],fate = %d, par = [ %+1.5e,%+1.5e, %+1.5e]: [%+1.10e, %+1.10e]=%+1.5e vs %+1.5e.\n", timebounds[1],timebounds[2],fate, par[1],par[2],par[3], ybound2,ybound1, ybound1-ybound2, eps(Float32) )
         timesample[1] = timebounds[1] + rand(Float32,)*(timebounds[2]-timebounds[1])        # uniform, as no information in loginvGamma_cdf anyways
         return true
     end     # end if wrong order
@@ -502,13 +507,13 @@ function CUDAsampleGammaExponential( par::Union{Array{Float32,1},MArray,CuArray,
         end     # end if significantly different
     end     # end if not inside interval
     if( timebounds[2]==+Inf32 )
-        @cuprintf( " Warning - CUDAsampleGammaExponential: Right timebound is %+1.5e. Shorten.\n", timebounds[2] )
+        #@cuprintf( " Warning - CUDAsampleGammaExponential: Right timebound is %+1.5e. Shorten.\n", timebounds[2] )
         timebounds[2] = max(Float32(200000.0), 2*timebounds[1])     # use finite, large upper guess instead - will get reset by nestedintervalroot, with a warning, if not valid
     end     # end if unbounded from above
-    if( (CUDAlogGammaExponential_distr(par,zero(Float32),fate)-yrandno)<zero(Float32) )
-        @cuprintf( " Info - CUDAsampleGammaExponential: Bad value at zero already: fun(0) = %+1.10e, yrandno = %+1.10e; pars = [ %+1.10e, %+1.10e, %+1.10e], timebounds = [ %+1.10e %+1.10e ], fate = %+d.\n", CUDAlogGammaExponential_distr(par,zero(Float32),fate), yrandno, par[1],par[2],par[3], timebounds[1],timebounds[2], fate )
-    end     # end if bad value at zero already
-    CUDAfindroot( x::Float32 -> CUDAlogGammaExponential_distr(par,x,fate)::Float32, yrandno,timesample, timebounds )
+    #if( (CUDAloginvGammaExponential_cdf(par,zero(Float32),fate)-yrandno)<zero(Float32) )
+    #    @cuprintf( " Info - CUDAsampleGammaExponential: Bad value at zero already: fun(0) = %+1.10e, yrandno = %+1.10e; pars = [ %+1.10e, %+1.10e, %+1.10e], timebounds = [ %+1.10e %+1.10e ], fate = %+d.\n", CUDAloginvGammaExponential_cdf(par,zero(Float32),fate), yrandno, par[1],par[2],par[3], timebounds[1],timebounds[2], fate )
+    #end     # end if bad value at zero already
+    CUDAfindroot( x::Float32 -> CUDAloginvGammaExponential_cdf(par,x,fate)::Float32, yrandno,timesample, timebounds )
     
     return false                # output is errorflag
 end     # end of CUDAsampleGammaExponential function

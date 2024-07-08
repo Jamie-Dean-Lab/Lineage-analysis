@@ -87,7 +87,12 @@ function runlineageABCmodel( lineagetree::Lineagetree, state_init::Lineagestate2
     isnothing(barenamestarts) ? barenamestarts = 0 : ""
     isnothing(barenameends) ? barenameends = length(lineagetree.name)+1 : ""
     barename::String = lineagetree.name[(barenamestarts[1]+1):(barenameends[1]-1)]
-    auxiliaryfolder::String = @sprintf( "%s/aux_%s(%s)_%s", auxiliaryfoldertrunkname, uppars.comment, uppars.chaincomment,barename )
+    local auxiliaryfolder::String 
+    if( auxiliaryfoldertrunkname[end]=='/' )                    # '/'-delimiter part of given foldertrunkname
+        auxiliaryfolder = @sprintf( "%saux_%s(%s)_%s", auxiliaryfoldertrunkname, uppars.comment, uppars.chaincomment,barename )
+    else                                                        # '/'-delimiter not part of given foldertrunkname
+        auxiliaryfolder = @sprintf( "%s/aux_%s(%s)_%s", auxiliaryfoldertrunkname, uppars.comment, uppars.chaincomment,barename )
+    end     # end if delimiter part of foldertrunkname
     if( !useRAM )                                               # only need external folder, if not using RAM
         mkpath( auxiliaryfolder )                               # creates auxiliary subdirectory
     end     # end if useRAM
@@ -771,11 +776,11 @@ function ABCinitialiseLineageMCmodel( lineagetree::Lineagetree, model::UInt,time
     end     # end of cells loop
     @printf( " (%s) Info - ABCinitialiseLineageMCmodel (%d): unknownmotherstarttimes = [ %s].\n", chaincomment,MCit, join([@sprintf("%+1.5e ",j) for j in unknownmotherstarttimes]) )
 
-    uppars = Uppars2( comment,chaincomment,newtimestamp,outputfile,tempering, model,priors_glob,overalllognormalisation,timeunit,nocells,noglobpars,nohide,nolocpars,indeptimes,looseends,MCit,MCstart,burnin,MCmax,subsample,statsrange, nomothersamples,nomotherburnin,unknownmotherstarttimes,celltostarttimesmap, pars_stps,rejected,samplecounter,adjfctrs, adj_Hb,adj_t0,adj_gamma,adj_kappa,adj_mu,adj_stepb, reasonablerejrange, without,withwriteoutputtext )
+    uppars::Uppars2 = Uppars2( comment,chaincomment,newtimestamp,outputfile,tempering, model,priors_glob,overalllognormalisation,timeunit,nocells,noglobpars,nohide,nolocpars,indeptimes,looseends,MCit,MCstart,burnin,MCmax,subsample,statsrange, nomothersamples,nomotherburnin,unknownmotherstarttimes,celltostarttimesmap, pars_stps,rejected,samplecounter,adjfctrs, adj_Hb,adj_t0,adj_gamma,adj_kappa,adj_mu,adj_stepb, reasonablerejrange, without,withwriteoutputtext )
     uppars.overalllognormalisation = log( getnormalisation( uppars) )    # update
 
     # get initial state:
-    unknownmothersamples_prop = Array{Unknownmotherequilibriumsamples,1}(undef,length(uppars.unknownmotherstarttimes))  # declare
+    unknownmothersamples_prop::Array{Unknownmotherequilibriumsamples,1} = Array{Unknownmotherequilibriumsamples,1}(undef,length(uppars.unknownmotherstarttimes))  # declare
     for j_starttime = 1:length(uppars.unknownmotherstarttimes)
         unknownmothersamples_prop[j_starttime] = Unknownmotherequilibriumsamples(uppars.unknownmotherstarttimes[j_starttime], uppars.nomothersamples,uppars.nomotherburnin,rand(uppars.nomothersamples,uppars.nohide),rand(uppars.nomothersamples,uppars.nolocpars),rand(uppars.nomothersamples,2),Int64.(ceil.(rand(uppars.nomothersamples).+0.5)),ones(uppars.nomothersamples))   # initialise
     end     # end of start times loop
@@ -1036,21 +1041,33 @@ end     # end of getfirstguess function
 function getfilterweights_withsave_loop( lineagetree::Lineagetree,nocells_here::UInt64,cellorder::Array{UInt64,1},noparticles_here::UInt64, state_curr_par::Array{Lineagestate2,1},myABCnuisanceparameters_curr_par::Array{ABCnuisanceparameters,1},logprob_curr_par::Array{Float64,1},logprob_prop_par::Array{Float64,1},logprior_curr_par::Array{Float64,1},logdthprob_curr_par::Array{Float64,1}, state_curr_here::Array{Lineagestate2,1}, myABCnuisanceparameters_curr_here::Array{ABCnuisanceparameters,1},logprob_curr_here::Array{Float64,1},logprior_curr_here::Array{Float64,1},logdthprob_curr_here::Array{Float64,1}, statefunctions::Statefunctions,targetfunctions::Targetfunctions,dthdivdistr::DthDivdistr, treeconstructionmode::UInt64,knownmothersamplemode::UInt64,withunknownmothers::Bool,withCUDA::Bool, uppars_here::Uppars2, uppars::Uppars2 )::Nothing
     # calls getfilterweights_withsave in loop
 
-    #for j_par = 1:noparticles_here
-    Threads.@threads for j_par = 1:noparticles_here
-        #@printf( " (%s) Info - getfilterweights_withsave_loop (%d): Start now with par %d, threadid %2d/%2d.\n", uppars_here.chaincomment,uppars_here.MCit, j_par, Threads.threadid(),Threads.nthreads() )
-        #@printf( " (%s) Info - getfilterweights_withsave_loop (%d): Start   threadid %2d/%2d,                      gctotmem = %10.1f MB, gclivemem = %10.1f MB, jitmem = %10.1f MB, Maxrss = %10.1f MB.\n", uppars.chaincomment,uppars.MCit, Threads.threadid(),Threads.nthreads(), Base.gc_total_bytes(Base.gc_num())/2^20, Base.gc_live_bytes()/2^20, Base.jit_total_bytes()/2^20, Sys.maxrss()/2^20 ); flush(stdout)
-        getfilterweights_withsave( lineagetree,nocells_here,cellorder, view(state_curr_par,j_par),view(myABCnuisanceparameters_curr_par,j_par),view(logprob_curr_par,j_par),view(logprior_curr_par,j_par),view(logprob_prop_par,j_par),view(logdthprob_curr_par,j_par), view(state_curr_here,Threads.threadid()),view(myABCnuisanceparameters_curr_here,Threads.threadid()), view(logprob_curr_here,Threads.threadid()), view(logprior_curr_here,Threads.threadid()), view(logdthprob_curr_here,Threads.threadid()), statefunctions,targetfunctions,dthdivdistr, treeconstructionmode,knownmothersamplemode,withunknownmothers,withCUDA, uppars_here, uppars )::Nothing
-    end     # end of particles loop
+    if( withCUDA & (nocells_here>1) & (uppars_here.nohide>1) )  # 2dRW models with large memory-consumption
+        for j_par = 1:noparticles_here                  # sequential particles loop
+            getfilterweights_withsave( lineagetree,nocells_here,cellorder, view(state_curr_par,j_par),view(myABCnuisanceparameters_curr_par,j_par),view(logprob_curr_par,j_par),view(logprior_curr_par,j_par),view(logprob_prop_par,j_par),view(logdthprob_curr_par,j_par), view(state_curr_here,Threads.threadid()),view(myABCnuisanceparameters_curr_here,Threads.threadid()), view(logprob_curr_here,Threads.threadid()), view(logprior_curr_here,Threads.threadid()), view(logdthprob_curr_here,Threads.threadid()), statefunctions,targetfunctions,dthdivdistr, treeconstructionmode,knownmothersamplemode,withunknownmothers,withCUDA, uppars_here, uppars )::Nothing
+        end     # end of particles loop
+    else                                                # nothing to hide
+        #for j_par = 1:noparticles_here
+        Threads.@threads for j_par = 1:noparticles_here
+            #@printf( " (%s) Info - getfilterweights_withsave_loop (%d): Start now with par %d, threadid %2d/%2d.\n", uppars_here.chaincomment,uppars_here.MCit, j_par, Threads.threadid(),Threads.nthreads() )
+            #@printf( " (%s) Info - getfilterweights_withsave_loop (%d): Start   threadid %2d/%2d,                      gctotmem = %10.1f MB, gclivemem = %10.1f MB, jitmem = %10.1f MB, Maxrss = %10.1f MB.\n", uppars.chaincomment,uppars.MCit, Threads.threadid(),Threads.nthreads(), Base.gc_total_bytes(Base.gc_num())/2^20, Base.gc_live_bytes()/2^20, Base.jit_total_bytes()/2^20, Sys.maxrss()/2^20 ); flush(stdout)
+            getfilterweights_withsave( lineagetree,nocells_here,cellorder, view(state_curr_par,j_par),view(myABCnuisanceparameters_curr_par,j_par),view(logprob_curr_par,j_par),view(logprior_curr_par,j_par),view(logprob_prop_par,j_par),view(logdthprob_curr_par,j_par), view(state_curr_here,Threads.threadid()),view(myABCnuisanceparameters_curr_here,Threads.threadid()), view(logprob_curr_here,Threads.threadid()), view(logprior_curr_here,Threads.threadid()), view(logdthprob_curr_here,Threads.threadid()), statefunctions,targetfunctions,dthdivdistr, treeconstructionmode,knownmothersamplemode,withunknownmothers,withCUDA, uppars_here, uppars )::Nothing
+        end     # end of particles loop
+    end     # end of distinguishing 2dRW models
     return nothing
 end     # end of getfilterweights_withsave_loop function
 function getfilterweights_withsave_loop( lineagetree::Lineagetree,nocells_here::UInt64,noparticles_here::UInt64, nuisancefullfilename::Function,cellorder::Array{UInt64,1},logprob_curr_par::Array{Float64,1},logprob_prop_par::Array{Float64,1}, state_curr_here::Array{Lineagestate2,1}, myABCnuisanceparameters_curr_here::Array{ABCnuisanceparameters,1},logprob_curr_here::Array{Float64,1},logprior_curr_here::Array{Float64,1},logdthprob_curr_here::Array{Float64,1},cellorder_here::Array{Array{UInt64,1},1}, statefunctions::Statefunctions,targetfunctions::Targetfunctions,dthdivdistr::DthDivdistr, treeconstructionmode::UInt64,knownmothersamplemode::UInt64,withunknownmothers::Bool,withCUDA::Bool, uppars_here::Uppars2, uppars::Uppars2 )::Nothing
     # calls getfilterweights_withsave in loop
 
-    #for j_par = 1:noparticles_here
-    Threads.@threads for j_par = 1:noparticles_here
-        getfilterweights_withsave( lineagetree,nocells_here, nuisancefullfilename(j_par),cellorder,view(logprob_curr_par,j_par),view(logprob_prop_par,j_par), view(state_curr_here,Threads.threadid()),view(myABCnuisanceparameters_curr_here,Threads.threadid()), view(logprob_curr_here,Threads.threadid()), view(logprior_curr_here,Threads.threadid()), view(logdthprob_curr_here,Threads.threadid()), view(cellorder_here,Threads.threadid()), statefunctions,targetfunctions,dthdivdistr, treeconstructionmode,knownmothersamplemode,withunknownmothers,withCUDA, uppars_here, uppars )::Nothing
-    end     # end of particles loop
+    if( withCUDA & (nocells_here>1) & (uppars_here.nohide>1) )  # 2dRW models with large memory-consumption
+        for j_par = 1:noparticles_here                  # sequential particles loop
+            getfilterweights_withsave( lineagetree,nocells_here, nuisancefullfilename(j_par),cellorder,view(logprob_curr_par,j_par),view(logprob_prop_par,j_par), view(state_curr_here,Threads.threadid()),view(myABCnuisanceparameters_curr_here,Threads.threadid()), view(logprob_curr_here,Threads.threadid()), view(logprior_curr_here,Threads.threadid()), view(logdthprob_curr_here,Threads.threadid()), view(cellorder_here,Threads.threadid()), statefunctions,targetfunctions,dthdivdistr, treeconstructionmode,knownmothersamplemode,withunknownmothers,withCUDA, uppars_here, uppars )::Nothing
+        end     # end of particles loop
+    else                                                # nothing to hide
+        #for j_par = 1:noparticles_here
+        Threads.@threads for j_par = 1:noparticles_here
+            getfilterweights_withsave( lineagetree,nocells_here, nuisancefullfilename(j_par),cellorder,view(logprob_curr_par,j_par),view(logprob_prop_par,j_par), view(state_curr_here,Threads.threadid()),view(myABCnuisanceparameters_curr_here,Threads.threadid()), view(logprob_curr_here,Threads.threadid()), view(logprior_curr_here,Threads.threadid()), view(logdthprob_curr_here,Threads.threadid()), view(cellorder_here,Threads.threadid()), statefunctions,targetfunctions,dthdivdistr, treeconstructionmode,knownmothersamplemode,withunknownmothers,withCUDA, uppars_here, uppars )::Nothing
+        end     # end of particles loop
+    end     # end of distinguishing 2dRW models
     return nothing
 end     # end of getfilterweights_withsave_loop function
 function getfilterweights_withsave( lineagetree::Lineagetree,nocells_here::UInt64,cellorder::Array{UInt64,1}, state_curr_par::SubArray{Lineagestate2,0},myABCnuisanceparameters_curr_par::SubArray{ABCnuisanceparameters,0},logprob_curr_par::SubArray{Float64,0},logprior_curr_par::SubArray{Float64,0},logprob_prop_par::SubArray{Float64,0},logdthprob_curr_par::SubArray{Float64,0}, state_curr_here::SubArray{Lineagestate2,0}, myABCnuisanceparameters_curr_here::SubArray{ABCnuisanceparameters,0},logprob_curr_here::SubArray{Float64,0},logprior_curr_here::SubArray{Float64,0},logdthprob_curr_here::SubArray{Float64,0}, statefunctions::Statefunctions,targetfunctions::Targetfunctions,dthdivdistr::DthDivdistr, treeconstructionmode::UInt64,knownmothersamplemode::UInt64,withunknownmothers::Bool,withCUDA::Bool, uppars_here::Uppars2, uppars::Uppars2 )::Nothing
@@ -1171,22 +1188,34 @@ end     # end of getresampling function
 function getrwperturbation_withsave_loop( lineagetree::Lineagetree,nocells_here::UInt64,cellorder::Array{UInt64,1},noparticles_here::UInt64, state_curr_par::Array{Lineagestate2,1},myABCnuisanceparameters_curr_par::Array{ABCnuisanceparameters,1},logprob_curr_par::Array{Float64,1},logprior_curr_par::Array{Float64,1},logdthprob_curr_par::Array{Float64,1}, stepsize::Float64,myconstd::Array{Float64,1},mypwup::Array{Float64,3}, samplecounter_glob_lev::Array{UInt64,3},rejected_glob_lev::Array{Float64,3}, myABCnuisanceparameters_buff::ABCnuisanceparameters, state_curr_here::Array{Lineagestate2,1}, myABCnuisanceparameters_curr_here::Array{ABCnuisanceparameters,1},logprob_curr_here::Array{Float64,1},logprior_curr_here::Array{Float64,1},logdthprob_curr_here::Array{Float64,1}, statefunctions::Statefunctions,targetfunctions::Targetfunctions,dthdivdistr::DthDivdistr, treeconstructionmode::UInt64,knownmothersamplemode::UInt64,withunknownmothers::Bool,withCUDA::Bool,j_lev::UInt64, uppars_here::Uppars2, uppars::Uppars2 )::Nothing
     # calls getrwperturbation_withsave in loop
 
-    #for j_par = 1:noparticles_here
-    Threads.@threads for j_par = 1:noparticles_here
-        #@printf( " (%s) Info - getrwperturbation_withsave_loop (%d): Threadid %2d/%2d for j_par=%4d start (after %1.3f sec).\n", uppars_here.chaincomment,uppars_here.MCit, Threads.threadid(),Threads.nthreads(),j_par, (DateTime(now())-uppars_here.timestamp)/Millisecond(1000) ); flush(stdout)
-        getrwperturbation_withsave( lineagetree,nocells_here,cellorder, view(state_curr_par,j_par),view(myABCnuisanceparameters_curr_par,j_par),view(logprob_curr_par,j_par),view(logprior_curr_par,j_par),view(logdthprob_curr_par,j_par), stepsize,myconstd,mypwup, samplecounter_glob_lev,rejected_glob_lev, myABCnuisanceparameters_buff, view(state_curr_here,Threads.threadid()),view(myABCnuisanceparameters_curr_here,Threads.threadid()),view(logprob_curr_here,Threads.threadid()),view(logprior_curr_here,Threads.threadid()),view(logdthprob_curr_here,Threads.threadid()), statefunctions,targetfunctions,dthdivdistr, treeconstructionmode,knownmothersamplemode,withunknownmothers,withCUDA,j_lev, uppars_here, uppars )
-    end     # end of particles loop
+    if( withCUDA & (nocells_here>1) & (uppars_here.nohide>1) )  # 2dRW models with large memory-consumption
+        for j_par = 1:noparticles_here                  # sequential particles loop
+            getrwperturbation_withsave( lineagetree,nocells_here,cellorder, view(state_curr_par,j_par),view(myABCnuisanceparameters_curr_par,j_par),view(logprob_curr_par,j_par),view(logprior_curr_par,j_par),view(logdthprob_curr_par,j_par), stepsize,myconstd,mypwup, samplecounter_glob_lev,rejected_glob_lev, myABCnuisanceparameters_buff, view(state_curr_here,Threads.threadid()),view(myABCnuisanceparameters_curr_here,Threads.threadid()),view(logprob_curr_here,Threads.threadid()),view(logprior_curr_here,Threads.threadid()),view(logdthprob_curr_here,Threads.threadid()), statefunctions,targetfunctions,dthdivdistr, treeconstructionmode,knownmothersamplemode,withunknownmothers,withCUDA,j_lev, uppars_here, uppars )
+        end     # end of particles loop
+    else                                                # nothing to hide
+        #for j_par = 1:noparticles_here
+        Threads.@threads for j_par = 1:noparticles_here
+            #@printf( " (%s) Info - getrwperturbation_withsave_loop (%d): Threadid %2d/%2d for j_par=%4d start (after %1.3f sec).\n", uppars_here.chaincomment,uppars_here.MCit, Threads.threadid(),Threads.nthreads(),j_par, (DateTime(now())-uppars_here.timestamp)/Millisecond(1000) ); flush(stdout)
+            getrwperturbation_withsave( lineagetree,nocells_here,cellorder, view(state_curr_par,j_par),view(myABCnuisanceparameters_curr_par,j_par),view(logprob_curr_par,j_par),view(logprior_curr_par,j_par),view(logdthprob_curr_par,j_par), stepsize,myconstd,mypwup, samplecounter_glob_lev,rejected_glob_lev, myABCnuisanceparameters_buff, view(state_curr_here,Threads.threadid()),view(myABCnuisanceparameters_curr_here,Threads.threadid()),view(logprob_curr_here,Threads.threadid()),view(logprior_curr_here,Threads.threadid()),view(logdthprob_curr_here,Threads.threadid()), statefunctions,targetfunctions,dthdivdistr, treeconstructionmode,knownmothersamplemode,withunknownmothers,withCUDA,j_lev, uppars_here, uppars )
+        end     # end of particles loop
+    end     # end of distinguishing 2dRW models
     return nothing
 end     # end of getrwperturbation_withsave_loop function
 function getrwperturbation_withsave_loop( lineagetree::Lineagetree,nocells_here::UInt64,noparticles_here::UInt64, nuisancefullfilename::Function,cellorder::Array{UInt64,1},logprob_curr_par::Array{Float64,1}, stepsize::Float64,myconstd::Array{Float64,1},mypwup::Array{Float64,3}, samplecounter_glob_lev::Array{UInt64,3},rejected_glob_lev::Array{Float64,3}, myABCnuisanceparameters_buff::ABCnuisanceparameters, state_curr_here::Array{Lineagestate2,1}, myABCnuisanceparameters_curr_here::Array{ABCnuisanceparameters,1},logprob_curr_here::Array{Float64,1},logprior_curr_here::Array{Float64,1},logdthprob_curr_here::Array{Float64,1},cellorder_here::Array{Array{UInt64,1},1}, statefunctions::Statefunctions,targetfunctions::Targetfunctions,dthdivdistr::DthDivdistr, treeconstructionmode::UInt64,knownmothersamplemode::UInt64,withunknownmothers::Bool,withCUDA::Bool,j_lev::UInt64, uppars_here::Uppars2, uppars::Uppars2 )::Nothing
     # calls getrwperturbation_withsave in loop
 
-    #for j_par = 1:noparticles_here
-    Threads.@threads for j_par = 1:noparticles_here
-        #@printf( " (%s) Info - getrwperturbation_withsave_loop (%d): Threadid %2d/%2d for j_par=%4d start (after %1.3f sec).\n", uppars_here.chaincomment,uppars_here.MCit, Threads.threadid(),Threads.nthreads(),j_par, (DateTime(now())-uppars_here.timestamp)/Millisecond(1000) ); flush(stdout)
-        getrwperturbation_withsave( lineagetree,nocells_here, nuisancefullfilename(j_par),cellorder,view(logprob_curr_par,j_par), stepsize,myconstd,mypwup, samplecounter_glob_lev,rejected_glob_lev, myABCnuisanceparameters_buff, view(state_curr_here,Threads.threadid()),view(myABCnuisanceparameters_curr_here,Threads.threadid()),view(logprob_curr_here,Threads.threadid()),view(logprior_curr_here,Threads.threadid()),view(logdthprob_curr_here,Threads.threadid()),view(cellorder_here,Threads.threadid()), statefunctions,targetfunctions,dthdivdistr, treeconstructionmode,knownmothersamplemode,withunknownmothers,withCUDA,j_lev, uppars_here, uppars )
-        #@printf( " (%s) Info - getrwperturbation_withsave_loop (%d): Threadid %2d/%2d for j_par=%4d end.\n", uppars_here.chaincomment,uppars_here.MCit, Threads.threadid(),Threads.nthreads(),j_par ); flush(stdout)
-    end     # end of particles loop
+    if( withCUDA & (nocells_here>1) & (uppars_here.nohide>1) )  # 2dRW models with large memory-consumption
+        for j_par = 1:noparticles_here                  # sequential particles loop
+            getrwperturbation_withsave( lineagetree,nocells_here, nuisancefullfilename(j_par),cellorder,view(logprob_curr_par,j_par), stepsize,myconstd,mypwup, samplecounter_glob_lev,rejected_glob_lev, myABCnuisanceparameters_buff, view(state_curr_here,Threads.threadid()),view(myABCnuisanceparameters_curr_here,Threads.threadid()),view(logprob_curr_here,Threads.threadid()),view(logprior_curr_here,Threads.threadid()),view(logdthprob_curr_here,Threads.threadid()),view(cellorder_here,Threads.threadid()), statefunctions,targetfunctions,dthdivdistr, treeconstructionmode,knownmothersamplemode,withunknownmothers,withCUDA,j_lev, uppars_here, uppars )
+        end     # end of particles loop
+    else                                                # nothing to hide
+        #for j_par = 1:noparticles_here
+        Threads.@threads for j_par = 1:noparticles_here
+            #@printf( " (%s) Info - getrwperturbation_withsave_loop (%d): Threadid %2d/%2d for j_par=%4d start (after %1.3f sec).\n", uppars_here.chaincomment,uppars_here.MCit, Threads.threadid(),Threads.nthreads(),j_par, (DateTime(now())-uppars_here.timestamp)/Millisecond(1000) ); flush(stdout)
+            getrwperturbation_withsave( lineagetree,nocells_here, nuisancefullfilename(j_par),cellorder,view(logprob_curr_par,j_par), stepsize,myconstd,mypwup, samplecounter_glob_lev,rejected_glob_lev, myABCnuisanceparameters_buff, view(state_curr_here,Threads.threadid()),view(myABCnuisanceparameters_curr_here,Threads.threadid()),view(logprob_curr_here,Threads.threadid()),view(logprior_curr_here,Threads.threadid()),view(logdthprob_curr_here,Threads.threadid()),view(cellorder_here,Threads.threadid()), statefunctions,targetfunctions,dthdivdistr, treeconstructionmode,knownmothersamplemode,withunknownmothers,withCUDA,j_lev, uppars_here, uppars )
+            #@printf( " (%s) Info - getrwperturbation_withsave_loop (%d): Threadid %2d/%2d for j_par=%4d end.\n", uppars_here.chaincomment,uppars_here.MCit, Threads.threadid(),Threads.nthreads(),j_par ); flush(stdout)
+        end     # end of particles loop
+    end     # end of distinguishing 2dRW models
     return nothing
 end     # end of getrwperturbation_withsave_loop function
 function getrwperturbation_withsave( lineagetree::Lineagetree,nocells_here::UInt64,cellorder::Array{UInt64,1}, state_curr_par::SubArray{Lineagestate2,0},myABCnuisanceparameters_curr_par::SubArray{ABCnuisanceparameters,0},logprob_curr_par::SubArray{Float64,0},logprior_curr_par::SubArray{Float64,0},logdthprob_curr_par::SubArray{Float64,0}, stepsize::Float64,myconstd::Array{Float64,1},mypwup::Array{Float64,3}, samplecounter_glob_lev::Array{UInt64,3},rejected_glob_lev::Array{Float64,3}, myABCnuisanceparameters_buff::ABCnuisanceparameters, state_curr_here::SubArray{Lineagestate2,0}, myABCnuisanceparameters_curr_here::SubArray{ABCnuisanceparameters,0},logprob_curr_here::SubArray{Float64,0},logprior_curr_here::SubArray{Float64,0},logdthprob_curr_here::SubArray{Float64,0}, statefunctions::Statefunctions,targetfunctions::Targetfunctions,dthdivdistr::DthDivdistr, treeconstructionmode::UInt64,knownmothersamplemode::UInt64,withunknownmothers::Bool,withCUDA::Bool,j_lev::UInt64, uppars_here::Uppars2, uppars::Uppars2 )::Nothing
@@ -1424,8 +1453,8 @@ function getknownmotherpropagation( lineagetree::Lineagetree, j_part::UInt64,cel
         xbounds_here = MArray{Tuple{2},Float64}( [ lineagetree.datawd[cell_here,3],getfirstnextframe(lineagetree, cell_here) ] .- times_cell_here_part[1] )
         xbounds_here[1] = max(0.0,xbounds_here[1])      # for immediately disappearing cells
     else                                                # ie cellfate unknown
-        xbounds_here = MArray{Tuple{2},Float64}( [0.0, 10000.0/uppars.timeunit] .+ (lineagetree.datawd[cell_here,3]-times_cell_here_part[1]) )
-        #xbounds_here = MArray{Tuple{2},Float64}( [lineagetree.datawd[cell_here,3]-times_cell_here_part[1], +Inf] )
+        #xbounds_here = MArray{Tuple{2},Float64}( [0.0, 10000.0/uppars.timeunit] .+ (lineagetree.datawd[cell_here,3]-times_cell_here_part[1]) )
+        xbounds_here = MArray{Tuple{2},Float64}( [lineagetree.datawd[cell_here,3]-times_cell_here_part[1], +Inf] )
         xbounds_here[1] = max(0.0,xbounds_here[1])      # for immediately disappearing cells
     end     # end if cellfate known
     if( (knownmothersamplemode==1) | (cellfate<0) )     # sample only times inside given window, fate freely
@@ -2133,7 +2162,8 @@ function getcorrecttreewithinerrorsSMCproposal_cont( lineagetree::Lineagetree, m
                 if( cellfate>0 )                                    # ie cellfate known
                     xbounds_here = MArray{Tuple{2},Float64}( [ lineagetree.datawd[cell_here,3],getfirstnextframe(lineagetree, cell_here) ] )   # in absolute times, ie relative to start-of-observation times, not birth-time (only at least zero life-time)
                 else                                                # ie cellfate unknown
-                    xbounds_here = MArray{Tuple{2},Float64}( [0.0, 1000/uppars.timeunit] .+ lineagetree.datawd[cell_here,3] )
+                    #xbounds_here = MArray{Tuple{2},Float64}( [0.0, 1000/uppars.timeunit] .+ lineagetree.datawd[cell_here,3] )
+                    xbounds_here = MArray{Tuple{2},Float64}( [Float64(lineagetree.datawd[cell_here,3]), +Inf] )
                 end     # end if cellfate know
                 select::Array{Bool,1} = (xbounds_here[1].<=state_curr.unknownmothersamples[uppars.celltostarttimesmap[cell_here]].time_cell_eq[:,2].<=xbounds_here[2])
                 if( cellfate>0 )                                    # cellfate known
@@ -2143,6 +2173,17 @@ function getcorrecttreewithinerrorsSMCproposal_cont( lineagetree::Lineagetree, m
                 if( logcellfateprob==-Inf )                         # no need to go through particles or cells
                     if( uppars.without>=2 )
                         @printf( " (%s) Info - getcorrecttreewithinerrorsSMCproposal_cont (%d): No suitable equilibrium sample, so rejected for sure for cell=%3d, threadid %2d/%2d, times=[%3d,%3d], mother=%3d, cellfate=%2d (logdthprob = %+1.5e).\n", uppars.chaincomment,uppars.MCit, cell_here, Threads.threadid(),Threads.nthreads(), lineagetree.datawd[cell_here,2],lineagetree.datawd[cell_here,3], mother,cellfate, logdthprob )
+                        div_mean::Float64 = mean(state_curr.unknownmothersamples[uppars.celltostarttimesmap[cell_here]].time_cell_eq[state_curr.unknownmothersamples[uppars.celltostarttimesmap[cell_here]].fate_cell_eq.==2,2])
+                        div_std::Float64 = std(state_curr.unknownmothersamples[uppars.celltostarttimesmap[cell_here]].time_cell_eq[state_curr.unknownmothersamples[uppars.celltostarttimesmap[cell_here]].fate_cell_eq.==2,2])
+                        dth_mean::Float64 = mean(state_curr.unknownmothersamples[uppars.celltostarttimesmap[cell_here]].time_cell_eq[state_curr.unknownmothersamples[uppars.celltostarttimesmap[cell_here]].fate_cell_eq.==1,2])
+                        dth_std::Float64 = std(state_curr.unknownmothersamples[uppars.celltostarttimesmap[cell_here]].time_cell_eq[state_curr.unknownmothersamples[uppars.celltostarttimesmap[cell_here]].fate_cell_eq.==1,2])
+                        @printf( " (%s)  pars_glob = [ %s],  div %+1.5e+-%1.5e, dth %+1.5e+-%1.5e, probdth %1.3f,  starttime %+1.5e, xbounds [ %+1.5e, %+1.5e].\n", uppars.chaincomment, join([@sprintf("%+1.5e ",j) for j in state_curr.pars_glob]), div_mean,div_std, dth_mean,dth_std, mean(state_curr.unknownmothersamples[uppars.celltostarttimesmap[cell_here]].fate_cell_eq.==1), state_curr.unknownmothersamples[uppars.celltostarttimesmap[cell_here]].starttime, xbounds_here[1],xbounds_here[2] )
+                        myhist::AbstractHistogram = fit(Histogram,state_curr.unknownmothersamples[uppars.celltostarttimesmap[cell_here]].time_cell_eq[:,2], nbins=20)
+                        @printf( " (%s)  edges : [ %s]\n", uppars.chaincomment, join([@sprintf("%+10.3e ",j) for j in myhist.edges[1]]) )
+                        myhist_divs::AbstractHistogram = fit(Histogram,state_curr.unknownmothersamples[uppars.celltostarttimesmap[cell_here]].time_cell_eq[state_curr.unknownmothersamples[uppars.celltostarttimesmap[cell_here]].fate_cell_eq.==2,2], myhist.edges[1])
+                        @printf( " (%s)  nodivs: [   %s         ]\n", uppars.chaincomment, join([@sprintf("%10d ",j) for j in myhist_divs.weights]) )
+                        myhist_dths::AbstractHistogram = fit(Histogram,state_curr.unknownmothersamples[uppars.celltostarttimesmap[cell_here]].time_cell_eq[state_curr.unknownmothersamples[uppars.celltostarttimesmap[cell_here]].fate_cell_eq.==1,2], myhist.edges[1])
+                        @printf( " (%s)  nodths: [   %s         ].\n", uppars.chaincomment, join([@sprintf("%10d ",j) for j in myhist_dths.weights]) )
                     end     # end if without
                     return -Inf, cellorder, cell_here  # abort
                 end     # end if no suitable samples
@@ -2777,18 +2818,19 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
     # set auxiliary parameters:
     nochains::UInt64 = length(state_chains_hist)        # number of independent chains (should be same for logprob_chains)
     nosamples::UInt64 = length(state_chains_hist[1])    # number of samples inside each chain
+    mynocells::UInt64 = uppars_chains[1].nocells        # number of cells in dataset
     myMCstart::UInt64 = uppars_chains[1].MCstart
     myburnin::UInt64 = uppars_chains[1].burnin
     myMCmax::UInt64 = uppars_chains[1].MCmax
-    mystatsrange::Array{UInt64,1} = collect(1:nosamples)#uppars_chains[1].statsrange      # samples to be evaluated; same for all chainss
+    mystatsrange::Array{UInt64,1} = collect(1:nosamples)#uppars_chains[1].statsrange      # samples to be evaluated; same for all chains
     mytimestamp::DateTime = uppars_chains[1].timestamp  # same for all chains
     mymodel::UInt64 = uppars_chains[1].model            # same for all chains
     mynoglobpars::UInt64 = uppars_chains[1].noglobpars
     mynolocpars::UInt64 = uppars_chains[1].nolocpars
     mynohide::UInt64 = uppars_chains[1].nohide
     pars_glob_means::Array{Float64,1} = zeros(mynoglobpars);   pars_glob_err::Array{Float64,1} = zeros(mynoglobpars)    # initialise
-    myres_stats_all::UInt64 = UInt64(ceil( 2*(nochains*nosamples)^(1/3) ))
-    myres_stats::UInt64 = UInt64(ceil( 2*(nosamples)^(1/3) ))
+    myres_stats_all::UInt64 = ceil(UInt64, 2*(nochains*nosamples)^(1/3) )
+    myres_stats::UInt64 = ceil(UInt64, 2*(nosamples)^(1/3) )
     #chainlabels::Array{String,2} = reshape([ @sprintf("chain %s",uppars_chains[j].chaincomment) for j in 1:nochains], (1,nochains))
     chainlabels::Array{String,2} = reshape([ @sprintf("chain %d",j) for j in 1:nochains], (1,nochains))
     mypriors_glob::Array{Fulldistr,1} = deepcopy( uppars_chains[1].priors_glob )
@@ -2841,7 +2883,7 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
     @printf( "  model:    %d\n", mymodel )
     @printf( "  neff:     %1.5f\n", geteffectivesamplesize(logprob_chains) )    
     @printf( "  global:\n" )
-    local values_chains_hist::Array{Float64,2}, minvalue::Float64,maxvalue::Float64,dvalue::Float64, mybins_here::Array{Float64,1}, unit_here::Float64, unitsymbol_here::String,unitrefforgraphs_here::String, dimension_here::String, suppl::String # declare
+    local values_chains_hist::Array{Float64,2}, minvalue::Float64,maxvalue::Float64,dvalue::Float64, mybins_here::Array{Float64,1}, mysubbins_here::Array{Float64,1}, unit_here::Float64, unitsymbol_here::String,unitrefforgraphs_here::String, dimension_here::String, suppl::String # declare
     local values1_chains_hist::Array{Float64,2}
     for j_globpar = 1:mynoglobpars
         if( any(timepar.==j_globpar) )      # current parameter has dimension time
@@ -2881,22 +2923,22 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
         # ...graphical:
         if( withgraphical )
             minvalue = minimum(values_chains_hist)*unit_here; maxvalue = maximum(values_chains_hist)*unit_here
-            dvalue = max(1E-10,(maxvalue-minvalue)/myres_stats_all); mybins_here = collect(minvalue:dvalue:maxvalue)
-            p1 = plot( xlabel=@sprintf("%s%s%s",namepar[j_globpar],unitrefforgraphs_here,suppl), ylabel="freq" )
+            dvalue = max(1E-10,(maxvalue-minvalue)/myres_stats_all); mybins_here = collect(minvalue:dvalue:maxvalue); mysubbins_here = collect(minvalue:(dvalue/20):maxvalue)
+            p1 = plot( xlabel=@sprintf("%s%s%s",namepar[j_globpar],unitrefforgraphs_here,suppl), ylabel="freq", grid=false )
             histogram!( values_chains_hist[:].*unit_here, bins=mybins_here, label="inference", lw=0 )
             if( dimension_here=="angle" )
-                plot!( mybins_here, exp.( mypriors_glob[j_globpar].get_logdistr( mod.(mybins_here./unit_here,2*pi) ) ).*(dvalue*nosamples*nochains/unit_here), label="prior",lw=2 )
+                plot!( mysubbins_here, exp.( mypriors_glob[j_globpar].get_logdistr( mod.(mysubbins_here./unit_here,2*pi) ) ).*(dvalue*nosamples*nochains/unit_here), label="prior",lw=2 )
             else
-                plot!( mybins_here, exp.( mypriors_glob[j_globpar].get_logdistr( mybins_here./unit_here ) ).*(dvalue*nosamples*nochains/unit_here), label="prior",lw=2 )
+                plot!( mysubbins_here, exp.( mypriors_glob[j_globpar].get_logdistr( mysubbins_here./unit_here ) ).*(dvalue*nosamples*nochains/unit_here), label="prior",lw=2 )
             end     # end if angle-dimension
             display(p1)
-            dvalue = max(1E-10,(maxvalue-minvalue)/myres_stats); mybins_here = collect(minvalue:dvalue:maxvalue)
-            p2 = plot( title=@sprintf("%s, individual chains", namepar[j_globpar]), xlabel=@sprintf("%s%s%s",namepar[j_globpar],unitrefforgraphs_here,suppl), ylabel="freq" )
+            dvalue = max(1E-10,(maxvalue-minvalue)/myres_stats); mybins_here = collect(minvalue:dvalue:maxvalue); mysubbins_here = collect(minvalue:(dvalue/20):maxvalue)
+            p2 = plot( title=@sprintf("%s, individual chains", namepar[j_globpar]), xlabel=@sprintf("%s%s%s",namepar[j_globpar],unitrefforgraphs_here,suppl), ylabel="freq", grid=false )
             histogram!( transpose(values_chains_hist).*unit_here, bins=mybins_here, label=chainlabels, opacity=0.5, lw=0 )
             if( dimension_here=="angle" )
-                plot!( mybins_here, exp.( mypriors_glob[j_globpar].get_logdistr( mod.(mybins_here./unit_here,2*pi) ) ).*(dvalue*nosamples/unit_here), label="prior",lw=2 )
+                plot!( mysubbins_here, exp.( mypriors_glob[j_globpar].get_logdistr( mod.(mysubbins_here./unit_here,2*pi) ) ).*(dvalue*nosamples/unit_here), label="prior",lw=2 )
             else
-                plot!( mybins_here, exp.( mypriors_glob[j_globpar].get_logdistr( mybins_here./unit_here ) ).*(dvalue*nosamples/unit_here), label="prior",lw=2 )
+                plot!( mysubbins_here, exp.( mypriors_glob[j_globpar].get_logdistr( mysubbins_here./unit_here ) ).*(dvalue*nosamples/unit_here), label="prior",lw=2 )
             end     # end if angle-dimension
             display(p2)
             # joint plots of shape and scale, if GammaExponential model:
@@ -2904,10 +2946,10 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
                 if( j_globpar==1 )                      # scale parameter
                     values1_chains_hist = deepcopy(values_chains_hist)
                 elseif( j_globpar==2 )                  # shape parameter
-                    p3 = plot( xlabel="scale parameter in h", ylabel="shape parameter" )
+                    p3 = plot( xlabel="scale parameter in h", ylabel="shape parameter", grid=false )
                     histogram2d!( values1_chains_hist[:].*unit_here, values_chains_hist[:], lw=0, show_empty_bins=true )    # scale vs shape parameter
                     display(p3)
-                    p4 = plot( xlabel="Gamma mean in h", ylabel="log scale/shape-ratio - log(h)" )
+                    p4 = plot( xlabel="Gamma mean in h", ylabel="log scale/shape-ratio - log(h)", grid=false )
                     newpar::Array{Float64,2} = zeros(2,length(values1_chains_hist))    # new parameters (after reparametrisation)
                     for j_sample in eachindex(values1_chains_hist)
                         getoldtonewparameters( [values1_chains_hist[j_sample],values_chains_hist[j_sample]], view(newpar, :,j_sample), uppars_chains[1] )
@@ -2921,10 +2963,13 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
     @printf( "  total log weight:\n" )
     @printf( "          individually per chain:  %+1.5e +- %1.5e      [ %s].\n", mean(logprob_chains),std(logprob_chains)/sqrt(nochains), join([@sprintf("%+1.5e ",j) for j in logprob_chains]) )
     #@printf( " Info - analysemultipleABCstatistics: Done now (after %1.3f sec).\n", (DateTime(now())-mytimestamp)/Millisecond(1000) )
+    # ...for eigenvalue-statistics:
     if( (mymodel==4) | (mymodel==9) | (mymodel==14) )               # also output eigenvalue statistics, in case of hiddenmatrix models
         eigenvalues_chains_hist::Array{ComplexF64,3} = Array{ComplexF64,3}(undef,nochains,2,nosamples)
         categories_chains_hist::Array{UInt64,2} = Array{UInt64,2}(undef,nochains,nosamples)
         categories_chains_mean::Array{Float64,2} = Array{Float64,2}(undef,nochains,3)
+        eigenvalues_hist::Array{ComplexF64,2} = Array{ComplexF64,2}(undef,2,nosamples)
+        categories_hist::Array{UInt64,1} = Array{UInt64,1}(undef,nosamples)
         @printf( "  Eigenvalue categories:\n" )
         @printf( "            [ %15s %15s %15s ]\n", "all>=0","some<0","complex" )
         for j_chain = 1:nochains
@@ -2937,7 +2982,120 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
             @printf( "  chain %2d: [ %15.4f %15.4f %15.4f ]\n", j_chain, categories_chains_mean[j_chain,1],categories_chains_mean[j_chain,2],categories_chains_mean[j_chain,3] )
         end     # end of chains loop
         @printf( "  means   : [ %7.4f+-%6.4f %7.4f+-%6.4f %7.4f+-%6.4f ]\n", mean(categories_chains_mean[:,1]),std(categories_chains_mean[:,1]), mean(categories_chains_mean[:,2]),std(categories_chains_mean[:,2]), mean(categories_chains_mean[:,3]),std(categories_chains_mean[:,3]) )
+        # ...add means of prior (estimate from sampling):
+        nopriorsamples::UInt64 = UInt64(1e6)                        # number of samples to estimate prior probabilities
+        state_prs_hist::Array{Lineagestate2,1} = Array{Lineagestate2,1}(undef,nopriorsamples)   # initialise
+        unknownmothersamples_prs::Array{Unknownmotherequilibriumsamples,1} = Array{Unknownmotherequilibriumsamples,1}(undef,length(uppars_chains[1].unknownmotherstarttimes))  # declare
+        for j_starttime = 1:length(uppars_chains[1].unknownmotherstarttimes)
+            unknownmothersamples_prs[j_starttime] = Unknownmotherequilibriumsamples(uppars_chains[1].unknownmotherstarttimes[j_starttime], uppars_chains[1].nomothersamples,uppars_chains[1].nomotherburnin,rand(uppars_chains[1].nomothersamples,mynohide),rand(uppars_chains[1].nomothersamples,mynolocpars),rand(uppars_chains[1].nomothersamples,2),Int64.(ceil.(rand(uppars_chains[1].nomothersamples).+0.5)),ones(uppars_chains[1].nomothersamples))   # initialise
+        end     # end of start times loop
+        pars_glob_prs::Array{Float64,1} = Array{Float64,1}(undef,mynoglobpars)  # initialise
+        for j_prs in eachindex(state_prs_hist)
+            for j_globpar in eachindex(pars_glob_prs)
+                pars_glob_prs[j_globpar] = mypriors_glob[j_globpar].get_sample()
+            end     # end of global parameters loop
+            #hiddenmatrix = gethiddenmatrix_m4(pars_glob_prs,uppars_chains[1])[1]; eigenvalues = getlargestabseigenvaluepart(hiddenmatrix, uppars_chains[1])[3]
+            #@printf( " prs %3d: pars_glob_prs = [ %s], eval = [ %s].\n", j_prs, join([@sprintf("%+9.2f ",j) for j in pars_glob_prs]), join([@sprintf("%+1.2f%+1.2f i ",real(j),imag(j)) for j in eigenvalues]) )
+            state_prs_hist[j_prs] = Lineagestate2( deepcopy(pars_glob_prs), ones(mynocells,mynohide),ones(mynocells,mynolocpars), ones(mynocells,2), unknownmothersamples_prs )
+        end     # end of priorsamples loop
+        categories_hist = ABCgeteigenvaluehist( state_prs_hist, uppars_chains[1] )[2]
+        categories_prs::Array{Float64,1} = [ mean(categories_hist.==j) for j in 1:3 ]
+        @printf( "  priors  : [ %15.4f %15.4f %15.4f ]     (based on %d samples).\n", categories_prs[1],categories_prs[2],categories_prs[3], nopriorsamples )
+        # ...add model comparison, if chains are consistent:
+        priorweights::Array{Float64,1} = 1*deepcopy(categories_prs) # single weight on priors
+        Dirichletlogevidence = ( counts::Array{Int64,1} -> (sum(loggamma.(priorweights.+counts.+1)) - loggamma(sum(priorweights.+counts.+1)))::Float64 )    # log-normalisation of Dirichlet distribution
+        local catcounts::Array{Int64,1}                             # declare; number of times various categories were observed
+        logevidence_independent::Float64 = 0.0                      # initialise log-evidence of independent model
+        for j_chain = 1:nochains
+            catcounts = [ sum(categories_chains_hist[j_chain,:].==j) for j = 1:3 ]  # number of times this category was observed in this chain
+            logevidence_independent += Dirichletlogevidence(catcounts)
+        end     # end of chain loop
+        catcounts = [ sum(categories_chains_hist.==j) for j = 1:3 ] # number of times this category was observed in any chain
+        logevidence_joint::Float64 = Dirichletlogevidence(catcounts)# log-evidence of joint model
+        @printf( "  model comparison for eigenvalue categories: chains jointly %5.2f%%, chains independently %5.2f%% (log-evidence %+1.5e vs %+1.5e)(priorweights = [ %s]).\n", 100/(1+exp(logevidence_independent-logevidence_joint)), 100/(1+exp(logevidence_joint-logevidence_independent)), logevidence_joint,logevidence_independent, join([@sprintf("%+1.5e ", j) for j in priorweights]) )
+        if( withgraphical )
+            p1 = plot( title=@sprintf("eigenvalue categories"), legend=:outerright )
+            pie!( ["all>=0","some<0","complex"], dropdims(mean(categories_chains_mean,dims=1),dims=1), lw=0, aspect_ratio=:square  )
+            display(p1)
+            p1 = plot( title=@sprintf("renormalised eigenvalue categories"), legend=:outerright )
+            pie!( ["all>=0","some<0","complex"], dropdims(mean(categories_chains_mean,dims=1),dims=1)./categories_prs, lw=0, aspect_ratio=:square  )
+            display(p1)
+        end     # end if withgraphical
     end     # end if model with hiddenmatrix
+    # ...for standardised event-times histogram:
+    if( withgraphical )
+        if( (mymodel==1) | (mymodel==2) | (mymodel==3) | (mymodel==4) | (mymodel==9) | (mymodel==11) | (mymodel==12) | (mymodel==13) | (mymodel==14) )  # only meaningful, if a model with rescaled time
+            # ....set auxiliary parameters:
+            pars_cell_std::Array{Float64,1} = pars_glob_means[1:mynolocpars]
+            #times_cell_std::Array{Float64,1} = [0.0, 0.0]
+            (statefunctions,targetfunctions, dthdivdistr) = deepcopy( getstateandtargetfunctions( mymodel ) )
+            target_cdf::Function = (par::Array{Float64,1},datapoint) ->  dthdivdistr.get_loginvcdf( par, [datapoint] )[1]
+            @printf( " Info - analysemultipleABCstatistics: pars_cell_std = [ %s].\n", join([@sprintf("%+1.5e ",j) for j in pars_cell_std]) )
+            xbounds::Array{Float64,1} = [0.0,20000.0/timeunit]
+            lifetimes::Array{Float64,3} = zeros(nochains,nosamples,mynocells)   # initialise
+            target_cdf_hist::Array{Float64,3} = zeros(nochains,nosamples,mynocells)  # initialise map to cdf
+            fateandcensoring::Array{Float64,1} = zeros(Int64, mynocells)        # both-censored:-3; left-censored,div:-2; left-censored,dth:-1; right-censored:0; compl,dth:1; compl,div:2
+            local mother::Int64, cellfate::Int64
+            # ....get data:            
+            for j_cell = 1:mynocells
+                mother = getmother( lineagetree, Int64(j_cell) )[2]
+                cellfate = getlifedata( lineagetree, Int64(j_cell) )[2]
+                if( (mother<0) )                    # unknown mother
+                    if( cellfate<0 )                # unknown fate
+                        fateandcensoring[j_cell] = -3
+                    elseif( cellfate==1 )           # death
+                        fateandcensoring[j_cell] = -1
+                    elseif( cellfate==2 )           # division
+                        fateandcensoring[j_cell] = -2
+                    else
+                        @printf( " Warning - analysemultipleABCstatistics: Unknown cellfate %d, mother %d for cell %d.\n", cellfate, mother, j_cell )
+                    end     # end of distinguishing cellfate
+                else                                # mother known
+                    if( cellfate<0 )                # unknown fate
+                        fateandcensoring[j_cell] = 0
+                    elseif( cellfate==1 )           # death
+                        fateandcensoring[j_cell] = 1
+                    elseif( cellfate==2 )           # division
+                        fateandcensoring[j_cell] = 2
+                    else
+                        @printf( " Warning - analysemultipleABCstatistics: Unknown cellfate %d, mother %d for cell %d.\n", cellfate, mother, j_cell )
+                    end     # end of distinguishing cellfate
+                end     # end if mother known
+            end     # end of cells loop
+            for j_chain = 1:nochains
+                for j_sample = 1:nosamples
+                    for j_cell = 1:mynocells
+                        lifetime_here::Float64 = (state_chains_hist[j_chain])[j_sample].times_cell[j_cell,2] - (state_chains_hist[j_chain])[j_sample].times_cell[j_cell,1]
+                        target_cdf_hist[j_chain,j_sample,j_cell] = dthdivdistr.get_loginvcdf( (state_chains_hist[j_chain])[j_sample].pars_cell[j_cell,:], [lifetime_here] )[1]
+                        #@printf( " Info - analysemultipleABCstatistics: chain %2d,sample %3d, cell %3d: lifetime_here %5.1f, target_cdf_here %+1.5e (%+1.5e).\n", j_chain,j_sample,j_cell, lifetime_here,target_cdf[j_chain,j_sample,j_cell], exp(target_cdf_here) )
+                        lifetimes[j_chain,j_sample,j_cell] = findroot( x::Float64->dthdivdistr.get_loginvcdf( pars_cell_std, [x] )[1], target_cdf_hist[j_chain,j_sample,j_cell], xbounds )
+                        #target_cdf_here::Float64 = dthdivdistr.get_loginvcdf( pars_cell_std, [lifetimes[j_chain,j_sample,j_cell]] )[1]
+                        #@printf( " Info - analysemultipleABCstatistics: chain %2d,sample %3d, cell %3d: lifetime_now  %5.1f, target_cdf_now  %+1.5e (%+1.5e).\n", j_chain,j_sample,j_cell, lifetimes[j_chain,j_sample,j_cell],target_cdf_here, exp(target_cdf_here) )
+                    end     # end of cells loop
+                end     # end of samples loop
+            end     # end of chains loop
+            # ....plots:
+            nouncensoredcells::UInt64 = sum(fateandcensoring.>=1)
+            myres_data::UInt64 = ceil(UInt64, 4*(mynocells)^(1/3) )
+            minvalue = minimum(lifetimes)*unit_here; maxvalue = maximum(lifetimes)*unit_here
+            dvalue = max(1E-10,(maxvalue-minvalue)/myres_data); mybins_here = collect(minvalue:dvalue:maxvalue); mysubbins_here = collect(minvalue:(dvalue/20):maxvalue)
+            p1 = plot( xlabel="standardised lifetimes in h", ylabel="freq", grid=false )
+            histogram!( (lifetimes[:,mystatsrange,fateandcensoring.==1].*unit_here)[:], bins=mybins_here, label="", color="red", opacity=0.5, lw=0 )
+            histogram!( (lifetimes[:,mystatsrange,fateandcensoring.==2].*unit_here)[:], bins=mybins_here, label="", color="green", opacity=0.5, lw=0 )
+            plot!( mysubbins_here, exp.( [targetfunctions.getcelltimes(pars_cell_std,[0.0,j],1,uppars_chains[1]) for j in mysubbins_here] ).*(dvalue*nosamples*nochains*nouncensoredcells/unit_here), label="deaths", color="red",lw=2 )
+            plot!( mysubbins_here, exp.( [targetfunctions.getcelltimes(pars_cell_std,[0.0,j],2,uppars_chains[1]) for j in mysubbins_here] ).*(dvalue*nosamples*nochains*nouncensoredcells/unit_here), label="divisions", color="green",lw=2 )
+            display(p1)
+            minvalue = 0.0; maxvalue = 1.0
+            dvalue = max(1E-10,(maxvalue-minvalue)/myres_data); mybins_here = collect(minvalue:dvalue:maxvalue)
+            p2 = plot( xlabel="cdf-value of lifetimes", ylabel="freq", grid=false )
+            histogram!( 1.0 .-exp.(target_cdf_hist[:,mystatsrange,fateandcensoring.==1])[:], bins=mybins_here, label="", color="red", opacity=0.5, lw=0 )
+            histogram!( 1.0 .-exp.(target_cdf_hist[:,mystatsrange,fateandcensoring.==2])[:], bins=mybins_here, label="", color="green", opacity=0.5, lw=0 )
+            dthprob::Float64 = sum(fateandcensoring.==1)/sum(fateandcensoring.>=1)
+            plot!( [minvalue,maxvalue], dthprob*ones(2).*(dvalue*nosamples*nochains*nouncensoredcells), label="deaths", color="red",lw=2 )
+            plot!( [minvalue,maxvalue], (1-dthprob)*ones(2).*(dvalue*nosamples*nochains*nouncensoredcells), label="divisions", color="green",lw=2 )
+            display(p2)
+        end     # end of distinguishing models
+    end     # end if withgraphical
     flush(stdout)
     return nothing
 end     # end of analysemultipleABCstatistics function
@@ -2951,7 +3109,7 @@ function ABCgeteigenvaluehist( state_hist::Array{Lineagestate2,1}, uppars::Uppar
     categories_hist::Array{UInt64,1} = Array{UInt64,1}(undef,nosamples)     # declare
     
     for j_sample in eachindex(state_hist)
-        hiddenmatrix::Array{ComplexF64,2} = gethiddenmatrix_m4( state_hist[j_sample].pars_glob, uppars )[1]
+        hiddenmatrix::Array{Float64,2} = gethiddenmatrix_m4( state_hist[j_sample].pars_glob, uppars )[1]
         eigenvalues::Array{ComplexF64,1} = getlargestabseigenvaluepart( hiddenmatrix, uppars )[3]
         eigenvalues_hist[:,j_sample] .= eigenvalues
         if( isreal(eigenvalues[1]) )                    # both are real-valued

@@ -3165,7 +3165,7 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
     # sample until beyond zero time:
     t_2 = DateTime(now()); sentwarning = false              # physical time to send warning, if stuck
     nextplottime::Float64 = starttime + 1#deepcopy(currenttime-1)#   # time for next plot
-    local sample_othr::Int64, newbirthtime::Float64,newendtime::Float64, currenttime::Float64 # declare
+    local sample_othr::Int64,sample_next::Int64, newbirthtime::Float64,newendtime::Float64, currenttime::Float64 # declare
     newpars_evol::MArray{Tuple{Int64(uppars.nohide)},Float64} = @MArray zeros(Int64(uppars.nohide)); newpars_cell::MArray{Tuple{Int64(uppars.nolocpars)},Float64} = @MArray zeros(Int64(uppars.nolocpars)); pars_evol_mthr::MArray{Tuple{Int64(uppars.nohide)},Float64} = @MArray zeros(Int64(uppars.nohide)) # initialise
     #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): In eq:      div %+1.5e +- %1.5e, dth %+1.5e +- %1.5e, probdth %+1.5e, since start: %+1.5e +- %1.5e.\n", uppars.chaincomment,uppars.MCit, mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,1]), std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,1]), mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,1]), std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,1]), mean(unknownmothersamples.fate_cell_eq.==1), mean(unknownmothersamples.time_cell_eq[:,2].-(0.0)),std(unknownmothersamples.time_cell_eq[:,2].-(0.0)) )
     #plotequilibriumsamples( unknownmothersamples,starttime-totaltime, "init", uppars )
@@ -3176,17 +3176,20 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
         unknownmothersamples.time_cell_eq = deepcopy(unknownmothersamples_memory.time_cell_eq); unknownmothersamples.fate_cell_eq = deepcopy(unknownmothersamples_memory.fate_cell_eq)
         unknownmothersamples.weights_eq = deepcopy(unknownmothersamples_memory.weights_eq)
         stillnaivelyinitialised .= zero(UInt64)             # reset to naive initialisation
-        unknownmothersamples.time_cell_eq .+= starttime-totaltime;   time_next = time_next_memory + starttime-totaltime; sample_next = deepcopy(sample_next_memory) # reset everything, so final time is starttime
+        unknownmothersamples.time_cell_eq .+= starttime-totaltime;   sample_next = deepcopy(sample_next_memory); time_next = unknownmothersamples.time_cell_eq[sample_next,2] # reset everything, so final time is starttime
         currenttime = deepcopy(time_next)                   # initialise
         while( time_next<starttime )
-            if( (!sentwarning) & (((DateTime(now())-t_2)/Millisecond(1000))>900) ) # already trying since 15 mins
+            if( (!sentwarning) & (((DateTime(now())-t_2)/Millisecond(1000))>1800) )     # already trying since 30 mins
                 @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Already trying to evolve since %1.3f sec, time_next = %+1.5e,currenttime = %+1.5e, totaltime=%1.5e,starttime=%+1.5e (stillnaivelyinitialised=%1.4f, avgfate=%1.4f, prob_dth2=%1.4f, beta_init=%1.4f).\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-t_2)/Millisecond(1000), time_next,currenttime,totaltime,starttime, mean(stillnaivelyinitialised.==0),mean(unknownmothersamples.fate_cell_eq),prob_dth2,beta_init )
                 @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  div = %1.5e+-%1.5e, dth = %1.5e+-%1.5e, prob_dth = %1.5e (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, mean_div,std_div, mean_dth,std_dth, prob_dth, (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
                 @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  pars_glob = [ %s] (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in pars_glob]), (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
                 sentwarning = true                              # not again
             end     # end if taking long
-            currenttime = deepcopy(time_next)                   # forward time
-            if( nextplottime<time_next )                        # time to plot
+            currenttime = deepcopy(time_next)               # forward time
+            #if( !((currenttime==time_next==unknownmothersamples.time_cell_eq[sample_next,2]) & (currenttime<=minimum(unknownmothersamples.time_cell_eq[:,2]))) )
+            #    @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Inconsistent currenttime1: currenttime %+1.15e, time_next %+1.15e, divtime %+1.15e, first end %+1.15e, updating %d.\n", uppars.chaincomment,uppars.MCit, currenttime,time_next, unknownmothersamples.time_cell_eq[sample_next,2], minimum(unknownmothersamples.time_cell_eq[:,2]), sample_next ); flush(stdout)
+            #end     # end if pathological
+            if( nextplottime<time_next )                    # time to plot
                 #=
                 p1 = plot( title=@sprintf("(%s) current end-times, plottime %+1.3e, starttime %+1.3e",uppars.chaincomment,nextplottime,starttime), xlabel="time",ylabel="freq" )
                 minbin = minimum(unknownmothersamples.time_cell_eq); maxbin = maximum(unknownmothersamples.time_cell_eq); res = Int64( ceil(4*uppars.nomothersamples^(1/3)) ); dbin = (maxbin-minbin)/res; mybins = minbin:dbin:maxbin
@@ -3228,7 +3231,7 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
                 kjh
                 =#
             end     # end if too few cell dividing
-            if( all(unknownmothersamples.fate_cell_eq.==1) )    # no convergence possible anymore
+            if( all(unknownmothersamples.fate_cell_eq.==1) )# no convergence possible anymore
                 if( uppars.without>=2 )
                     @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): All samples dying, abort.\n", uppars.chaincomment,uppars.MCit )
                     #@printf( " (%s)  From birth     : div = %11.5e+-%11.5e, dth = %11.5e+-%11.5e,  dth_prob = %1.5f(logdivprob=%+1.5e).\n", uppars.chaincomment, mean_div,std_div, mean_dth,std_dth, prob_dth2,logprob_div2 )
@@ -3236,8 +3239,8 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
                     #@printf( " (%s)  currenttime = %+1.5e, totaltime = %+1.5e, starttime = %+1.5e.\n", uppars.chaincomment, currenttime,totaltime,starttime )
                     flush(stdout)
                 end     # end if without
-                convflag = Int64(-1)                            # indicates no convergence
-                break                                           # aborts time-evolution
+                convflag = Int64(-1)                        # indicates no convergence
+                break                                       # aborts time-evolution
             end     # end if all cells dying
             if( unknownmothersamples.fate_cell_eq[sample_next]==1 ) # death
                 # ....pick old cell to replaced by dying one:
@@ -3285,16 +3288,28 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
                 pars_evol_mthr .= deepcopy(unknownmothersamples.pars_evol_eq[sample_next,:])
                 # ...get new parameters for daughter:
                 newbirthtime = deepcopy(currenttime)
+                #if( newbirthtime>minimum(unknownmothersamples.time_cell_eq[:,2]) )
+                #    @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Newbirthtime larger than first end: newbirth %+1.15e, first end %+1.15e (%+1.5e), current %+1.15e, divtime %+1.15e, dividing %d.\n", uppars.chaincomment,uppars.MCit, newbirthtime,minimum(unknownmothersamples.time_cell_eq[:,2]), minimum(unknownmothersamples.time_cell_eq[:,2])-newbirthtime, currenttime, unknownmothersamples.time_cell_eq[sample_next,2], sample_next ); flush(stdout)
+                #end     # end if newbirthtime somewhat off
                 mygetevolpars( pars_glob, pars_evol_mthr, view(newpars_evol, :), uppars )
                 mygetcellpars( pars_glob, newpars_evol,[newbirthtime,newbirthtime], view(newpars_cell, :), uppars )    # only start time matters
                 (lifetime, newfate) = dthdivdistr.get_sample( newpars_cell )[1:2]
                 # ...replace mother by daughter:
                 unknownmothersamples.fate_cell_eq[sample_next] = deepcopy(newfate)
                 unknownmothersamples.time_cell_eq[sample_next,:] .= deepcopy([newbirthtime,newbirthtime + lifetime])
+                #if( unknownmothersamples.time_cell_eq[sample_next,1]>minimum(unknownmothersamples.time_cell_eq[:,2]) )
+                #    @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): divtime      larger than first end: divtime  %+1.15e, first end %+1.15e (%+1.5e), current %+1.15e, dividing %d.\n", uppars.chaincomment,uppars.MCit, unknownmothersamples.time_cell_eq[sample_next,1],minimum(unknownmothersamples.time_cell_eq[:,2]), minimum(unknownmothersamples.time_cell_eq[:,2])-unknownmothersamples.time_cell_eq[sample_next,1], currenttime, sample_next ); flush(stdout)
+                #end     # end if newbirthtime somewhat off
                 unknownmothersamples.pars_evol_eq[sample_next,:] .= deepcopy(newpars_evol)
                 unknownmothersamples.pars_cell_eq[sample_next,:] .= deepcopy(newpars_cell)
                 stillnaivelyinitialised[sample_next] += 1
                 #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Replace div  cell %3d with pars_cell=[ %s], times=[%+1.5e,%+1.5e], fate=%d.\n", uppars.chaincomment,uppars.MCit, sample_next, join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.pars_cell_eq[sample_next,:]]), unknownmothersamples.time_cell_eq[sample_next,1],unknownmothersamples.time_cell_eq[sample_next,2], unknownmothersamples.fate_cell_eq[sample_next] )
+                #if( minimum(unknownmothersamples.time_cell_eq[:,2])<maximum(unknownmothersamples.time_cell_eq[:,1]) )   # some birthtime past some endtime
+                #    selectbadstarts = collect(1:uppars.nomothersamples)[minimum(unknownmothersamples.time_cell_eq[:,2]).<unknownmothersamples.time_cell_eq[:,1]]
+                #    selectbadends = collect(1:uppars.nomothersamples)[unknownmothersamples.time_cell_eq[:,2].<maximum(unknownmothersamples.time_cell_eq[:,1])]
+                #    @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): last start %+1.15e, first end %+1.15e (%+1.5e), when dividing %d and ?.\n", uppars.chaincomment,uppars.MCit, maximum(unknownmothersamples.time_cell_eq[:,1]), minimum(unknownmothersamples.time_cell_eq[:,2]), maximum(unknownmothersamples.time_cell_eq[:,1])-minimum(unknownmothersamples.time_cell_eq[:,2]),sample_next ); flush(stdout)
+                #    @printf( " (%s)  badstarts [ %s], badends = [ %s]; just updated %d ([%+1.15e, %+1.5e]), currenttime %+1.15e.\n", uppars.chaincomment, join([@sprintf("%3d ",j) for j in selectbadstarts]),join([@sprintf("%3d ",j) for j in selectbadends]), sample_next,unknownmothersamples.time_cell_eq[sample_next,1],unknownmothersamples.time_cell_eq[sample_next,2], currenttime ); flush(stdout)
+                #end     # end if birth and end times incompatible
                 # ...also update second sample, if necessary:
                 if( rand()<((uppars.nomothersamples-1)/(uppars.nomothersamples+1)) )    # also add second daughter to the list
                     # ....get new parameters for second daughter:
@@ -3303,9 +3318,9 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
                     mygetcellpars( pars_glob, newpars_evol,[newbirthtime,newbirthtime], view(newpars_cell, :), uppars )  # only start time matters
                     (lifetime, newfate) = dthdivdistr.get_sample( newpars_cell )[1:2]
                     # ....pick old cell to be replaced by new one:
-                    sample_othr = deepcopy(sample_next)         # initialise as already replaced mother
-                    while( sample_othr==sample_next )           # keep trying until actual old cell gets replaced
-                        sample_othr = rand(collect(1:uppars.nomothersamples))
+                    sample_othr = deepcopy(sample_next)     # initialise as already replaced mother
+                    while( sample_othr==sample_next )       # keep trying until actual old cell gets replaced
+                        sample_othr = ceil(Int64, uppars.nomothersamples*rand() )
                     end     # end while not replacing old cell
                     # ....replace old cell by second daughter:
                     unknownmothersamples.fate_cell_eq[sample_othr] = deepcopy(newfate)
@@ -3315,16 +3330,16 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
                     stillnaivelyinitialised[sample_othr] = deepcopy(stillnaivelyinitialised[sample_next])   # has same number of divisions as other sister
                     #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Replace othr cell %3d with pars_cell=[ %s], times=[%+1.5e,%+1.5e], fate=%d.\n", uppars.chaincomment,uppars.MCit, sample_othr, join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.pars_cell_eq[sample_othr,:]]), unknownmothersamples.time_cell_eq[sample_othr,1],unknownmothersamples.time_cell_eq[sample_othr,2], unknownmothersamples.fate_cell_eq[sample_othr] )
                 end     # end if also update second cell
-            else                                                # unknown fate
+            else                                            # unknown fate
                 @printf( " Warning - getjointequilibriumparameterswithnetgrowth: Unknown fate %d at position %d.\n", unknownmothersamples.fate_cell_eq[sample_next], sample_next )
             end     # end of distinguishing fate
             # sanity check:
-            if( minimum(unknownmothersamples.time_cell_eq[:,2])<maximum(unknownmothersamples.time_cell_eq[:,1]) )   # some birthtime past some endtime
-                selectbadstarts = collect(1:uppars.nomothersamples)[minimum(unknownmothersamples.time_cell_eq[:,2]).<unknownmothersamples.time_cell_eq[:,1]]
-                selectbadends = collect(1:uppars.nomothersamples)[unknownmothersamples.time_cell_eq[:,2].<maximum(unknownmothersamples.time_cell_eq[:,1])]
-                @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): last start %+1.15e, first end %+1.15e (%+1.5e).\n", uppars.chaincomment,uppars.MCit, maximum(unknownmothersamples.time_cell_eq[:,1]), minimum(unknownmothersamples.time_cell_eq[:,2]), maximum(unknownmothersamples.time_cell_eq[:,1])-minimum(unknownmothersamples.time_cell_eq[:,2]) )
-                @printf( " (%s)  badstarts [ %s], badends = [ %s]; just updated %d ([%+1.5e, %+1.5e]) from %d ([%+1.5e, %+1.5e]), currenttime %+1.15e.\n", uppars.chaincomment, join([@sprintf("%3d ",j) for j in selectbadstarts]),join([@sprintf("%3d ",j) for j in selectbadends]), sample_next,unknownmothersamples.time_cell_eq[sample_next,1],unknownmothersamples.time_cell_eq[sample_next,2] ,sample_othr,unknownmothersamples.time_cell_eq[sample_othr,1],unknownmothersamples.time_cell_eq[sample_othr,2], currenttime )
-            end     # end if birth and end times incomppatible
+            #if( minimum(unknownmothersamples.time_cell_eq[:,2])<maximum(unknownmothersamples.time_cell_eq[:,1]) )   # some birthtime past some endtime
+            #    selectbadstarts = collect(1:uppars.nomothersamples)[minimum(unknownmothersamples.time_cell_eq[:,2]).<unknownmothersamples.time_cell_eq[:,1]]
+            #    selectbadends = collect(1:uppars.nomothersamples)[unknownmothersamples.time_cell_eq[:,2].<maximum(unknownmothersamples.time_cell_eq[:,1])]
+            #    @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): last start %+1.15e, first end %+1.15e (%+1.5e).\n", uppars.chaincomment,uppars.MCit, maximum(unknownmothersamples.time_cell_eq[:,1]), minimum(unknownmothersamples.time_cell_eq[:,2]), maximum(unknownmothersamples.time_cell_eq[:,1])-minimum(unknownmothersamples.time_cell_eq[:,2]) )
+            #    @printf( " (%s)  badstarts [ %s], badends = [ %s]; just updated %d ([%+1.15e, %+1.5e]) from %d ([%+1.15e, %+1.5e]), currenttime %+1.15e.\n", uppars.chaincomment, join([@sprintf("%3d ",j) for j in selectbadstarts]),join([@sprintf("%3d ",j) for j in selectbadends]), sample_next,unknownmothersamples.time_cell_eq[sample_next,1],unknownmothersamples.time_cell_eq[sample_next,2] ,sample_othr,unknownmothersamples.time_cell_eq[sample_othr,1],unknownmothersamples.time_cell_eq[sample_othr,2], currenttime ); flush(stdout)
+            #end     # end if birth and end times incompatible
             # update next time/sample:
             (time_next, sample_next) = findmin( unknownmothersamples.time_cell_eq[:,2] )   # next event time and index of respective sample
         end     # end of time-evolution
