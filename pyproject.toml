@@ -6,6 +6,7 @@ requires = [
 ]
 
 [project]
+name = "lineage-analysis"
 authors = [
     {email = "arc.collaborations@ucl.ac.uk", name = "Centre for Advanced Research Computing, UCL"},
 ]
@@ -16,11 +17,11 @@ classifiers = [
 ]
 dependencies = [
   "pandas",
-  "btrack"
+  "btrack",
+  "parsl>=2024.06.24",
 ]
 description = "A package to convert track formats"
 dynamic = ["version"]
-name = "track_converter"
 readme = "README.md"
 requires-python = ">=3.10"
 
@@ -32,6 +33,11 @@ dev = [
     "pytest-cov",
     "ruff",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["track_converter"]
+exclude = ["logdir", "runinfo"]
 
 [tool.ruff]
 fix = true
