@@ -40,7 +40,7 @@ function runmultiplelineageABCmodels( lineagetree::Lineagetree, nochains::UInt, 
         keeptrying = false                          # false, unless trickycell is found
         for j_chain = 1:nochains
             chaincomment_here = @sprintf( "%d",j_chain )
-            (state_init_here, ~,~, dthdivdistr_here, uppars_chains[j_chain]) = ABCinitialiseLineageMCmodel( lineagetree, model,timeunit,tempering, comment,chaincomment_here,timestamp, MCstart,burnin,MCmax,subsample, state_init,pars_stps, nomothersamples,nomotherburnin, without,withwriteoutputtext )
+            (state_init_here, _, _, dthdivdistr_here, uppars_chains[j_chain]) = ABCinitialiseLineageMCmodel( lineagetree, model,timeunit,tempering, comment,chaincomment_here,timestamp, MCstart,burnin,MCmax,subsample, state_init,pars_stps, nomothersamples,nomotherburnin, without,withwriteoutputtext )
             (state_chains_hist[j_chain], logprob_chains[j_chain], trickycell) = runlineageABCmodel( lineagetree,deepcopy(state_init_here),nolevels,notreeparticles,auxiliaryfoldertrunkname,useRAM,withCUDA,trickycells, deepcopy(dthdivdistr_here), uppars_chains[j_chain] )
             if( trickycell>0 )                      # stopped prematurely because of a trickycell
                 if( any(trickycells.==trickycell) ) # already knew this trickycell before
@@ -115,7 +115,7 @@ function runlineageABCmodel( lineagetree::Lineagetree, state_init::Lineagestate2
     startercells::Array{UInt64,1} = collect(1:lineagetree.nocells)[lineagetree.datawd[:,4].<0]  # listindices of cells with unknown mothers
     myABCnuisanceparameters_prop.motherparticles = repeat(collect(1:notreeparticles)', inner=(lineagetree.nocells,1))   # make sure mother exists for each particle
     myABCnuisanceparameters_prop.motherparticles[startercells,:] .= 0               # no predecessors for cells with unknownmother
-    (~, statefunctions,targetfunctions, ~, ~) = ABCinitialiseLineageMCmodel( lineagetree, uppars.model,uppars.timeunit,uppars.tempering, uppars.comment,uppars.chaincomment,uppars.timestamp, uppars.MCstart,uppars.burnin,uppars.MCmax,uppars.subsample, state_init,uppars.pars_stps, uppars.nomothersamples,uppars.nomotherburnin, uppars.without,uppars.withwriteoutputtext )
+    (_, statefunctions,targetfunctions, _, _) = ABCinitialiseLineageMCmodel( lineagetree, uppars.model,uppars.timeunit,uppars.tempering, uppars.comment,uppars.chaincomment,uppars.timestamp, uppars.MCstart,uppars.burnin,uppars.MCmax,uppars.subsample, state_init,uppars.pars_stps, uppars.nomothersamples,uppars.nomotherburnin, uppars.without,uppars.withwriteoutputtext )
     (orderedcellweights,cellcategories1,trickycells) = getweightedcellnumber( lineagetree,trickycells, statefunctions,targetfunctions,dthdivdistr, knownmothersamplemode,withCUDA, uppars )
     orderedcellweights_cs_dth::Array{Float64,1} = cumsum(orderedcellweights.*((cellcategories1.==1).|(cellcategories1.==4).|(cellcategories1.==3).|(cellcategories1.==6)))
     orderedcellweights_cs_div::Array{Float64,1} = cumsum(orderedcellweights.*((cellcategories1.==2).|(cellcategories1.==5).|(cellcategories1.==3).|(cellcategories1.==6)))
@@ -292,7 +292,7 @@ function runlineageABCmodel( lineagetree::Lineagetree, state_init::Lineagestate2
             @printf( " (%s) Info - runlineageABCmodel (%d): Got %1.2f / %d effective samples (lost %d / %d entirely)  (after %1.3f sec).\n", uppars_lev[j_lev].chaincomment,uppars_lev[j_lev].MCit, effsamplesize,noparticles_lev[min(j_lev+1,nolevels)], sum(logrelativeweight.==-Inf)-sum(logprob_curr_par.==-Inf), length(logrelativeweight)-sum(logprob_curr_par.==-Inf), (DateTime(now())-uppars_lev[j_lev].timestamp)/Millisecond(1000) ); flush(stdout)
         end     # end if only few effective samples
         
-        if( any(isnan.(logrelativeweight)) | any(logrelativeweight.==+Inf) )
+        if( any(isnan.(logrelativeweight)) || any(logrelativeweight.==+Inf) )
             @printf( " (%s) Warning - runlineageABCmodel (%d): Got %3d nans, %3d -infs, %3d +inf out of %d.\n", uppars_lev[j_lev].chaincomment,uppars_lev[j_lev].MCit, sum(isnan.(logrelativeweight)),sum(logrelativeweight.==-Inf),sum(logrelativeweight.==Inf),length(logrelativeweight) )
             @printf( " (%s)  logrelativeweight = [ %s].\n", uppars_lev[j_lev].chaincomment, join([@sprintf("%+8.1e ",j) for j in logrelativeweight]) ); flush(stdout)
             @printf( " (%s)  logprob_prop_par = [ %s].\n", uppars_lev[j_lev].chaincomment, join([@sprintf("%+8.1e ",j) for j in logprob_prop_par]) )
@@ -315,7 +315,7 @@ function runlineageABCmodel( lineagetree::Lineagetree, state_init::Lineagestate2
         @printf( " (%s)   means   [%s].\n", uppars_lev[j_lev].chaincomment, join([@sprintf(" %+1.3e ",j) for j in mymean]) )
         @printf( " (%s)   margstd [%s].\n", uppars_lev[j_lev].chaincomment, join([@sprintf(" %+1.3e ",j) for j in sqrt.(diag(mycov))]) )
         @printf( " (%s)   constd  [%s].\n", uppars_lev[j_lev].chaincomment, join([@sprintf(" %+1.3e ",j) for j in myconstd]) )
-        if( !( (uppars.model==1) | (uppars.model==2) | (uppars.model==3) | (uppars.model==4) | (uppars.model==9) ) )    # only need this in case actual reparametrisation happens
+        if !(uppars.model in (1, 2, 3, 4, 9))    # only need this in case actual reparametrisation happens
             (myconstd, mypwup, mycov, mymean, coverrorflag) = getcondvariance( state_list, logrelativeweight, effsamplesize, true, uppars_lev[j_lev] )  # with reparametrisation; use myconst,mypwup for RW-updates later
             @printf( " (%s) Info - runlineageABCmodel (%d): Statistics on reparametrised parameters: stepsize %1.3e  (after %1.3f sec)\n", uppars_lev[j_lev].chaincomment,uppars_lev[j_lev].MCit, stepsize, (DateTime(now())-uppars_lev[j_lev].timestamp)/Millisecond(1000) )
             @printf( " (%s)   means   [%s].\n", uppars_lev[j_lev].chaincomment, join([@sprintf(" %+1.3e ",j) for j in mymean]) )
@@ -325,7 +325,7 @@ function runlineageABCmodel( lineagetree::Lineagetree, state_init::Lineagestate2
         @printf( " (%s) Info - runlineageABCmodel (%d): RW proposal for singles = [ %s], pairs = [ %s].\n", uppars_lev[j_lev].chaincomment,uppars_lev[j_lev].MCit, join([@sprintf("%d ",j) for j in 1:uppars_lev[j_lev].noglobpars]), join([@sprintf("%d%d ",mypwup[1,1,j],mypwup[2,1,j]) for j in axes(mypwup,3)]) ); flush(stdout)
         #@printf( " (%s) Info - runlineageABCmodel (%d): Before perturbation threadid %2d/%2d,                    gctotmem = %10.1f MB, gclivemem = %10.1f MB, jitmem = %10.1f MB, Maxrss = %10.1f MB.\n", uppars_lev[j_lev].chaincomment,uppars_lev[j_lev].MCit, Threads.threadid(),Threads.nthreads(), Base.gc_total_bytes(Base.gc_num())/2^20, Base.gc_live_bytes()/2^20, Base.jit_total_bytes()/2^20, Sys.maxrss()/2^20 ); flush(stdout)
         #display( CUDA.memory_status() ); flush(stdout)
-        if( isnan(effsamplesize) | isinf(logprob) | (coverrorflag>0) )
+        if( isnan(effsamplesize) || isinf(logprob) || (coverrorflag>0) )
             without_mem = deepcopy( uppars_lev[j_lev].without )
             uppars_lev[j_lev].without = 4                                   # make sure to give all output
             j_par = 1
@@ -730,7 +730,7 @@ function ABCinitialiseLineageMCmodel( lineagetree::Lineagetree, model::UInt,time
     else                                                    # unknown model
         @printf( " Warning - ABCinitialiseLineageMCmodel: Unknown model %d.\n", model )
     end     # end of distinguishing models
-    if( (model==1) | (model==11) )                          # models without need of unknownmothersamples
+    if model in (1, 11)                          # models without need of unknownmothersamples
         if( without>=2 )
             @printf( " Info - ABCinitialiseLineageMCmodel: Automatically set nomotherburnin %d-->%d, nomothersamples %d-->%d, as model %d has no mother samples.\n", nomotherburnin,0, nomothersamples,0, model )
         end     # end if without
@@ -993,7 +993,7 @@ function getfirstguess( state_curr_here::SubArray{Lineagestate2,0}, myABCnuisanc
             # ...rejection sampler for correct death-rate:
             logrelpriorweight_here = 0.0                    # no difference, yet
             priorcounter[1] += 1                            # one more times of proposing prior to rejection sampler
-            if( (dthdivdistr.typename=="FrechetWeibull") | (dthdivdistr.typename=="GammaExponential") ) # death- and division process
+            if( (dthdivdistr.typename=="FrechetWeibull") || (dthdivdistr.typename=="GammaExponential") ) # death- and division process
                 MLEref = 0.0                                # MLEref = (nodeaths*log(nodeaths/(nodeaths+nodivs)) + nodivs*log(nodivs/(nodeaths+nodivs)))
                 nodeaths_here = nodeaths + 1; nodivs_here = nodivs + 1  # use slight bias to moderate/middle values
                 (nodeaths_here>0) ? (MLEref+=nodeaths_here*log(nodeaths_here/(nodeaths_here+nodivs_here))) : (MLEref+=0.0)
@@ -1264,10 +1264,10 @@ function getrwperturbation( lineagetree::Lineagetree,nocells_here::UInt64,cellor
                 else                                                # no numerical problems with reversing path, yet
                     loghastings -= getlogdetnewparameters(pars_glob_prop_new_here,uppars_here)
                 end     # end if backwards-compatible
-                if( ((uppars_here.model==2)|(uppars_here.model==12)) & (j_up==(uppars_here.nolocpars+3)) )  # phase-parameter of clock-modulated model
+                if uppars_here.model in (2, 12) && j_up == (uppars_here.nolocpars + 3)  # phase-parameter of clock-modulated model
                     state_prop_here.pars_glob[j_up] = mod( state_prop_here.pars_glob[j_up], 2*pi )  # reflect inside bounds
                 end     # end if phase-parameter of clock-modulated model
-                if( ((uppars_here.model==11)|(uppars_here.model==12)|(uppars_here.model==13)|(uppars_here.model==14)) & (j_up==uppars_here.nolocpars) )    # GammaExponential models; last entry is probability to divide, ie in [0,1]
+                if uppars_here.model in (11, 12, 13, 14) && j_up == uppars_here.nolocpars    # GammaExponential models; last entry is probability to divide, ie in [0,1]
                     state_prop_here.pars_glob[j_up] = acos(cos(state_prop_here.pars_glob[j_up]*pi))/pi      # zig-zag curve between R -> [0,1]
                 end     # end if probability to divide in GammaExponential models
             else                                                    # pair update
@@ -1285,7 +1285,7 @@ function getrwperturbation( lineagetree::Lineagetree,nocells_here::UInt64,cellor
                 else                                                # no numerical problems with reversing path, yet
                     loghastings -= getlogdetnewparameters(pars_glob_prop_new_here,uppars_here)
                 end     # end if backwards-compatible
-                if( (uppars_here.model==2) | (uppars_here.model==12) )  # clock-modulated model
+                if uppars_here.model in (2, 12)  # clock-modulated model
                     if( j_glob==(uppars_here.nolocpars+3) )             # phase-parameter
                         state_prop_here.pars_glob[j_glob] = mod( state_prop_here.pars_glob[j_glob], 2*pi )          # fold back inside bounds
                     end     # end if j_glob is phase-parameter
@@ -1293,7 +1293,7 @@ function getrwperturbation( lineagetree::Lineagetree,nocells_here::UInt64,cellor
                         state_prop_here.pars_glob[jj_glob] = mod( state_prop_here.pars_glob[jj_glob], 2*pi )        # fold back inside bounds
                     end     # end if jj_glob is phase-parameter
                 end     # end if clock-modulated model
-                if( (uppars_here.model==11)|(uppars_here.model==12)|(uppars_here.model==13)|(uppars_here.model==14) )  # GammaExponential models
+                if uppars_here.model in (11, 12, 13, 14)  # GammaExponential models
                     if( j_glob==uppars_here.nolocpars )                 # division probability
                         state_prop_here.pars_glob[j_glob] = acos(cos(state_prop_here.pars_glob[j_glob]*pi))/pi      # zig-zag curve between R -> [0,1]
                     end     # end if j_glob is division probability
@@ -1457,22 +1457,22 @@ function getknownmotherpropagation( lineagetree::Lineagetree, j_part::UInt64,cel
         xbounds_here = MArray{Tuple{2},Float64}( [lineagetree.datawd[cell_here,3]-times_cell_here_part[1], +Inf] )
         xbounds_here[1] = max(0.0,xbounds_here[1])      # for immediately disappearing cells
     end     # end if cellfate known
-    if( (knownmothersamplemode==1) | (cellfate<0) )     # sample only times inside given window, fate freely
+    if knownmothersamplemode == 1 || cellfate < 0     # sample only times inside given window, fate freely
         probvals = dthdivdistr.get_loginvcdf( Array{Float64,1}(pars_cell_here_part), xbounds_here )
         probval_here = logsubexp(probvals[1],probvals[2])
         if( probval_here==-Inf )                        # impossible
             particlelogweights_here_part[1] = -Inf      # impossible
-        elseif( isnan(probval_here) | (probval_here==Inf) ) # for numerics check
+        elseif !isfinite(probval_here) # for numerics check
             @printf( " (%s) Warning - getknownmotherpropagation (%d): probvals = %+1.5e (%+1.5e,%+1.5e) for xbounds=[%+1.5e..%+1.5e], pars_cell = [ %s].\n", uppars.chaincomment,uppars.MCit, probval_here,probvals[1],probvals[2], xbounds_here[1],xbounds_here[2], join([@sprintf("%+1.5e ",j) for j in pars_cell_here_part]) ); flush(stdout)
             particlelogweights_here_part[1] = -Inf      # impossible
         else                                            # has finite weight within interval
-            if( false & (any(isinf.(probvals)) | any(isnan.(probvals))) )
+            if false && any(!isfinite, probvals)
                 #@printf( " (%s) Info - getknownmotherpropagation (%d): probvals = %+1.5e (%+1.5e,%+1.5e) for xbounds=[%+1.5e..%+1.5e], pars_cell = [ %s].\n", uppars.chaincomment,uppars.MCit, probval_here,probvals[1],probvals[2], xbounds_here[1],xbounds_here[2], join([@sprintf("%+1.5e ",j) for j in pars_cell_here_part]) ); flush(stdout)
                 @printf( " (%s) Info - getknownmotherpropagation (%d): Got probvals=%+1.5e,%+1.5e (probval_here=%+1.1e), xbounds=[%+1.5e..%+1.5e], pars_cell=[ %s].\n", uppars.chaincomment,uppars.MCit, probvals[1],probvals[2], probval_here, xbounds_here[1],xbounds_here[2], join([@sprintf("%+1.5e ",j) for j in pars_cell_here_part]) ); flush(stdout)
             end     # end if probvals infinity
             (lifetime,fate_cell_here[1]) = dthdivdistr.get_samplewindow( Array{Float64,1}(pars_cell_here_part), xbounds_here )[1:2]
             times_cell_here_part[2] = times_cell_here_part[1] + lifetime
-            if( (cellfate>0) & (cellfate!=fate_cell_here[1]) )  # ie different from known cellfate
+            if cellfate > 0 && cellfate != fate_cell_here[1]  # ie different from known cellfate
                 particlelogweights_here_part[1] = -Inf  # impossible
             else                                        # ie correct cellfate, but conditioned on window
                 #probvals = dthdivdistr.get_loginvcdf( Array{Float64,1}(pars_cell_here_part), Float64.(xbounds_here) )
@@ -1480,7 +1480,7 @@ function getknownmotherpropagation( lineagetree::Lineagetree, j_part::UInt64,cel
             end     # end if correct cellfate
         end     # end of checking numerical problems
     elseif( knownmothersamplemode==2 )                  # sample times and fate according to observations
-        if( (uppars.model==1) | (uppars.model==2) | (uppars.model==3) | (uppars.model==4) | (uppars.model==9) ) # Frechet(Weibull) models
+        if uppars.model in (1, 2, 3, 4, 9) # Frechet(Weibull) models
             (lifetime,reject_this_for_sure) = statefunctions.getcelltimes( Array{Float64,1}(pars_cell_here_part), xbounds_here, cellfate, uppars )
             times_cell_here_part[2] = times_cell_here_part[1] + lifetime
             fate_cell_here[1] = deepcopy(cellfate)
@@ -1489,12 +1489,12 @@ function getknownmotherpropagation( lineagetree::Lineagetree, j_part::UInt64,cel
             else                                            # not rejecting for sure
                 particlelogweights_here_part[1] = targetfunctions.getcelltimes( Array{Float64,1}(pars_cell_here_part), Array{Float64,1}(times_cell_here_part), cellfate,uppars ) - dthdivdistr.get_logdistrwindowfate( Array{Float64,1}(pars_cell_here_part), [times_cell_here_part[2]-times_cell_here_part[1]], Float64.(xbounds_here), cellfate )[1] # work-around to get integral over xbounds
             end     # end if reject_this_for_sure
-        elseif( (uppars.model==11) | (uppars.model==12) | (uppars.model==13) | (uppars.model==14) ) # GammaExponential models
+        elseif uppars.model in (11, 12, 13, 14) # GammaExponential models
             probvals = loginvGammaExponential_cdf( Array{Float64,1}(pars_cell_here_part), xbounds_here, cellfate )
             probval_here = logsubexp(probvals[1],probvals[2])
             if( probval_here==-Inf )                        # impossible
                 particlelogweights_here_part[1] = -Inf      # impossible
-            elseif( isnan(probval_here) | (probval_here==Inf) ) # for numerics check
+            elseif !isfinite(probval_here) # for numerics check
                 @printf( " (%s) Warning - getknownmotherpropagation (%d): probvals = %+1.5e (%+1.5e,%+1.5e) for xbounds=[%+1.5e..%+1.5e], pars_cell = [ %s].\n", uppars.chaincomment,uppars.MCit, probval_here,probvals[1],probvals[2], xbounds_here[1],xbounds_here[2], join([@sprintf("%+1.5e ",j) for j in pars_cell_here_part]) ); flush(stdout)
                 particlelogweights_here_part[1] = -Inf      # impossible
             else                                            # has finite weight within interval
@@ -1523,10 +1523,10 @@ function CUDAgetknownmotherpropagation_preloop( lineagetree::Lineagetree, nopart
 
     # set auxiliary parameters:
     #@printf( " (%s) Info - CUDAgetknownmotherpropagation_preloop (%d): Start now with thread %2d/%2d, j_cell %d,cell_here %d, after %1.3f sec.\n", uppars.chaincomment,uppars.MCit, Threads.threadid(),Threads.nthreads(), j_cell,cell_here, (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
-    if( (knownmothersamplemode!=1) & ((uppars.model==1)|(uppars.model==2)|(uppars.model==3)|(uppars.model==4)|(uppars.model==9)) )
+    if (knownmothersamplemode != 1) && uppars.model in (1, 2, 3, 4, 9)
         @printf( " (%s) Warning - CUDAgetknownmotherpropagation_preloop (%d): knownmothersamplemode %d not implemented for model %d and CUDA-version.\n", uppars.chaincomment,uppars.MCit, knownmothersamplemode, uppars.model ); flush(stdout)
     end     # end if inapplicable knownmothersamplemode
-    if( ~((uppars.model==1)|(uppars.model==2)|(uppars.model==3)|(uppars.model==4)|(uppars.model==11)|(uppars.model==12)|(uppars.model==13)|(uppars.model==14)) )
+    if !(uppars.model in (1, 2, 3, 4, 11, 12, 13, 14))
         @printf( " (%s) Warning - CUDAgetknownmotherpropagation_preloop (%d): model %d not implemented for CUDA-version.\n", uppars.chaincomment,uppars.MCit, uppars.model ); flush(stdout)
     end     # end if inapplicable model
     device!( ceil(Int,(Threads.threadid()/Threads.nthreads())*length(devices()))-1 )  # set device to the one corresponding to this thread
@@ -1672,11 +1672,11 @@ function CUDAgetknownmotherpropagation( endframe_here::Int32,nextframe_here::Int
         #@cuprintf( " Info - CUDAgetlineageABCdynamics: open bound, %+1.5e, %+1.5e, %+1.5e.\n", CUDAloginvGammaExponential_cdf( pars_cell_here_part, xbounds_here_part[2] ),CUDAloginvGamma_cdf(pars_cell_here_part[1],pars_cell_here_part[2], xbounds_here_part[2]), CUDAloginvexponential_cdf(pars_cell_here_part[3],xbounds_here_part[2]) )
     end     # end if cellfate known
     local probvals1::Float32, probvals2::Float32, probval_here::Float32
-    if( (knownmothersamplemode==1) | (cellfate<0) )     # sampling not conditioned on fate, but gets rejected afterwards
-        if( (model==1) | (model==2) | (model==3) | (model==4) )                 # FrechetWeibull distributed event-times
+    if knownmothersamplemode == 1 || cellfate < 0     # sampling not conditioned on fate, but gets rejected afterwards
+        if model in (1, 2, 3, 4)                 # FrechetWeibull distributed event-times
             probvals1 = CUDAloginvFrechetWeibull_cdf( pars_cell_here_part, xbounds_here_part[1] )
             probvals2 = CUDAloginvFrechetWeibull_cdf( pars_cell_here_part, xbounds_here_part[2] )
-        elseif( (model==11) | (model==12) | (model==13) | (model==14) )         # GammaExponential distributed event-times
+        elseif model in (11, 12, 13, 14)         # GammaExponential distributed event-times
             probvals1 = CUDAloginvGammaExponential_cdf( pars_cell_here_part, xbounds_here_part[1] )
             probvals2 = CUDAloginvGammaExponential_cdf( pars_cell_here_part, xbounds_here_part[2] )
         else                                            # unknown model
@@ -1685,16 +1685,16 @@ function CUDAgetknownmotherpropagation( endframe_here::Int32,nextframe_here::Int
         probval_here = logsubexp(probvals1,probvals2)
         if( probval_here==-Inf32 )                          # impossible
             particlelogweights_here_part[1] = -Inf32        # impossible; nothing more to do
-        elseif( isnan(probval_here) | (probval_here==Inf32) )   # for numerics check
+        elseif !isfinite(probval_here)   # for numerics check
             #@cuprintf( " Warning - CUDAgetknownmotherpropagation: probvals = %+1.5e(%+1.5e) (%+1.5e(%+1.5e),%+1.5e(%+1.5e)) for xbounds=[%+1.5e(%+1.5e)..%+1.5e(%+1.5e)], cell %3d(%3d), fate %2d(%2d), mother %3d(%3d), starttime %+1.5e(%+1.5e), motherendtime %+1.5e(%+1.5e), endframe %3d(%3d), nextframe %3d(%3d).\n", probval_here,probval_here, probvals1,probvals1, probvals2,probvals2, xbounds_here_part[1],xbounds_here_part[1], xbounds_here_part[2],xbounds_here_part[2], cell_here,cell_here, cellfate,cellfate, mother,mother, times_cell_here_part[1],times_cell_here_part[1], times_cell_mthr[2,motherpart[1]],times_cell_mthr[2,motherpart[1]], endframe_here,endframe_here, nextframe_here,nextframe_here )
             #@cuprintf( " Warning - CUDAgetknownmotherpropagation: probvals = %+1.5e (%+1.5e,%+1.5e) for xbounds=[%+1.5e..%+1.5e], cell %3d, fate %2d, mother %3d, starttime %+1.5e, motherendtime %+1.5e, endframe %3d, nextframe %3d.\n", probval_here, probvals1, probvals2, xbounds_here_part[1], xbounds_here_part[2], cell_here, cellfate, mother, times_cell_here_part[1], times_cell_mthr[2,motherpart[1]], endframe_here, nextframe_here )
             #@cuprintf( " ...pars_cell_here_pars = [ %+1.5e %+1.5e %+1.5e ...] (mean %+1.5e, std %1.5e)(p_loc = %+1.5e, xbounds[1] = %1.5e, loginvGamma_cdf[1] = %+1.5e, CUDAloginvexponential_cdf[1] = %+1.5e)\n", pars_cell_here_part[1],pars_cell_here_part[2],pars_cell_here_part[3], pars_cell_here_part[1]*pars_cell_here_part[2], pars_cell_here_part[1]*sqrt(pars_cell_here_part[2]), pars_cell_here_part[3]^(1/pars_cell_here_part[2]), xbounds_here_part[1], CUDAloginvGamma_cdf(pars_cell_here_part[1]/(pars_cell_here_part[3]^(1/pars_cell_here_part[2])),pars_cell_here_part[2], xbounds_here_part[1]), CUDAloginvexponential_cdf(pars_cell_here_part[1]/(1 - pars_cell_here_part[3]^(1/pars_cell_here_part[2])), xbounds_here_part[1]) )
             particlelogweights_here_part[1] = -Inf32        # can happen when shape parameter is close to xounds/scale parameter (at boundary between incgamma implementations)
         else                                                # has finite weight within interval
             #@cuprintf( " Info - CUDAgetknownmotherpropagation: length(times_cell_here_part) = %5d(%5d).\n", length(times_cell_here_part),length(times_cell_here_part) )
-            if( (model==1) | (model==2) | (model==3) | (model==4) )                 # FrechetWeibull distributed event-times
+            if model in (1, 2, 3, 4)                 # FrechetWeibull distributed event-times
                 CUDAsampleFrechetWeibull( pars_cell_here_part, xbounds_here_part, lifetime_here_part,fate_cell_here_part )
-            elseif( (model==11) | (model==12) | (model==13) | (model==14) )         # GammaExponential distributed event-times
+            elseif model in (11, 12, 13, 14)         # GammaExponential distributed event-times
                 CUDAsampleGammaExponential2( pars_cell_here_part, xbounds_here_part, lifetime_here_part,fate_cell_here_part )
             else                                            # unknown model
                 @cuprintf( " Warning - CUDAgetknownmotherpropagation: Sample mode %d not implemented for model %d.\n", knownmothersamplemode, model )
@@ -1707,13 +1707,13 @@ function CUDAgetknownmotherpropagation( endframe_here::Int32,nextframe_here::Int
             end     # end if correct cellfate
         end     # end of checking numerical problems
     elseif( knownmothersamplemode==2 )                      # sampling conditioned on fate
-        if( (model==11) | (model==12) | (model==13) | (model==14) ) # GammaExponential distributed event-times
+        if model in (11, 12, 13, 14) # GammaExponential distributed event-times
             probvals1 = CUDAloginvGammaExponential_cdf( pars_cell_here_part, xbounds_here_part[1], cellfate )
             probvals2 = CUDAloginvGammaExponential_cdf( pars_cell_here_part, xbounds_here_part[2], cellfate )
             probval_here = logsubexp(probvals1,probvals2)
             if( probval_here==-Inf32 )
                 particlelogweights_here_part[1] = -Inf32    # impossible; nothing more to do
-            elseif( isnan(probval_here) | (probval_here==+Inf32) )
+            elseif !isfinite(probval_here)
                 #@cuprintf( " Warning - CUDAgetknownmotherpropagation: probvals = %+1.5e(%+1.5e) (%+1.5e(%+1.5e),%+1.5e(%+1.5e)) for xbounds=[%+1.5e(%+1.5e)..%+1.5e(%+1.5e)], cell %3d(%3d), fate %2d(%2d), mother %3d(%3d), starttime %+1.5e(%+1.5e), motherendtime %+1.5e(%+1.5e), endframe %3d(%3d), nextframe %3d(%3d).\n", probval_here,probval_here, probvals1,probvals1, probvals2,probvals2, xbounds_here_part[1],xbounds_here_part[1], xbounds_here_part[2],xbounds_here_part[2], cell_here,cell_here, cellfate,cellfate, mother,mother, times_cell_here_part[1],times_cell_here_part[1], times_cell_mthr[2,motherpart[1]],times_cell_mthr[2,motherpart[1]], endframe_here,endframe_here, nextframe_here,nextframe_here )
                 #@cuprintf( " Warning - CUDAgetknownmotherpropagation: probvals = %+1.5e (%+1.5e,%+1.5e) for xbounds=[%+1.5e..%+1.5e], cell %3d, fate %2d, mother %3d, starttime %+1.5e, motherendtime %+1.5e, endframe %3d, nextframe %3d.\n", probval_here, probvals1, probvals2, xbounds_here_part[1], xbounds_here_part[2], cell_here, cellfate, mother, times_cell_here_part[1], times_cell_mthr[2,motherpart[1]], endframe_here, nextframe_here )
                 #@cuprintf( " ...pars_cell_here_pars = [ %+1.5e %+1.5e %+1.5e ...] (mean %+1.5e, std %1.5e)(loginvGamma_cdf[1] = %+1.5e)\n", pars_cell_here_part[1],pars_cell_here_part[2],pars_cell_here_part[3], pars_cell_here_part[1]*pars_cell_here_part[2], pars_cell_here_part[1]*sqrt(pars_cell_here_part[2]), CUDAloginvGamma_cdf(pars_cell_here_part[1],pars_cell_here_part[2], xbounds_here_part[1]) )
@@ -1851,7 +1851,7 @@ function getcorrecttreewithinerrorsproposal( lineagetree::Lineagetree, state_cur
     datawd_sampled = deepcopy( lineagetree.datawd ); datawd_sampled[:,2:3] .= -1# initialise, same as observed datawd, but different times (still to be determined)
     times_sampled = zeros(Float64, uppars.nocells,2 )                           # true/ non-rounded times of first and last appearance
     logprob = 0.0                                                               # initialise weight, due to sticking to observed lineagetree architecture
-    if( isnan(logdthprob) | isnan(logdivprob) | (logdthprob==+Inf) | (logdivprob==+Inf) )
+    if( isnan(logdthprob) || isnan(logdivprob) || (logdthprob==+Inf) || (logdivprob==+Inf) )
         @printf( " (%s) Warning - getcorrecttreewithinerrorsproposal (%d): Pathological probabilities for death/division: logdthprob = %+1.5e, logdivprob = %+1.5e.\n", uppars.chaincomment,uppars.MCit, logdthprob,logdivprob )
     end     # end if pathological probabilities for death or division
     
@@ -2022,7 +2022,7 @@ function getcorrecttreewithinerrorsSMCproposal( lineagetree::Lineagetree, state_
                 else                                                # ie cellfate unknown
                     xbounds_here = MArray{Tuple{2},Float64}( [0.0, 1000/uppars.timeunit] .+ (lineagetree.datawd[cell_here,3]-times_cell_part[cell_here,1,j_part]) )
                 end     # end if cellfate known
-                if( (knownmothersamplemode==1) | (cellfate<0) )     # sample only times inside given window, fate freely
+                if knownmothersamplemode == 1 || cellfate < 0     # sample only times inside given window, fate freely
                     (lifetime,fate_here) = dthdivdistr.get_samplewindow( pars_cell_part[cell_here,:,j_part], xbounds_here )[1:2]
                     times_cell_part[cell_here,2,j_part] = times_cell_part[cell_here,1,j_part] + lifetime
                     fates_cell_part[cell_here,j_part] = deepcopy(fate_here)
@@ -2207,7 +2207,7 @@ function getcorrecttreewithinerrorsSMCproposal_cont( lineagetree::Lineagetree, m
                     display( myABCnuisanceparameters.particlelogweights[cellorder[1:cellordercounter],:]' )
                 end     # end if pathological
                 #@printf( " (%s) Info - getcorrecttreearchitectureproposal_cont (%d): prev logweights[%d] = [ %s](noinfs=%4d/%4d).\n", uppars.chaincomment,uppars.MCit, cellorder[jj_cell], join([ @sprintf("%+8.1e ",j) for j in myABCnuisanceparameters.particlelogweights[cellorder[jj_cell],1:12] ]), sum(myABCnuisanceparameters.particlelogweights[cellorder[jj_cell],:].==-Inf),length(myABCnuisanceparameters.particlelogweights[cellorder[jj_cell],:]) ); flush(stdout)  
-                if( ~withCUDA )                                     # ie without CUDA
+                if !withCUDA # ie without CUDA
                     getknownmotherpropagation_loop( lineagetree, noparticles,cell_here,j_cell,cellorder, mother,myABCnuisanceparameters, state_curr, cellfate, statefunctions,targetfunctions,dthdivdistr, knownmothersamplemode, uppars )
                 else                                                # ie withCUDA
                     CUDAgetknownmotherpropagation_preloop( lineagetree, noparticles,cell_here,j_cell,cellorder, mother,myABCnuisanceparameters, state_curr, cellfate, knownmothersamplemode, uppars )
@@ -2229,11 +2229,11 @@ function getcorrecttreewithinerrorsSMCproposal_cont( lineagetree::Lineagetree, m
         if( all(myABCnuisanceparameters.particlelogweights[cell_here,:].==-Inf) )
             if( uppars.without>=2 )
                 @printf( " (%s) Info - getcorrecttreewithinerrorsSMCproposal_cont (%d): All particles of cell %d rejected (mother=%d,cellfate=%d). Abort.\n", uppars.chaincomment,uppars.MCit, cell_here, mother,cellfate )
-                if( (uppars.model==1) | (uppars.model==2) | (uppars.model==3) | (uppars.model==4) )         # FrechetWeibull models
+                if uppars.model in (1, 2, 3, 4)         # FrechetWeibull models
                     (mean_div,std_div, mean_dth,std_dth, prob_dth) = estimateFrechetWeibullstats( state_curr.pars_glob[1:uppars.nolocpars] )
                 elseif( uppars.model==9 )                                                                   # Frechet models
                     (mean_div,std_div, mean_dth,std_dth, prob_dth) = getFrechetstats( state_curr.pars_glob[1:uppars.nolocpars] )
-                elseif( (uppars.model==11) | (uppars.model==12) | (uppars.model==13) | (uppars.model==14) ) # GammaExponential models
+                elseif uppars.model in (11, 12, 13, 14) # GammaExponential models
                     (mean_div,std_div, mean_dth,std_dth, prob_dth) = estimateGammaExponentialstats( state_curr.pars_glob[1:uppars.nolocpars] )
                 else                                        # unknown model
                     @printf( " (%s) Info - getcorrecttreewithinerrorsSMCproposal_cont (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
@@ -2320,10 +2320,10 @@ function forwardsimulatenuisanceparameters( pars_glob::Array{Float64,1}, xbounds
     statefunctions.getevolpars( pars_glob,pars_evol_mother, view(pars_evol_here, :), uppars )
     statefunctions.getcellpars( pars_glob,vcat(pars_evol_here),[times_cell_here[1],+Inf], view(pars_cell_here, :), uppars ) # only birth-time matters
     xbounds_here::Array{Float64,1} = xbounds_pre_here .- times_cell_here[1]
-    if( (knownmothersamplemode==1) | (cellfate<0) )     # sample only times inside given window, fate freely
+    if knownmothersamplemode == 1 || cellfate < 0     # sample only times inside given window, fate freely
         (lifetime,fates_cell_here) = dthdivdistr.get_samplewindow( pars_cell_here, xbounds_here )[1:2]
         times_cell_here[2] = times_cell_here[1] + lifetime
-        if( (cellfate>0) & (cellfate!=fates_cell_here) )# ie different from known cellfate
+        if cellfate > 0 && cellfate != fates_cell_here # ie different from known cellfate
             particlelogweights_here = -Inf              # impossible
         else                                            # ie correct cellfate, but conditioned on window
             probvals = dthdivdistr.get_loginvcdf( pars_cell_here, xbounds_here )
@@ -2457,13 +2457,13 @@ function getweightedcellnumber( lineagetree::Lineagetree,trickycells::Array{UInt
     # ...very first cell:
     trickycells = sort(unique( vcat(trickycells,cellorder[1]) ))        # add first encountered cell to tricky list
     # ...first cell that dies and is fully observed:
-    firstindex = findfirst(x->x==1,cellcategories2[cellorder])          # index of first fully observed death of ordered cells
-    if( ~isnothing(firstindex) )                                        # ie fully observed death exists
+    firstindex = findfirst(==(1), cellcategories2[cellorder])          # index of first fully observed death of ordered cells
+    if !isnothing(firstindex)                                        # ie fully observed death exists
         trickycells = sort(unique( vcat(trickycells,cellorder[firstindex]) ))   # add first encountered full death; this is the original index, not in the ordered list
     end     # end if fully observed death exists
     # ...first cell that divides and is fully observed:
-    firstindex = findfirst(x->x==2,cellcategories2[cellorder])          # index of first fully observed division of ordered cells
-    if( ~isnothing(firstindex) )                                        # ie fully observed death exists
+    firstindex = findfirst(==(2), cellcategories2[cellorder])          # index of first fully observed division of ordered cells
+    if !isnothing(firstindex)                                        # ie fully observed death exists
         trickycells = sort(unique( vcat(trickycells,cellorder[firstindex]) ))   # add first encountered full death; this is the original index, not in the ordered list
     end     # end if fully observed death exists
 
@@ -2572,7 +2572,7 @@ function getcondvariance( state_curr_par::Array{Lineagestate2,1}, logrelativewei
                         errorflag += UInt64(100)     # indicates error
                     end     # end of try getting pairwise conditional
                     myeigvals = eigvals(mycondstd_here)         # eigenvalues
-                    if( ~all(isreal.(myeigvals)) | any(real.(myeigvals).<=0) )
+                    if !all(isreal, myeigvals) || any(real.(myeigvals).<=0)
                         @printf( " (%s) Warning - getcondvariance (%d): Got non-positive conditional covariance %+1.5e for j_glob = %d, jj_glob = %d. Use variance of %+1.5e instead.\n", uppars.chaincomment,uppars.MCit, minimum(mycondstd_here), j_glob,jj_glob, stddev_repl )
                         display( mycondstd_here ); @printf( " (%s) Warning - getcondvariance (%d): Sleep now.\n",  uppars.chaincomment,uppars.MCit); sleep(1)
                         display( myeigvals ); @printf( " (%s) Warning - getcondvariance (%d): Sleep now.\n",  uppars.chaincomment,uppars.MCit); sleep(1)
@@ -2593,9 +2593,9 @@ end      # end of getcondvariance function
 function getoldtonewparameters( pars_glob_old::Union{Array{Float64,1},SubArray{Float64,1}},pars_glob_new::Union{Array{Float64,1},SubArray{Float64,1}}, uppars::Uppars2 )::Nothing
     # computes new parametrisation from old parameters
 
-    if( (uppars.model==1) | (uppars.model==2) | (uppars.model==3) | (uppars.model==4) | (uppars.model==9) ) # FrechetWeibull/Frechet models
+    if uppars.model in (1, 2, 3, 4, 9) # FrechetWeibull/Frechet models
         pars_glob_new .= pars_glob_old      # no change
-    elseif( (uppars.model==11) | (uppars.model==12) | (uppars.model==13) | (uppars.model==14) )             # GammaExponential models
+    elseif uppars.model in (11, 12, 13, 14)             # GammaExponential models
         # new parameters are mean and std of division distribution:
         #pars_glob_new[1] = pars_glob_old[1]*pars_glob_old[2]        # mean of divisions
         #pars_glob_new[2] = pars_glob_old[1]*sqrt(pars_glob_old[2])  # standard deviation of divisions
@@ -2612,9 +2612,9 @@ end     # end of getoldtonewparameters function
 function getnewtooldparameters( pars_glob_old::Union{Array{Float64,1},SubArray{Float64,1}},pars_glob_new::Union{Array{Float64,1},SubArray{Float64,1}}, uppars::Uppars2 )::Nothing
     # computes old parametrisation from new parameters
 
-    if( (uppars.model==1) | (uppars.model==2) | (uppars.model==3) | (uppars.model==4) | (uppars.model==9) ) # FrechetWeibull/Frechet models
+    if uppars.model in (1, 2, 3, 4, 9) # FrechetWeibull/Frechet models
         pars_glob_old .= pars_glob_new      # no change
-    elseif( (uppars.model==11) | (uppars.model==12) | (uppars.model==13) | (uppars.model==14) )             # GammaExponential models
+    elseif uppars.model in (11, 12, 13, 14)             # GammaExponential models
         # new parameters are mean and std of division distribution:
         #pars_glob_old[1] = (pars_glob_new[2]^2)/pars_glob_new[1]    # scale parameter of Gamma
         #pars_glob_old[2] = (pars_glob_new[1]/pars_glob_new[2])^2    # shape parameter of Gamma
@@ -2635,9 +2635,9 @@ function getlogdetnewparameters( pars_glob_new::Array{Float64,1}, uppars::Uppars
     # log of det of d_new/d_old
 
     local logdet::Float64                   # declare
-    if( (uppars.model==1) | (uppars.model==2) | (uppars.model==3) | (uppars.model==4) | (uppars.model==9) ) # FrechetWeibull/Frechet models
+    if uppars.model in (1, 2, 3, 4, 9) # FrechetWeibull/Frechet models
         logdet = 0.0                        # no change
-    elseif( (uppars.model==11) | (uppars.model==12) | (uppars.model==13) | (uppars.model==14) )             # GammaExponential models
+    elseif uppars.model in (11, 12, 13, 14)             # GammaExponential models
         # det of [ [ old[2], old[1] ]; [ sqrt(old[2]), old[1]/(2*sqrt(old[2])) ] ]
         # new parameters are mean and std of division distribution:
         #logdet = log(abs(pars_glob_new[2])/2)   # flat in old, means large pars_glob_new[2] are/should be less likely
@@ -2692,14 +2692,14 @@ function adjuststepsizes( stepsize::Float64, samplecounter::Array{UInt64,2}, rej
         end     # end of setting ssign
         if( ssign*sign(adjfctr)<0 )             # overshot
             newadjfctr = myadjfctr^0.8          # reduce adjustfactor
-            if( !((newadjfctr==0) | (isinf(newadjfctr)) | (isnan(newadjfctr))) )
+            if newadjfctr != 0 && isfinite(newadjfctr)
                 myadjfctr = newadjfctr
             end     # end of avoiding pathological cases
         end     # end of setting new adjfctr
         adjfctr = ssign*myadjfctr
         # adjust stepsize:
         newstepsize = stepsize*(myadjfctr^(-deviation))
-        if( !((newstepsize==0) | (isinf(newstepsize)) | (isnan(newstepsize))) )
+        if newstepsize != 0 || ifinite(newstepsize)
             stepsize = newstepsize              # adopt new stepsize; otherwise keep as is
         end     # end of avoiding pathological cases
         # output changes to the control-window:
@@ -2734,13 +2734,13 @@ function ABCstateoutput( state::Lineagestate2, logprob::Float64, accptmetrics::A
     # output state parameters:
     @printf( " (%s)  global:\n", uppars.chaincomment )
     @printf( " (%s)   [ %s]\n", uppars.chaincomment, join([@sprintf("%+12.5e ",j) for j in state.pars_glob]) )
-    if( (uppars.model==1) | (uppars.model==2) | (uppars.model==3) | (uppars.model==4) )         # Frechet-Weibull models
+    if uppars.model in (1, 2, 3, 4)         # Frechet-Weibull models
         (mean_div,std_div, mean_dth,std_dth, prob_dth) = estimateFrechetWeibullstats( state.pars_glob[1:uppars.nolocpars] )
         @printf( " (%s)   lifestats: div = %1.5e +- %1.5e,   dth = %1.5e +- %1.5e,   prob_dth = %1.5e\n", uppars.chaincomment, mean_div,std_div, mean_dth,std_dth, prob_dth )
     elseif( uppars.model==9 )                                                                   # Frechet-models
         (mean_div,std_div, mean_dth,std_dth, prob_dth) = getFrechetstats( state.pars_glob[1:uppars.nolocpars] )
         @printf( " (%s)   lifestats: div = %1.5e +- %1.5e,   dth = %1.5e +- %1.5e,   prob_dth = %1.5e\n", uppars.chaincomment, mean_div,std_div, mean_dth,std_dth, prob_dth )
-    elseif( (uppars.model==11) | (uppars.model==12) | (uppars.model==13) | (uppars.model==14) ) # Gamma-Exponential-models
+    elseif uppars.model in (11, 12, 13, 14) # Gamma-Exponential-models
         (mean_div,std_div, mean_dth,std_dth, prob_dth) = estimateGammaExponentialstats( state.pars_glob[1:uppars.nolocpars] )
         @printf( " (%s)   lifestats: div = %1.5e +- %1.5e,   dth = %1.5e +- %1.5e,   prob_dth = %1.5e\n", uppars.chaincomment, mean_div,std_div, mean_dth,std_dth, prob_dth )
     end     # end of distinguishing models
@@ -2807,7 +2807,7 @@ end     # end of ABCstateoutput function
 function ABCregularcontrolwindowoutput( lineagetree::Lineagetree, state::Lineagestate2, logprob::Float64, accptmetrics::Array{Bool,1}, cellcategories::Array{UInt64,1},nocorrelationgenerations::UInt64, uppars::Uppars2 )::Nothing
     # outputs state to the control-window at a regular frequency
 
-    if( (uppars.without>=1) & ((uppars.MCit%(uppars.MCmax/10)==0) | (uppars.MCit==uppars.MCmax)) )
+    if uppars.without >= 1 && ((uppars.MCit%(uppars.MCmax/10)==0) || (uppars.MCit==uppars.MCmax))
         ABCstateoutput( state, logprob,accptmetrics, cellcategories,nocorrelationgenerations, uppars )
     end     # end if time for output
     return nothing
@@ -2942,7 +2942,7 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
             end     # end if angle-dimension
             display(p2)
             # joint plots of shape and scale, if GammaExponential model:
-            if( (mymodel==11) | (mymodel==12) | (mymodel==13) | (mymodel==14) ) # ie GammaExponential model
+            if mymodel in (11, 12, 13, 14) # ie GammaExponential model
                 if( j_globpar==1 )                      # scale parameter
                     values1_chains_hist = deepcopy(values_chains_hist)
                 elseif( j_globpar==2 )                  # shape parameter
@@ -2964,7 +2964,7 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
     @printf( "          individually per chain:  %+1.5e +- %1.5e      [ %s].\n", mean(logprob_chains),std(logprob_chains)/sqrt(nochains), join([@sprintf("%+1.5e ",j) for j in logprob_chains]) )
     #@printf( " Info - analysemultipleABCstatistics: Done now (after %1.3f sec).\n", (DateTime(now())-mytimestamp)/Millisecond(1000) )
     # ...for eigenvalue-statistics:
-    if( (mymodel==4) | (mymodel==9) | (mymodel==14) )               # also output eigenvalue statistics, in case of hiddenmatrix models
+    if mymodel in (4, 9, 14)               # also output eigenvalue statistics, in case of hiddenmatrix models
         eigenvalues_chains_hist::Array{ComplexF64,3} = Array{ComplexF64,3}(undef,nochains,2,nosamples)
         categories_chains_hist::Array{UInt64,2} = Array{UInt64,2}(undef,nochains,nosamples)
         categories_chains_mean::Array{Float64,2} = Array{Float64,2}(undef,nochains,3)
@@ -3024,7 +3024,7 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
     end     # end if model with hiddenmatrix
     # ...for standardised event-times histogram:
     if( withgraphical )
-        if( (mymodel==1) | (mymodel==2) | (mymodel==3) | (mymodel==4) | (mymodel==9) | (mymodel==11) | (mymodel==12) | (mymodel==13) | (mymodel==14) )  # only meaningful, if a model with rescaled time
+        if mymodel in (1, 2, 3, 4, 9, 11, 12, 13, 14)  # only meaningful, if a model with rescaled time
             # ....set auxiliary parameters:
             pars_cell_std::Array{Float64,1} = pars_glob_means[1:mynolocpars]
             #times_cell_std::Array{Float64,1} = [0.0, 0.0]
@@ -3247,7 +3247,7 @@ function ABCreadlineagestatefromtext( fullfilename::String )::Tuple{Array{Lineag
         newline = readline(myfile)          # empty line
         noparticles = noparticles[1]        # number of particles at posterior level
         (noups, noglobpars_2,nohide_2,nolocpars_2) = getMCmodelnoups2( model, nocells )
-        if( (noglobpars_2!=noglobpars) | (nohide_2!=nohide) | (nolocpars_2!=nolocpars) )
+        if noglobpars_2 != noglobpars || nohide_2 != nohide || nolocpars_2 != nolocpars
             @printf( " (%s) Warning - ABCreadlineagestatefromtext (%d): Wrong parameter numbers for model %d, version %d: %d vs %d, %d vs %d, %d vs %d.\n", chaincomment,MCmax, model,version, noglobpars,noglobpars_2, nohide,nohide_2, nolocpars,nolocpars_2 )
         end     # end if read something wrong
         pars_stps = ones(noups); pars_stps[2] = 2E-4
@@ -3256,7 +3256,7 @@ function ABCreadlineagestatefromtext( fullfilename::String )::Tuple{Array{Lineag
         (fullfilename,lineagedata) = readlineagefile("",lineagename[1:(end-4)]); lineagetree = initialiseLineagetree(fullfilename,lineagedata, unknownfates)
         unknownmothersamples::Unknownmotherequilibriumsamples = Unknownmotherequilibriumsamples(0.0,nomothersamples,nomotherburnin,zeros(nomothersamples,nohide),zeros(nomothersamples,nolocpars),zeros(nomothersamples,2),zeros(Int64,nomothersamples),zeros(nomothersamples))   # initialise
         state_init2::Lineagestate2 = Lineagestate2( NaN*ones(noglobpars), NaN*ones(nocells,nohide), NaN*ones(nocells,nolocpars), NaN*ones(nocells,2), [unknownmothersamples] )  # will get set randomly for each chain, if it contains NaN
-        (~, statefunctions,~,~, uppars) = ABCinitialiseLineageMCmodel( lineagetree, model,timeunit,"none", comment,chaincomment,timestamp, UInt64(1),UInt64(1),noparticles,subsample, state_init2,pars_stps, nomothersamples,nomotherburnin, without,withwriteoutputtext )
+        (_, statefunctions, _, _, uppars) = ABCinitialiseLineageMCmodel( lineagetree, model,timeunit,"none", comment,chaincomment,timestamp, UInt64(1),UInt64(1),noparticles,subsample, state_init2,pars_stps, nomothersamples,nomotherburnin, without,withwriteoutputtext )
         state_hist = Array{Lineagestate2,1}(undef,noparticles);  logweight_hist = Array{Float64,1}(undef,noparticles)  # initialise
         if( uppars.model==1 )               # simple FrechetWeibull model
             getstatefromlist = x->getstatefromlist_m1( lineagetree, x,statefunctions, uppars )          # has to be in-line definition
