@@ -1,0 +1,7 @@
+[project]
+name = "lineage-analysis"
+version = "0.1.0"
+dependencies = [
+  "parsl>=2024.06.24",
+]
+requires-python = ">= 3.8"
