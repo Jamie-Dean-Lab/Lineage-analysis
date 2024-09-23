@@ -33,13 +33,13 @@ function readandanalysemultipleABCstatistics()
     end     # end of distinguishing modes
     @printf( " Info - readandanalysemultipleABCstatistics: Start with postprocessing existing file now, mode %d (after %1.3f sec).\n", mode, (DateTime(now())-t1)/Millisecond(1000) )
     # Read the first line of the file to decide the version.  First line of the file is of the format:
-    #     version:   3
-    # so we read it, split by ':' and parse the second part of the line.
-    version = parse(Int, split(readline(filenames[1]), ':')[2])
-    if( version==3 )
+    #     version:   3.10
+    # so we read it, split by ':', remove whitespaces, and parse the second part of the line.
+    version = parse(VersionNumber, strip(split(readline(filenames[1]), ':')[2]))
+    if version == v"3"
         (state_chains_hist::Vector{Vector{Lineagestate2}}, logprob_chains::Vector{Float64}, uppars_chains::Vector{Uppars2}, lineagetree::Lineagetree) = ABCreadmultiplestatesfromtexts( filenames )[[1,3,4,5]]
     else                                        # unknown version
-        @printf( " Warning - readandanalysemultipleABCstatistics: Unkonwn version %d.\n", version )
+        println(" Warning - readandanalysemultipleABCstatistics: Unkonwn version $(version).")
         error( " Error - readandanalysemultipleABCstatistics: Unknown version." )
     end     # end of checking version
     analysemultipleABCstatistics( lineagetree, state_chains_hist,logprob_chains, uppars_chains, withgraphical,withrotationcorrection )
