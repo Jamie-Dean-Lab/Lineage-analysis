@@ -55,7 +55,7 @@ config = Config(
                 nodes_per_block=1,
                 init_blocks=1,
                 max_blocks=1,
-                walltime="00:30:00",
+                walltime="00:20:00",
                 scheduler_options='#$ -pe mpi 18', # Input your scheduler_options if needed
                 # Parsl python environment need to be loaded and activated also
                 # on the compute node.
