@@ -76,6 +76,5 @@ this_dir = os.path.dirname(os.path.realpath(__file__))
 def run_lineage_analysis(this_dir):
     return f"""julia -t 18 --project={this_dir} -e 'using Pkg; Pkg.instantiate(); include("{this_dir}/controlgetlineageABCdynamics.jl"); controlgetlineageABCdynamics()'"""
 
-
-parsl.load(config)
-run_lineage_analysis(this_dir).result()
+with parsl.load(config):
+    run_lineage_analysis(this_dir).result()
