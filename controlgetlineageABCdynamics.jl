@@ -86,7 +86,7 @@ function controlgetlineageABCdynamics()
     notreeparticles::UInt64 = UInt64(1e2)           # number of particles to estimate effect of nuisance parameters
     auxiliaryfoldertrunkname::String = "Auxfiles"   # trunkname of folder, where auxiliary files are saved, if useRAM is 'false'
     useRAM::Bool = true                             # 'true' for saving variables into workspace, 'false' for saving in external textfiles
-    withCUDA::Bool = true                           # 'true' for using GPU, 'false' for without using GPU
+    withCUDA::Bool = false                          # 'true' for using GPU, 'false' for without using GPU
     trickycells::Array{UInt64,1} = UInt64.([])      # cells that need many particles to not lose them; in order of appearance in lineagetree
     without::Int64 = 1                              # '0' only warnings, '1' basic output, '2' detailied output, '3' debugging
     withwriteoutputtext::Bool = true                # 'true' if output of textfile, 'false' otherwise
