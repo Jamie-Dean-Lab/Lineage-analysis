@@ -16,7 +16,7 @@ classifiers = [
 ]
 dependencies = [
 ]
-description = "A test package"
+description = "A package to convert track formats"
 dynamic = ["version"]
 name = "track-converter"
 readme = "README.md"
