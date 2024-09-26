@@ -1,0 +1,43 @@
+name: ParslPipeline
+
+on:
+  push:
+    branches: "main"
+    tags: ["*"]
+  pull_request:
+  release:
+
+concurrency:
+  # Skip intermediate builds: always.
+  # Cancel intermediate builds: always.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-parsl:
+    timeout-minutes: 60
+    name: Test Parsl pipeline
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+          arch: 'x64'
+      - uses: julia-actions/cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+      - name: Create virtual environment
+        run: |
+          python3 -m venv env
+          source env/bin/activate
+      - name: Install Parsl
+        run: |
+          pip install .
+      - name: Run Parsl pipeline
+        run: |
+          ./run-lineage-analysis.py
