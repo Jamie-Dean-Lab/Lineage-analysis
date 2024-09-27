@@ -22,10 +22,19 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@v2
-        with:
-          version: '1'
-          arch: 'x64'
+      - name: Remove Julia
+        # We want to test the installation of Julia with juliaup within the
+        # Parsl pipeline, so we have to remove Julia from this environment.
+        run: |
+          sudo rm -r /usr/bin/julia /usr/local/julia*
+      - name: Make sure Julia is not installed
+        # Make sure Julia is indeed not installed at this point, in case the
+        # previous step failed to remove all installations of Julia.
+        run: |
+          if which julia; then
+              echo "Julia is installed, make sure it's uninstalled at this point"
+              exit 1
+          fi
       - uses: julia-actions/cache@v2
       - uses: actions/setup-python@v5
         with:
@@ -41,3 +50,8 @@ jobs:
       - name: Run Parsl pipeline
         run: |
           ./run-lineage-analysis.py
+      - name: Add Julia to PATH
+        # This is only needed for the post-run hook of the `julia-actions/cache`
+        # workflow, which needs `julia` to be available in `PATH`.
+        run: |
+          echo "PATH=${HOME}/.juliaup/bin:${PATH}" >> "${GITHUB_ENV}"
