@@ -15,10 +15,11 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
 ]
 dependencies = [
+  "pandas"
 ]
 description = "A package to convert track formats"
 dynamic = ["version"]
-name = "track-converter"
+name = "track_converter"
 readme = "README.md"
 requires-python = ">=3.10"
 
@@ -44,6 +45,9 @@ ignore = [
     "D407", # removed dashes lines under sections
     "D417", # argument description in docstring (unreliable)
     "ISC001", # simplify implicit str concatenation (ruff-format recommended)
+    "D104",
+    "D100",
+    "PLR2004"
 ]
 per-file-ignores = {"tests*" = [
     "INP001", # File is part of an implicit namespace package.
