@@ -34,15 +34,19 @@ def validate_tracks_shape_dtypes(tracks: pd.DataFrame) -> None:
         raise ValueError(msg)
 
     if not (tracks["L"] > 0).all():
-        msg = "all values in the first column must be greater than zero"
+        msg = "all track labels (first column) must be greater than zero"
+        raise ValueError(msg)
+
+    if not tracks["L"].is_unique:
+        msg = "all track labels (first column) must be unique"
         raise ValueError(msg)
 
     if not (tracks["P"] >= 0).all():
-        msg = "all values in the fourth column must be greater than or equal to zero"
+        msg = "all track parent labels (fourth column) must be greater than or equal to zero"
         raise ValueError(msg)
 
     if not tracks["R"].isin((0, 1)).all():
-        msg = "all values in the last column must be 0 or 1"
+        msg = "all right-censoring flags (last column) must be 0 or 1"
         raise ValueError(msg)
 
 
@@ -59,6 +63,33 @@ def validate_track_begin_end_frames(tracks: pd.DataFrame) -> None:
 
     if not (tracks_begin_after_end["B"] - tracks_begin_after_end["E"] == 1).all():
         msg = "The tracks start frame must be <= the tracks end frame, unless it is by a single frame."
+        raise ValueError(msg)
+
+
+def validate_n_daughters(tracks: pd.DataFrame) -> None:
+    """
+    Validate the number of daughters produced by each cell, as well as some other simple checks for the parent id.
+
+    Each mother-cell should either have two daughters or none (right-censored or dying).
+    """
+    # All parent ids (P) should match a track label (L) or be 0
+    parents_in_labels = tracks["P"].isin(tracks["L"])
+    parents_are_zero = tracks["P"] == 0
+    if not (parents_in_labels | parents_are_zero).all():
+        msg = "Track parents (fourth column) must match a track label (first column), or be set to zero"
+        raise ValueError(msg)
+
+    # The parent id (P) of a track can't be equal to its label (L)
+    if (tracks["P"] == tracks["L"]).any():
+        msg = "A tracks parent (fourth column) can't be equal to its label (first column)"
+        raise ValueError(msg)
+
+    # Each parent id should appear twice (i.e. two daughters), except for zero which can occur any number of times
+    parent_counts = tracks["P"].value_counts()
+    two_daughters = parent_counts == 2
+    zero_label = parent_counts.index.to_series() == 0
+    if not (two_daughters | zero_label).all():
+        msg = "Tracks must have 2 daughters, or None"
         raise ValueError(msg)
 
 
@@ -79,6 +110,7 @@ def preprocess_ctc_file(input_ctc_filepath: Path, output_ctc_filepath: Path) -> 
     tracks = pd.read_table(input_ctc_filepath, sep=r"\s+", header=None)
     validate_tracks_shape_dtypes(tracks)
     validate_track_begin_end_frames(tracks)
+    validate_n_daughters(tracks)
 
     # save new file
     tracks.to_csv(output_ctc_filepath, sep=" ", header=False, index=False)
