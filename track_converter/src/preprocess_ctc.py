@@ -46,6 +46,22 @@ def validate_tracks_shape_dtypes(tracks: pd.DataFrame) -> None:
         raise ValueError(msg)
 
 
+def validate_track_begin_end_frames(tracks: pd.DataFrame) -> None:
+    """
+    Validate the begin and end frames of the tracks.
+
+    Begin frame (B) must be <= end frame (E), unless it is by a single frame.
+    E can be one less than B if the cell existed but was never observed.
+    """
+    tracks_begin_after_end = tracks.loc[tracks["B"] > tracks["E"], :]
+    if tracks_begin_after_end.empty:
+        return
+
+    if not (tracks_begin_after_end["B"] - tracks_begin_after_end["E"] == 1).all():
+        msg = "The tracks start frame must be <= the tracks end frame, unless it is by a single frame."
+        raise ValueError(msg)
+
+
 def preprocess_ctc_file(input_ctc_filepath: Path, output_ctc_filepath: Path) -> None:
     """
     Preprocess Cell Tracking Challenge (CTC) format files.
@@ -62,6 +78,7 @@ def preprocess_ctc_file(input_ctc_filepath: Path, output_ctc_filepath: Path) -> 
     """
     tracks = pd.read_table(input_ctc_filepath, sep=r"\s+", header=None)
     validate_tracks_shape_dtypes(tracks)
+    validate_track_begin_end_frames(tracks)
 
     # save new file
     tracks.to_csv(output_ctc_filepath, sep=" ", header=False, index=False)

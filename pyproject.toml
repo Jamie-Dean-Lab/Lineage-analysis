@@ -49,12 +49,25 @@ ignore = [
     "D100",
     "PLR2004"
 ]
-per-file-ignores = {"tests*" = [
+per-file-ignores = {"track_converter/tests*" = [
     "INP001", # File is part of an implicit namespace package.
-    "S101", # Use of `assert` detected
+    "S101", # Use of `assert` detected,
+    "ANN001",
+    "ANN201",
+    "D103",
+    "PT006"
 ]}
 select = ["ALL"]
 mccabe.max-complexity = 18
+
+[tool.pytest.ini_options]
+addopts = [
+    "--color=yes",
+    "--verbose",
+]
+testpaths = [
+    "track_converter/tests",
+]
 
 [tool.tomlsort]
 all = true
@@ -62,3 +75,6 @@ spaces_indent_inline_array = 4
 trailing_comma_inline_array = true
 overrides."project.classifiers".inline_arrays = false
 overrides."tool.coverage.paths.source".inline_arrays = false
+
+[tool.mypy]
+explicit_package_bases = true
