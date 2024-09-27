@@ -73,15 +73,44 @@ def python_path():
     return f'PATH="{os.path.dirname(sys.executable)}:${{PATH}}"'
 
 
+# In case Julia isn't available in the system, install it using juliaup:
+# <https://github.com/JuliaLang/juliaup>.
+def install_juliaup():
+    return '''
+    if which julia &> /dev/null; then
+        export JL_BINDIR=""
+    else
+        if which wget &> /dev/null; then
+            DOWNLOADER="wget -O -"
+        elif which curl &> /dev/null; then
+            DOWNLOADER="curl -fsSL"
+        else
+            echo "No known downloader (wget or curl) available to install Julia"
+        fi # if which wget
+
+        ${DOWNLOADER} https://install.julialang.org | sh -s -- --yes
+
+        export JL_BINDIR="${HOME}/.juliaup/bin/"
+    fi # if which julia
+    '''
+
+
 def module_load_julia(system):
     if system == 'myriad.rc.ucl.ac.uk':
         return 'module load julia/1.10.1'
     else:
-        return ''
+        # We don't know how to use julia here, let's try to install it with
+        # Juliaup if not available.
+        return install_juliaup()
 
 
 def get_worker_init(system):
-    return f'{source_bashrc(system)}; {module_load_python(system)}; {python_path()}; {module_load_julia(system)}'
+    return f'''
+    {source_bashrc(system)}
+    {module_load_python(system)}
+    {python_path()}
+    {module_load_julia(system)}
+    '''
 
 
 def get_htc_executor(system):
@@ -119,9 +148,21 @@ def get_config():
 
 
 @bash_app
-def run_lineage_analysis(this_dir):
-    return f"""julia -t auto --project={this_dir} -e 'using Pkg; Pkg.instantiate(); include("{this_dir}/controlgetlineageABCdynamics.jl"); controlgetlineageABCdynamics()'"""
+def run_lineage_analysis(this_dir, system):
+    # The bash script we'll eventually run
+    script = ''
+
+    if system == 'local':
+        # We may need to install juliaup if we're running "locally".
+        script = script + install_juliaup()
+
+    # The actual pipeline
+    script = script + f'''
+    ${{JL_BINDIR}}julia -t auto --project={this_dir} -e 'using Pkg; Pkg.instantiate(); include("{this_dir}/controlgetlineageABCdynamics.jl"); controlgetlineageABCdynamics()'
+    '''
+
+    return script
 
 
 with parsl.load(get_config()):
-    run_lineage_analysis(this_dir).result()
+    run_lineage_analysis(this_dir, system).result()
