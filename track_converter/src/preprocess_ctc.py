@@ -93,6 +93,22 @@ def validate_n_daughters(tracks: pd.DataFrame) -> None:
         raise ValueError(msg)
 
 
+def validate_mother_daughter_frames(tracks: pd.DataFrame) -> None:
+    """Validate that both daughter cells appear one frame after the mother's last frame."""
+    # ignore parent ids of 0 (this means the parent is unknown)
+    tracks_with_parents = tracks.loc[tracks["P"] != 0, :]
+
+    # For each track, its begin frame (B) must be one more than its parent's end frame (E)
+    tracks_with_parents = tracks_with_parents.merge(
+        tracks[["L", "E"]], how="left", left_on="P", right_on="L", suffixes=("_track", "_parent")
+    )
+    tracks_with_parents = tracks_with_parents[["L_track", "P", "B", "E_parent"]]
+
+    if not (tracks_with_parents["B"] - tracks_with_parents["E_parent"] == 1).all():
+        msg = "Daughter cells must appear one frame after the mother's last frame"
+        raise ValueError(msg)
+
+
 def preprocess_ctc_file(input_ctc_filepath: Path, output_ctc_filepath: Path) -> None:
     """
     Preprocess Cell Tracking Challenge (CTC) format files.
@@ -111,6 +127,7 @@ def preprocess_ctc_file(input_ctc_filepath: Path, output_ctc_filepath: Path) -> 
     validate_tracks_shape_dtypes(tracks)
     validate_track_begin_end_frames(tracks)
     validate_n_daughters(tracks)
+    validate_mother_daughter_frames(tracks)
 
     # save new file
     tracks.to_csv(output_ctc_filepath, sep=" ", header=False, index=False)
