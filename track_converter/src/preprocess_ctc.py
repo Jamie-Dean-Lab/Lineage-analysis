@@ -109,6 +109,14 @@ def validate_mother_daughter_frames(tracks: pd.DataFrame) -> None:
         raise ValueError(msg)
 
 
+def validate_right_censored_daughters(tracks: pd.DataFrame) -> None:
+    """Validate that all right-censored cells have no daughters."""
+    right_censored_labels = tracks.loc[tracks["R"] == 1, "L"]
+    if (tracks["P"].isin(right_censored_labels)).any():
+        msg = "Right-censored cells should have no daughters"
+        raise ValueError(msg)
+
+
 def preprocess_ctc_file(input_ctc_filepath: Path, output_ctc_filepath: Path) -> None:
     """
     Preprocess Cell Tracking Challenge (CTC) format files.
@@ -128,6 +136,7 @@ def preprocess_ctc_file(input_ctc_filepath: Path, output_ctc_filepath: Path) -> 
     validate_track_begin_end_frames(tracks)
     validate_n_daughters(tracks)
     validate_mother_daughter_frames(tracks)
+    validate_right_censored_daughters(tracks)
 
     # save new file
     tracks.to_csv(output_ctc_filepath, sep=" ", header=False, index=False)

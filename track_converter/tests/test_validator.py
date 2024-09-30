@@ -48,6 +48,15 @@ def test_validate_mother_daughter_frames(tmp_path, test_data_dir):
         preprocess_ctc_file(tracks_in_path, tracks_out_path)
 
 
+def test_validate_right_censored_daughters(tmp_path, test_data_dir):
+    """Test exception is raised when right-censored cells have daughters."""
+    tracks_in_path = test_data_dir / "tracks_right_censored_with_daughters.txt"
+    tracks_out_path = tmp_path / "tracks_out.txt"
+
+    with pytest.raises(ValueError, match=r"Right-censored cells should have no daughters"):
+        preprocess_ctc_file(tracks_in_path, tracks_out_path)
+
+
 def test_valid_file_passes(tmp_path, test_data_dir):
     """Run a valid example file through the validation, checking no exceptions are raised."""
     tracks_in_path = test_data_dir / "tracks_standard_format.txt"
