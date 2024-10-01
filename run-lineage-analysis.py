@@ -158,7 +158,26 @@ def run_lineage_analysis(this_dir, system):
 
     # The actual pipeline
     script = script + f'''
-    ${{JL_BINDIR}}julia -t auto --project={this_dir} -e 'using Pkg; Pkg.instantiate(); include("{this_dir}/controlgetlineageABCdynamics.jl"); controlgetlineageABCdynamics()'
+    ${{JL_BINDIR}}julia -t auto --project={this_dir} -e 'using Pkg; Pkg.instantiate(); include("{this_dir}/controlgetlineageABCdynamics.jl"); controlgetlineageABCdynamics(;
+        trunkfilename = nothing,
+        filename = nothing,
+        comment = nothing,
+        nochains = UInt(2),
+        model = UInt64(11),
+        timeunit = 4.0/60,
+        MCmax = UInt(30),
+        subsample = UInt(2),
+        nomothersamples = UInt(300),
+        nomotherburnin = UInt(5),
+        nolevels = UInt(3),
+        notreeparticles = UInt(100),
+        auxiliaryfoldertrunkname = nothing,
+        useRAM = nothing,
+        withCUDA = nothing,
+        trickycells = nothing,
+        without = nothing,
+        withwriteoutputtext = nothing,
+    )'
     '''
 
     return script
