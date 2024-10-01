@@ -46,6 +46,15 @@ jobs:
         run: |
           include(joinpath(pwd(), "controlgetlineageABCdynamics.jl"))
           controlgetlineageABCdynamics(;
+              model=UInt64(11),
+              timeunit=4.0/60,
+              nochains=UInt(2),
+              MCmax=UInt(30),
+              subsample=UInt(2),
+              nomothersamples=UInt(300),
+              nomotherburnin=UInt(5),
+              nolevels=UInt(3),
+              notreeparticles=UInt(100)
           )
         env:
           JULIA_NUM_THREADS: 4
