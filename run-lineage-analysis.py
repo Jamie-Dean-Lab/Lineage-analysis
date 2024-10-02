@@ -113,6 +113,13 @@ def get_worker_init(system):
     '''
 
 
+def get_scheduler_options(system):
+    if system == 'myriad.rc.ucl.ac.uk':
+        return '#$ -pe smp 8'
+    else:
+        return ''
+
+
 def get_htc_executor(system):
     return HighThroughputExecutor(
         label=system,
@@ -124,7 +131,7 @@ def get_htc_executor(system):
             init_blocks=1,
             max_blocks=1,
             walltime="00:20:00",
-            scheduler_options='#$ -pe smp 8', # Input your scheduler_options if needed
+            scheduler_options=get_scheduler_options(system), # Input your scheduler_options if needed
             # Parsl python environment need to be loaded and activated also
             # on the compute node.
             worker_init=get_worker_init(system),
