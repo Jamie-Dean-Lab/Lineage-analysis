@@ -49,7 +49,15 @@ jobs:
           pip install .
       - name: Run Parsl pipeline
         run: |
-          ./run-lineage-analysis.py
+          ./run-lineage-analysis.py --model 11 \
+              --timeunit '4/6' \
+              --nochains 2 \
+              --mcmax 30 \
+              --subsample 2 \
+              --nomothersamples 300 \
+              --nomotherburnin 5 \
+              --nolevels 3 \
+              --notreeparticles 100
       - name: Add Julia to PATH
         # This is only needed for the post-run hook of the `julia-actions/cache`
         # workflow, which needs `julia` to be available in `PATH`.

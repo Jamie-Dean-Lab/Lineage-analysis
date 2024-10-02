@@ -15,7 +15,7 @@ function controlgetlineageABCdynamics(;
                                       trunkfilename::Maybe{String}=nothing,
                                       filename::Maybe{String}=nothing,
                                       comment::Maybe{String}=nothing,
-                                      nochains::Maybe=nothing, # number of independent chains for convergence statistic.  Must be a number convertable to `UInt64`o
+                                      nochains::Maybe=nothing, # number of independent chains for convergence statistic.  Must be a number convertable to `UInt64`
                                       model::Maybe{Integer}=nothing, # Must be set by the user! '1' for FrechWeib-model with global paramters, '2' for FrechWeib-model with clock, '3' for FrechWeib-model with rw-inheritance, '4' for FrechWeib-model with 2d rw-inheritance, '11' fr GammaExponential with global parameters, '12' for GammaExponential with clock, '13' for GammaExponential with rw-inheritance, '14' for GammaExponential with 2d rw-inheritance
                                       timeunit::Maybe{Float64}=nothing, # for getting priors right; in relation to hours.  Must be set by users!
                                       MCmax::Maybe{Integer}=nothing, # last iteration
@@ -23,7 +23,7 @@ function controlgetlineageABCdynamics(;
                                       nomothersamples::Maybe{Integer}=nothing, # number of samples for sampling empirically from unknownmotherdistribution
                                       nomotherburnin::Maybe{Integer}=nothing, # burnin for sampling empirically from unknownmotherdistribution
                                       nolevels::Maybe{Integer}=nothing, # number of levels before posterior, first one is prior
-                                      notreeparticles::Maybe{UInt64}=nothing, # number of particles to estimate effect of nuisance parameters
+                                      notreeparticles::Maybe{Integer}=nothing, # number of particles to estimate effect of nuisance parameters
                                       auxiliaryfoldertrunkname::Maybe{String}=nothing, # trunkname of folder, where auxiliary files are saved, if useRAM is 'false'
                                       useRAM::Maybe{Bool}=nothing, # 'true' for saving variables into workspace, 'false' for saving in external textfiles
                                       withCUDA::Maybe{Bool}=nothing, # 'true' for using GPU, 'false' for without using GPU
