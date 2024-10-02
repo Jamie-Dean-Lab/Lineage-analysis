@@ -5,9 +5,10 @@ from pathlib import Path
 import shutil
 import socket
 import sys
+
+import click
 import parsl
 from parsl import bash_app
-
 from parsl.channels import LocalChannel
 from parsl.config import Config
 from parsl.executors import HighThroughputExecutor
@@ -18,20 +19,7 @@ from parsl.usage_tracking.levels import LEVEL_1
 # parsl.set_stream_logger(level=parsl.logging.DEBUG)
 
 
-if 'myriad.ucl.ac.uk' in socket.gethostname():
-    system = 'myriad.rc.ucl.ac.uk'
-else:
-    system = 'local'
-
-
 this_dir = os.path.dirname(os.path.realpath(__file__))
-
-
-def get_logdir_root(system):
-    if system == 'myriad.rc.ucl.ac.uk':
-        return '/lustre/scratch/scratch/cceamgi/tmp/parsl-test'
-    else:
-        return os.path.join(this_dir, 'logdir')
 
 
 def source_bashrc(system):
@@ -120,17 +108,17 @@ def get_scheduler_options(system):
         return ''
 
 
-def get_htc_executor(system):
+def get_htc_executor(system, walltime, logdir):
     return HighThroughputExecutor(
         label=system,
         max_workers_per_node=1,
-        worker_logdir_root=get_logdir_root(system),
+        worker_logdir_root=logdir if logdir else os.path.join(this_dir, 'logdir'),
         provider=GridEngineProvider(
             channel=LocalChannel(),
             nodes_per_block=1,
             init_blocks=1,
             max_blocks=1,
-            walltime="00:20:00",
+            walltime=walltime,
             scheduler_options=get_scheduler_options(system), # Input your scheduler_options if needed
             # Parsl python environment need to be loaded and activated also
             # on the compute node.
@@ -140,13 +128,13 @@ def get_htc_executor(system):
 
 
 # Define configuration
-def get_config():
+def get_config(system, walltime, logdir):
     if system == 'local':
         return None
 
     return Config(
         executors=[
-            get_htc_executor(system),
+            get_htc_executor(system, walltime, logdir),
         ],
         #  AdHoc Clusters should not be setup with scaling strategy.
         strategy='none',
@@ -155,7 +143,43 @@ def get_config():
 
 
 @bash_app
-def run_lineage_analysis(this_dir, system):
+def run_lineage_analysis(script):
+    return script
+
+
+@click.command()
+@click.option("--system", default="auto", help="Name of the system where to run the pipeline")
+@click.option("--walltime", default="00:20:00", help="Walltime for jobs sent to the scheduler")
+@click.option("--logdir", default="", help="Directory where to store the Parsl log files")
+@click.option("--trunkfilename", default="nothing")
+@click.option("--filename", default="nothing")
+@click.option("--comment", default="nothing")
+@click.option("--nochains", default="nothing", help="Number of independent chains for convergence statistic")
+@click.option("--model", default="nothing")
+@click.option("--timeunit", default="nothing")
+@click.option("--mcmax", default="nothing", help="Last iteration")
+@click.option("--subsample", default="nothing", help="Subsampling frequency")
+@click.option("--nomothersamples", default="nothing", help="Number of samples for sampling empirically from unknownmotherdistribution")
+@click.option("--nomotherburnin", default="nothing", help="Burnin for sampling empirically from unknownmotherdistribution")
+@click.option("--nolevels", default="nothing", help="Number of levels before posterior, first one is prior")
+@click.option("--notreeparticles", default="nothing", help="Number of particles to estimate effect of nuisance parameters")
+@click.option("--auxiliaryfoldertrunkname", default="nothing", help="Trunkname of folder, where auxiliary files are saved, if useRAM is 'false'")
+@click.option("--useram", default="nothing", help="'true' for saving variables into workspace, 'false' for saving in external textfiles")
+@click.option("--withcuda", default="nothing", help="'true' for using CUDA GPU, 'false' for without using GPU")
+@click.option("--trickycells", default="nothing", help="Cells that need many particles to not lose them; in order of appearance in lineagetree")
+@click.option("--without", default="nothing", help="'0' only warnings, '1' basic output, '2' detailied output, '3' debugging")
+@click.option("--withwriteoutputtext", default="nothing", help="'true' if output of textfile, 'false' otherwise")
+def main(system, walltime, logdir, trunkfilename, filename, comment, nochains, model,
+         timeunit, mcmax, subsample, nomothersamples, nomotherburnin, nolevels,
+         notreeparticles, auxiliaryfoldertrunkname, useram, withcuda,
+         trickycells, without, withwriteoutputtext):
+
+    if system == 'auto':
+        if 'myriad.ucl.ac.uk' in socket.gethostname():
+            system = 'myriad.rc.ucl.ac.uk'
+        else:
+            system = 'local'
+
     # The bash script we'll eventually run
     script = ''
 
@@ -165,30 +189,39 @@ def run_lineage_analysis(this_dir, system):
 
     # The actual pipeline
     script = script + f'''
-    ${{JL_BINDIR}}julia -t auto --project={this_dir} -e 'using Pkg; Pkg.instantiate(); include("{this_dir}/controlgetlineageABCdynamics.jl"); controlgetlineageABCdynamics(;
-        trunkfilename = nothing,
-        filename = nothing,
-        comment = nothing,
-        nochains = UInt(2),
-        model = UInt64(11),
-        timeunit = 4.0/60,
-        MCmax = UInt(30),
-        subsample = UInt(2),
-        nomothersamples = UInt(300),
-        nomotherburnin = UInt(5),
-        nolevels = UInt(3),
-        notreeparticles = UInt(100),
-        auxiliaryfoldertrunkname = nothing,
-        useRAM = nothing,
-        withCUDA = nothing,
-        trickycells = nothing,
-        without = nothing,
-        withwriteoutputtext = nothing,
+    ${{JL_BINDIR}}julia -t auto --project={this_dir} -e '
+    using Pkg
+
+    Pkg.Registry.add("General") # Add registry in case we are in a fresh depot
+    Pkg.Registry.update()
+    Pkg.resolve()
+    Pkg.instantiate()
+
+    include("{this_dir}/controlgetlineageABCdynamics.jl"); controlgetlineageABCdynamics(;
+        trunkfilename = {trunkfilename},
+        filename = {filename},
+        comment = {comment},
+        nochains = {nochains},
+        model = {model},
+        timeunit = {timeunit},
+        MCmax = {mcmax},
+        subsample = {subsample},
+        nomothersamples = {nomothersamples},
+        nomotherburnin = {nomotherburnin},
+        nolevels = {nolevels},
+        notreeparticles = {notreeparticles},
+        auxiliaryfoldertrunkname = {auxiliaryfoldertrunkname},
+        useRAM = {useram},
+        withCUDA = {withcuda},
+        trickycells = {trickycells},
+        without = {without},
+        withwriteoutputtext = {withwriteoutputtext},
     )'
     '''
 
-    return script
+    with parsl.load(get_config(system, walltime, logdir)):
+        run_lineage_analysis(script).result()
 
 
-with parsl.load(get_config()):
-    run_lineage_analysis(this_dir, system).result()
+if __name__ == '__main__':
+    main()
