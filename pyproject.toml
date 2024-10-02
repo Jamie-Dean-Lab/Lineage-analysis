@@ -18,6 +18,7 @@ classifiers = [
 dependencies = [
   "pandas",
   "btrack",
+  "click>=8.1.7, <9",
   "parsl>=2024.06.24",
 ]
 description = "A package to convert track formats"
