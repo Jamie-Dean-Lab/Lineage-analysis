@@ -40,7 +40,7 @@ function controlgetlineageABCdynamics(;
     comment = something(comment, "for_m2extrasmalltestdata")
     auxiliaryfoldertrunkname::String="Auxfiles"
     useRAM = something(useRAM, true)
-    withCUDA = something(withCUDA, false)
+    withCUDA = something(withCUDA, CUDA.functional())
     without = something(without, 1)
     withwriteoutputtext = something(withwriteoutputtext, true)
 
