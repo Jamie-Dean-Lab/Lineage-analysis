@@ -1,4 +1,5 @@
 import re
+from contextlib import nullcontext as does_not_raise
 from pathlib import Path
 
 import pandas as pd
@@ -24,25 +25,55 @@ def read_tracks(tracks_path: Path):
 @pytest.mark.parametrize(
     "tracks_file,expected_warning,expected_remaining_labels",
     [
-        ("tracks_begin_larger_than_end_frame_by_one.txt", "", (1, 2, 3, 4, 5, 6)),
-        (
+        # validate_cell_begin_end_frames
+        pytest.param(
+            "tracks_begin_larger_than_end_frame_by_one.txt",
+            "",
+            (1, 2, 3, 4, 5, 6),
+            id="Begin frame larger than end frame by one",
+        ),
+        pytest.param(
             "tracks_begin_larger_than_end_frame_by_two.txt",
             r"All cell start frames must be <= their end frame.*invalid labels: \[2\]",
             (4, 5, 6),
+            id="Begin frame larger than end frame by two",
+        ),
+        # validate_n_daughters
+        pytest.param(
+            "tracks_one_daughter.txt",
+            r"Cells must have 2 daughters, or None. .*invalid labels: \[1\]",
+            (3, 4, 5),
+            id="Cell only has one daughter",
+        ),
+        # validate_mother_daughter_frames
+        pytest.param(
+            "tracks_daughter_two_frames_after_mother.txt",
+            r"Daughter cells must appear one frame after .*invalid labels: \[2\]",
+            (4, 5, 6),
+            id="Daughter appears two frames after mother ends",
+        ),
+        # validate_right_censored_daughters
+        pytest.param(
+            "tracks_right_censored_with_daughters.txt",
+            r"Right-censored cells should have no daughters..*invalid labels: \[2 3\]",
+            (4, 5, 6),
+            id="Right-censored cell has daughters",
         ),
     ],
 )
-def test_validate_track_begin_end_frames(
-    tracks_file, expected_warning, expected_remaining_labels, tmp_path, test_data_dir, caplog
-):
-    """Test removal of invalid cells for begin frame > than end, unless it is by a single frame."""
+def test_validate_tracks(tracks_file, expected_warning, expected_remaining_labels, tmp_path, test_data_dir, caplog):
+    """
+    Test validation of tracks files with various issues.
+
+    For each, check the correct cells are removed and the correct warning is given.
+    """
     tracks_in_path = test_data_dir / tracks_file
     tracks_out_path = tmp_path / "tracks_out.txt"
     preprocess_ctc_file(tracks_in_path, tracks_out_path)
 
     # Check expected warning is given
     pattern = re.compile(expected_warning)
-    assert pattern.search(caplog.text) is not None
+    assert pattern.search(caplog.text) is not None, "Expected warning doesn't match"
 
     # Check correct cell labels are filtered out
     if tracks_out_path.exists:
@@ -54,35 +85,8 @@ def test_validate_track_begin_end_frames(
             assert remaining_labels.isin(expected_remaining_labels).all()
 
 
-def test_validate_n_daughters(tmp_path, test_data_dir):
-    """Test exception is raised when number of daughters is not equal to 2."""
-    tracks_in_path = test_data_dir / "tracks_one_daughter.txt"
-    tracks_out_path = tmp_path / "tracks_out.txt"
-
-    with pytest.raises(ValueError, match=r"Cell must have 2 daughters, or None"):
-        preprocess_ctc_file(tracks_in_path, tracks_out_path)
-
-
-def test_validate_mother_daughter_frames(tmp_path, test_data_dir):
-    """Test exception is raised when daughters don't appear one frame after the mother ends."""
-    tracks_in_path = test_data_dir / "tracks_daughter_two_frames_after_mother.txt"
-    tracks_out_path = tmp_path / "tracks_out.txt"
-
-    with pytest.raises(ValueError, match=r"Daughter cells must appear one frame after"):
-        preprocess_ctc_file(tracks_in_path, tracks_out_path)
-
-
-def test_validate_right_censored_daughters(tmp_path, test_data_dir):
-    """Test exception is raised when right-censored cells have daughters."""
-    tracks_in_path = test_data_dir / "tracks_right_censored_with_daughters.txt"
-    tracks_out_path = tmp_path / "tracks_out.txt"
-
-    with pytest.raises(ValueError, match=r"Right-censored cells should have no daughters"):
-        preprocess_ctc_file(tracks_in_path, tracks_out_path)
-
-
 def test_valid_file_passes(tmp_path, test_data_dir):
-    """Run a valid example file through the validation, checking no exceptions are raised."""
+    """Run a larger valid example file through the validation, checking no exceptions are raised."""
     tracks_in_path = test_data_dir / "tracks_standard_format.txt"
     tracks_out_path = tmp_path / "tracks_out.txt"
 
@@ -90,7 +94,7 @@ def test_valid_file_passes(tmp_path, test_data_dir):
 
 
 @pytest.mark.parametrize(
-    "tracks_file,labels_to_discard,expected_remaining_labels",
+    "tracks_file,labels_to_discard,expected_remaining_labels,expected_exception",
     [
         # tracks where all cells are connected in one 'tree' with structure:
         #    1
@@ -98,20 +102,30 @@ def test_valid_file_passes(tmp_path, test_data_dir):
         #  2   3
         #     / \
         #    4   5
-        ("tracks_one_tree.txt", (5, 2), ()),
+        pytest.param(
+            "tracks_one_tree.txt",
+            (5, 2),
+            (),
+            pytest.raises(ValueError, match=r"No tracks remaining after discarding related cells of \(5, 2\)"),
+            id="one tree",
+        ),
         # tracks where cells are connected into two 'trees' with structure:
         #    1       4
         #   / \     / \
         #  2   3   5   6
-        ("tracks_two_trees.txt", (2,), (4, 5, 6)),
+        pytest.param("tracks_two_trees.txt", (2,), (4, 5, 6), does_not_raise(), id="two trees"),
     ],
 )
-def test_discard_related_cells(tracks_file, labels_to_discard, expected_remaining_labels, test_data_dir):
+def test_discard_related_cells(
+    tracks_file, labels_to_discard, expected_remaining_labels, expected_exception, test_data_dir
+):
     """Test discarding all related cells in different cell lineages."""
     tracks = read_tracks(test_data_dir / tracks_file)
-    tracks = discard_related_cells(tracks, labels_to_discard)
 
-    remaining_labels = tracks["L"]
-    assert len(remaining_labels) == len(expected_remaining_labels)
-    if len(expected_remaining_labels) > 0:
-        assert remaining_labels.isin(expected_remaining_labels).all()
+    with expected_exception:
+        tracks = discard_related_cells(tracks, labels_to_discard)
+        remaining_labels = tracks["L"]
+
+        assert len(remaining_labels) == len(expected_remaining_labels)
+        if len(expected_remaining_labels) > 0:
+            assert remaining_labels.isin(expected_remaining_labels).all()

@@ -129,6 +129,7 @@ def validate_cell_begin_end_frames(tracks: pd.DataFrame) -> pd.DataFrame:
         )
         logger.warning(msg)
         return discard_related_cells(tracks, invalid_labels)
+
     logger.info(passed_msg)
     return tracks
 
@@ -147,6 +148,7 @@ def validate_parents_in_labels(tracks: pd.DataFrame) -> pd.DataFrame:
         )
         logger.warning(msg)
         return discard_related_cells(tracks, invalid_labels)
+
     logger.info("Checking parent labels (P) appear in cell labels (L)... Passed")
     return tracks
 
@@ -162,6 +164,7 @@ def validate_parent_label_unequal(tracks: pd.DataFrame) -> pd.DataFrame:
         )
         logger.warning(msg)
         return discard_related_cells(tracks, invalid_labels)
+
     logger.info("Checking no cells have a parent label (P) equal to their own label (L)... Passed")
     return tracks
 
@@ -174,18 +177,17 @@ def validate_n_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
     """
     # Each parent label should appear twice (i.e. two daughters), except for zero which can occur any number of times
     parent_counts = tracks["P"].value_counts()
-    two_daughters = parent_counts == 2
-    zero_label = parent_counts.index.to_series() == 0
-    cells_are_valid = two_daughters | zero_label
+    cells_are_invalid = (parent_counts != 2) & (parent_counts.index.to_series() != 0)
 
-    if not cells_are_valid.all():
-        invalid_labels = tracks.loc[~cells_are_valid, "L"]
+    if cells_are_invalid.any():
+        invalid_labels = parent_counts.index.to_series()[cells_are_invalid]
         msg = (
             f"Cells must have 2 daughters, or None. "
             f"Removing all cells connected to invalid labels: {invalid_labels.to_numpy()}"
         )
         logger.warning(msg)
         return discard_related_cells(tracks, invalid_labels)
+
     logger.info("Checking cells have two daughters or no daughters... Passed")
     return tracks
 
@@ -203,13 +205,14 @@ def validate_mother_daughter_frames(tracks: pd.DataFrame) -> pd.DataFrame:
 
     cells_are_invalid = tracks_with_parents["B"] - tracks_with_parents["E_parent"] != 1
     if cells_are_invalid.any():
-        invalid_labels = tracks.loc[cells_are_invalid, "L"]
+        invalid_labels = tracks_with_parents.loc[cells_are_invalid, "L_track"]
         msg = (
             f"Daughter cells must appear one frame after the mother's last frame. "
             f"Removing all cells connected to invalid labels: {invalid_labels.to_numpy()}"
         )
         logger.warning(msg)
         return discard_related_cells(tracks, invalid_labels)
+
     logger.info("Checking daughter cells appear one frame after the mother's last frame... Passed")
     return tracks
 
@@ -227,6 +230,7 @@ def validate_right_censored_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
         )
         logger.warning(msg)
         return discard_related_cells(tracks, invalid_labels)
+
     logger.info("Checking right-censored cells have no daughters... Passed")
     return tracks
 
