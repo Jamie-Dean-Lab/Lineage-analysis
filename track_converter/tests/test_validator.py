@@ -1,4 +1,4 @@
-from contextlib import nullcontext as does_not_raise
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -12,23 +12,46 @@ def test_data_dir():
     return Path(__file__).parent.resolve() / "data"
 
 
+def read_tracks(tracks_path: Path):
+    tracks = pd.read_table(tracks_path, sep=r"\s+", header=None)
+    if len(tracks.columns) == 4:
+        tracks.columns = ["L", "B", "E", "P"]
+    elif len(tracks.columns) == 5:
+        tracks.columns = ["L", "B", "E", "P", "R"]
+    return tracks
+
+
 @pytest.mark.parametrize(
-    "tracks_file,expectation",
+    "tracks_file,expected_warning,expected_remaining_labels",
     [
-        ("tracks_begin_larger_than_end_frame_by_one.txt", does_not_raise()),
+        ("tracks_begin_larger_than_end_frame_by_one.txt", "", (1, 2, 3, 4, 5, 6)),
         (
             "tracks_begin_larger_than_end_frame_by_two.txt",
-            pytest.raises(ValueError, match=r"The tracked cell's start frame must be <= the end frame"),
+            r"All cell start frames must be <= their end frame.*invalid labels: \[2\]",
+            (4, 5, 6),
         ),
     ],
 )
-def test_validate_track_begin_end_frames(tracks_file, expectation, tmp_path, test_data_dir):
-    """Test exception is raised for begin frame > than end, unless it is by a single frame."""
+def test_validate_track_begin_end_frames(
+    tracks_file, expected_warning, expected_remaining_labels, tmp_path, test_data_dir, caplog
+):
+    """Test removal of invalid cells for begin frame > than end, unless it is by a single frame."""
     tracks_in_path = test_data_dir / tracks_file
     tracks_out_path = tmp_path / "tracks_out.txt"
+    preprocess_ctc_file(tracks_in_path, tracks_out_path)
 
-    with expectation:
-        preprocess_ctc_file(tracks_in_path, tracks_out_path)
+    # Check expected warning is given
+    pattern = re.compile(expected_warning)
+    assert pattern.search(caplog.text) is not None
+
+    # Check correct cell labels are filtered out
+    if tracks_out_path.exists:
+        processed_tracks = read_tracks(tracks_out_path)
+        remaining_labels = processed_tracks["L"]
+
+        assert len(remaining_labels) == len(expected_remaining_labels)
+        if len(expected_remaining_labels) > 0:
+            assert remaining_labels.isin(expected_remaining_labels).all()
 
 
 def test_validate_n_daughters(tmp_path, test_data_dir):
@@ -85,8 +108,7 @@ def test_valid_file_passes(tmp_path, test_data_dir):
 )
 def test_discard_related_cells(tracks_file, labels_to_discard, expected_remaining_labels, test_data_dir):
     """Test discarding all related cells in different cell lineages."""
-    tracks = pd.read_table(test_data_dir / tracks_file, sep=r"\s+", header=None)
-    tracks.columns = ["L", "B", "E", "P"]
+    tracks = read_tracks(test_data_dir / tracks_file)
     tracks = discard_related_cells(tracks, labels_to_discard)
 
     remaining_labels = tracks["L"]

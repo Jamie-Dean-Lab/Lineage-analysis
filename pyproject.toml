@@ -47,7 +47,8 @@ ignore = [
     "ISC001", # simplify implicit str concatenation (ruff-format recommended)
     "D104",
     "D100",
-    "PLR2004"
+    "PLR2004",
+    "PLR0913"
 ]
 per-file-ignores = {"track_converter/tests*" = [
     "INP001", # File is part of an implicit namespace package.

@@ -1,6 +1,10 @@
+import logging
 from pathlib import Path
 
 import pandas as pd
+
+logging.basicConfig(format="%(levelname)s: %(name)s: %(message)s")
+logger = logging.getLogger(__name__)
 
 
 def find_root(tracks: pd.DataFrame, cell_label: int) -> int:
@@ -40,6 +44,11 @@ def discard_related_cells(tracks: pd.DataFrame, cell_labels: list[int]) -> pd.Da
             root = find_root(tracks, label)
             tracks = discard_all_descendants(tracks, root)
 
+    if tracks.empty:
+        msg = f"No tracks remaining after discarding related cells of {cell_labels}"
+        logger.error(msg)
+        raise ValueError(msg)
+
     return tracks
 
 
@@ -54,10 +63,12 @@ def validate_tracks_shape_dtypes(tracks: pd.DataFrame) -> None:
 
     if ncols not in (4, 5):
         msg = "input file must have 4 or 5 columns"
+        logger.error(msg)
         raise ValueError(msg)
 
     if nrows == 0:
         msg = "input file must contain at least one tracked cell"
+        logger.error(msg)
         raise ValueError(msg)
 
     # add right-censoring column (if it doesn't exist), defaulting to all zero
@@ -71,39 +82,55 @@ def validate_tracks_shape_dtypes(tracks: pd.DataFrame) -> None:
     cols_are_integers = tracks.apply(pd.api.types.is_integer_dtype, axis=0)
     if not cols_are_integers.all():
         msg = "all columns must contain integer values"
+        logger.error(msg)
         raise ValueError(msg)
 
     if not (tracks["L"] > 0).all():
         msg = "all tracked cell labels (first column) must be greater than zero"
+        logger.error(msg)
         raise ValueError(msg)
 
     if not tracks["L"].is_unique:
         msg = "all tracked cell labels (first column) must be unique"
+        logger.error(msg)
         raise ValueError(msg)
 
     if not (tracks["P"] >= 0).all():
         msg = "all parent labels (fourth column) must be greater than or equal to zero"
+        logger.error(msg)
         raise ValueError(msg)
 
     if not tracks["R"].isin((0, 1)).all():
         msg = "all right-censoring flags (last column) must be 0 or 1"
+        logger.error(msg)
         raise ValueError(msg)
 
 
-def validate_cell_begin_end_frames(tracks: pd.DataFrame) -> None:
+def validate_cell_begin_end_frames(tracks: pd.DataFrame) -> pd.DataFrame:
     """
     Validate the begin and end frames of the tracked cells.
 
     Begin frame (B) must be <= end frame (E), unless it is by a single frame.
     E can be one less than B if the cell existed but was never observed.
     """
+    passed_msg = "Checking cell begin/end frames... Passed"
+
     tracks_begin_after_end = tracks.loc[tracks["B"] > tracks["E"], :]
     if tracks_begin_after_end.empty:
-        return
+        logger.info(passed_msg)
+        return tracks
 
-    if not (tracks_begin_after_end["B"] - tracks_begin_after_end["E"] == 1).all():
-        msg = "The tracked cell's start frame must be <= the end frame, unless it is by a single frame."
-        raise ValueError(msg)
+    tracks_are_invalid = tracks_begin_after_end["B"] - tracks_begin_after_end["E"] != 1
+    if tracks_are_invalid.any():
+        invalid_labels = tracks_begin_after_end.loc[tracks_are_invalid, "L"]
+        msg = (
+            f"All cell start frames must be <= their end frame, unless it is by a single frame. Removing all cells "
+            f"connected to invalid labels: {invalid_labels.to_numpy()}"
+        )
+        logger.warning(msg)
+        return discard_related_cells(tracks, invalid_labels)
+    logger.info(passed_msg)
+    return tracks
 
 
 def validate_n_daughters(tracks: pd.DataFrame) -> None:
@@ -173,7 +200,7 @@ def preprocess_ctc_file(input_ctc_filepath: Path, output_ctc_filepath: Path) -> 
     """
     tracks = pd.read_table(input_ctc_filepath, sep=r"\s+", header=None)
     validate_tracks_shape_dtypes(tracks)
-    validate_cell_begin_end_frames(tracks)
+    tracks = validate_cell_begin_end_frames(tracks)
     validate_n_daughters(tracks)
     validate_mother_daughter_frames(tracks)
     validate_right_censored_daughters(tracks)
