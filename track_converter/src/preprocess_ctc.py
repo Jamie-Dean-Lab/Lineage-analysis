@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-logging.basicConfig(format="%(levelname)s: %(name)s: %(message)s")
+logging.basicConfig(format="%(levelname)s: %(name)s: %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -115,14 +115,14 @@ def validate_cell_begin_end_frames(tracks: pd.DataFrame) -> pd.DataFrame:
     """
     passed_msg = "Checking cell begin/end frames... Passed"
 
-    tracks_begin_after_end = tracks.loc[tracks["B"] > tracks["E"], :]
-    if tracks_begin_after_end.empty:
+    cells_begin_after_end = tracks.loc[tracks["B"] > tracks["E"], :]
+    if cells_begin_after_end.empty:
         logger.info(passed_msg)
         return tracks
 
-    tracks_are_invalid = tracks_begin_after_end["B"] - tracks_begin_after_end["E"] != 1
-    if tracks_are_invalid.any():
-        invalid_labels = tracks_begin_after_end.loc[tracks_are_invalid, "L"]
+    cells_are_invalid = cells_begin_after_end["B"] - cells_begin_after_end["E"] != 1
+    if cells_are_invalid.any():
+        invalid_labels = cells_begin_after_end.loc[cells_are_invalid, "L"]
         msg = (
             f"All cell start frames must be <= their end frame, unless it is by a single frame. Removing all cells "
             f"connected to invalid labels: {invalid_labels.to_numpy()}"
@@ -133,34 +133,64 @@ def validate_cell_begin_end_frames(tracks: pd.DataFrame) -> pd.DataFrame:
     return tracks
 
 
-def validate_n_daughters(tracks: pd.DataFrame) -> None:
+def validate_parents_in_labels(tracks: pd.DataFrame) -> pd.DataFrame:
+    """Validate that all parent labels (P) appear in the cell labels (L) or are 0."""
+    parents_in_labels = tracks["P"].isin(tracks["L"])
+    parents_are_zero = tracks["P"] == 0
+    cells_are_valid = parents_in_labels | parents_are_zero
+
+    if not cells_are_valid.all():
+        invalid_labels = tracks.loc[~cells_are_valid, "L"]
+        msg = (
+            f"Parent labels (fourth column) must match a cell label (first column), or be set to zero. "
+            f"Removing all cells connected to invalid labels: {invalid_labels.to_numpy()}"
+        )
+        logger.warning(msg)
+        return discard_related_cells(tracks, invalid_labels)
+    logger.info("Checking parent labels (P) appear in cell labels (L)... Passed")
+    return tracks
+
+
+def validate_parent_label_unequal(tracks: pd.DataFrame) -> pd.DataFrame:
+    """Validate that no cells have a parent label (P) equal to their own label (L)."""
+    cells_are_invalid = tracks["P"] == tracks["L"]
+    if cells_are_invalid.any():
+        invalid_labels = tracks.loc[cells_are_invalid, "L"]
+        msg = (
+            f"A cell's parent (fourth column) can't be equal to its label (first column)."
+            f"Removing all cells connected to invalid labels: {invalid_labels.to_numpy()}"
+        )
+        logger.warning(msg)
+        return discard_related_cells(tracks, invalid_labels)
+    logger.info("Checking no cells have a parent label (P) equal to their own label (L)... Passed")
+    return tracks
+
+
+def validate_n_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
     """
-    Validate the number of daughters produced by each cell, as well as some other simple checks for the parent label.
+    Validate the number of daughters produced by each cell.
 
     Each mother-cell should either have two daughters or none (right-censored or dying).
     """
-    # All parent labels (P) should match a cell label (L) or be 0
-    parents_in_labels = tracks["P"].isin(tracks["L"])
-    parents_are_zero = tracks["P"] == 0
-    if not (parents_in_labels | parents_are_zero).all():
-        msg = "Parent labels (fourth column) must match a cell label (first column), or be set to zero"
-        raise ValueError(msg)
-
-    # The parent label (P) of a cell can't be equal to its label (L)
-    if (tracks["P"] == tracks["L"]).any():
-        msg = "A cell's parent (fourth column) can't be equal to its label (first column)"
-        raise ValueError(msg)
-
     # Each parent label should appear twice (i.e. two daughters), except for zero which can occur any number of times
     parent_counts = tracks["P"].value_counts()
     two_daughters = parent_counts == 2
     zero_label = parent_counts.index.to_series() == 0
-    if not (two_daughters | zero_label).all():
-        msg = "Cell must have 2 daughters, or None"
-        raise ValueError(msg)
+    cells_are_valid = two_daughters | zero_label
+
+    if not cells_are_valid.all():
+        invalid_labels = tracks.loc[~cells_are_valid, "L"]
+        msg = (
+            f"Cells must have 2 daughters, or None. "
+            f"Removing all cells connected to invalid labels: {invalid_labels.to_numpy()}"
+        )
+        logger.warning(msg)
+        return discard_related_cells(tracks, invalid_labels)
+    logger.info("Checking cells have two daughters or no daughters... Passed")
+    return tracks
 
 
-def validate_mother_daughter_frames(tracks: pd.DataFrame) -> None:
+def validate_mother_daughter_frames(tracks: pd.DataFrame) -> pd.DataFrame:
     """Validate that both daughter cells appear one frame after the mother's last frame."""
     # ignore parent ids of 0 (this means the parent is unknown)
     tracks_with_parents = tracks.loc[tracks["P"] != 0, :]
@@ -171,17 +201,34 @@ def validate_mother_daughter_frames(tracks: pd.DataFrame) -> None:
     )
     tracks_with_parents = tracks_with_parents[["L_track", "P", "B", "E_parent"]]
 
-    if not (tracks_with_parents["B"] - tracks_with_parents["E_parent"] == 1).all():
-        msg = "Daughter cells must appear one frame after the mother's last frame"
-        raise ValueError(msg)
+    cells_are_invalid = tracks_with_parents["B"] - tracks_with_parents["E_parent"] != 1
+    if cells_are_invalid.any():
+        invalid_labels = tracks.loc[cells_are_invalid, "L"]
+        msg = (
+            f"Daughter cells must appear one frame after the mother's last frame. "
+            f"Removing all cells connected to invalid labels: {invalid_labels.to_numpy()}"
+        )
+        logger.warning(msg)
+        return discard_related_cells(tracks, invalid_labels)
+    logger.info("Checking daughter cells appear one frame after the mother's last frame... Passed")
+    return tracks
 
 
-def validate_right_censored_daughters(tracks: pd.DataFrame) -> None:
+def validate_right_censored_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
     """Validate that all right-censored cells have no daughters."""
     right_censored_labels = tracks.loc[tracks["R"] == 1, "L"]
-    if (tracks["P"].isin(right_censored_labels)).any():
-        msg = "Right-censored cells should have no daughters"
-        raise ValueError(msg)
+    cells_are_invalid = tracks["P"].isin(right_censored_labels)
+
+    if cells_are_invalid.any():
+        invalid_labels = tracks.loc[cells_are_invalid, "L"]
+        msg = (
+            f"Right-censored cells should have no daughters."
+            f"Removing all cells connected to invalid labels: {invalid_labels.to_numpy()}"
+        )
+        logger.warning(msg)
+        return discard_related_cells(tracks, invalid_labels)
+    logger.info("Checking right-censored cells have no daughters... Passed")
+    return tracks
 
 
 def preprocess_ctc_file(input_ctc_filepath: Path, output_ctc_filepath: Path) -> None:
@@ -201,9 +248,11 @@ def preprocess_ctc_file(input_ctc_filepath: Path, output_ctc_filepath: Path) -> 
     tracks = pd.read_table(input_ctc_filepath, sep=r"\s+", header=None)
     validate_tracks_shape_dtypes(tracks)
     tracks = validate_cell_begin_end_frames(tracks)
-    validate_n_daughters(tracks)
-    validate_mother_daughter_frames(tracks)
-    validate_right_censored_daughters(tracks)
+    tracks = validate_parents_in_labels(tracks)
+    tracks = validate_parent_label_unequal(tracks)
+    tracks = validate_n_daughters(tracks)
+    tracks = validate_mother_daughter_frames(tracks)
+    tracks = validate_right_censored_daughters(tracks)
 
     # save new file
     tracks.to_csv(output_ctc_filepath, sep=" ", header=False, index=False)
