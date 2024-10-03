@@ -187,3 +187,60 @@ def test_fix_late_daughters(tracks_file, expected_warning, expected_output, tmp_
         processed_tracks = read_tracks(tracks_out_path)
         expected_output.columns = ["L", "B", "E", "P", "R"]
         assert processed_tracks.equals(expected_output)
+
+
+@pytest.mark.parametrize(
+    "tracks_file,expected_warning,expected_output",
+    [
+        pytest.param(
+            "tracks_one_daughter.txt",
+            r"Cells with label \[1\] only have one daughter",
+            # Output dataframe is identical to the input, with one extra row for the generated daughter
+            pd.DataFrame(
+                np.array(
+                    [
+                        [1, 0, 2, 0, 0],
+                        [2, 3, 4, 1, 0],
+                        [3, 0, 2, 0, 0],
+                        [4, 3, 4, 3, 0],
+                        [5, 3, 4, 3, 0],
+                        [6, 3, 2, 1, 1],
+                    ]
+                )
+            ),
+            id="Cell only has one daughter",
+        ),
+        pytest.param(
+            "tracks_two_trees.txt",
+            "",
+            # output is identical to input - just want to check that no changes are made when the tracks are valid
+            pd.DataFrame(
+                np.array(
+                    [
+                        [1, 0, 2, 0, 0],
+                        [2, 3, 4, 1, 0],
+                        [3, 3, 4, 1, 0],
+                        [4, 0, 2, 0, 0],
+                        [5, 3, 4, 4, 0],
+                        [6, 3, 4, 4, 0],
+                    ]
+                )
+            ),
+            id="All cells have two daughters",
+        ),
+    ],
+)
+def test_fix_missing_daughters(tracks_file, expected_warning, expected_output, tmp_path, test_data_dir, caplog):
+    tracks_in_path = test_data_dir / tracks_file
+    tracks_out_path = tmp_path / "tracks_out.txt"
+    preprocess_ctc_file(tracks_in_path, tracks_out_path, fix_missing_daughters=True)
+
+    # Check expected warning is given
+    pattern = re.compile(expected_warning)
+    assert pattern.search(caplog.text) is not None, "Expected warning doesn't match"
+
+    # Check output is correct
+    if tracks_out_path.exists:
+        processed_tracks = read_tracks(tracks_out_path)
+        expected_output.columns = ["L", "B", "E", "P", "R"]
+        assert processed_tracks.equals(expected_output)

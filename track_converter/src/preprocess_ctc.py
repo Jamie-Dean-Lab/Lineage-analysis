@@ -169,6 +169,30 @@ def validate_parent_label_unequal(tracks: pd.DataFrame) -> pd.DataFrame:
     return tracks
 
 
+def correct_missing_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
+    """
+    Create a second daughter for any mother cells that only have one.
+
+    This daughter will have (L B E P R) of:
+    (next available label - frame after mother ends - frame mother ends - mother label - 1)
+    """
+    parent_counts = tracks["P"].value_counts()
+    parents_with_one_daughter = parent_counts.index.to_series()[parent_counts == 1]
+
+    if len(parents_with_one_daughter) > 0:
+        msg = f"Cells with label {parents_with_one_daughter.to_numpy()} only have one daughter - creating a second"
+        logger.warning(msg)
+
+        max_label = tracks["L"].max()
+
+        for parent in parents_with_one_daughter:
+            max_label += 1
+            parent_end = tracks.loc[tracks["L"] == parent, "E"].to_numpy()[0]
+            tracks.loc[len(tracks.index)] = [max_label, parent_end + 1, parent_end, parent, 1]
+
+    return tracks
+
+
 def validate_n_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
     """
     Validate the number of daughters produced by each cell.
@@ -260,7 +284,12 @@ def validate_right_censored_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
     return tracks
 
 
-def preprocess_ctc_file(input_ctc_filepath: Path, output_ctc_filepath: Path, fix_late_daughters: bool = False) -> None:
+def preprocess_ctc_file(
+    input_ctc_filepath: Path,
+    output_ctc_filepath: Path,
+    fix_late_daughters: bool = False,
+    fix_missing_daughters: bool = False,
+) -> None:
     """
     Preprocess Cell Tracking Challenge (CTC) format files.
 
@@ -277,12 +306,16 @@ def preprocess_ctc_file(input_ctc_filepath: Path, output_ctc_filepath: Path, fix
     tracks = pd.read_table(input_ctc_filepath, sep=r"\s+", header=None)
     validate_tracks_shape_dtypes(tracks)
 
+    tracks = validate_parents_in_labels(tracks)
+    tracks = validate_parent_label_unequal(tracks)
+
     if fix_late_daughters:
         tracks = correct_late_daughters(tracks)
 
+    if fix_missing_daughters:
+        tracks = correct_missing_daughters(tracks)
+
     tracks = validate_cell_begin_end_frames(tracks)
-    tracks = validate_parents_in_labels(tracks)
-    tracks = validate_parent_label_unequal(tracks)
     tracks = validate_n_daughters(tracks)
     tracks = validate_mother_daughter_frames(tracks)
     tracks = validate_right_censored_daughters(tracks)
