@@ -16,9 +16,6 @@ from parsl.providers import GridEngineProvider
 from parsl.usage_tracking.levels import LEVEL_1
 
 
-# parsl.set_stream_logger(level=parsl.logging.DEBUG)
-
-
 this_dir = os.path.dirname(os.path.realpath(__file__))
 
 
