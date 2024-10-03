@@ -192,20 +192,45 @@ def validate_n_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
     return tracks
 
 
+def correct_late_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ensure all pairs of daughter cells have the same begin frame (B).
+
+    Back-date any late daughters to the begin time of the earlier daughter.
+    """
+    # ignore parent ids of 0 (this means the parent is unknown)
+    has_parents = tracks["P"] != 0
+    tracks_with_parents = tracks.loc[has_parents, :]
+
+    different_begin_frame = tracks_with_parents.groupby("P")["B"].nunique() != 1
+    if different_begin_frame.any():
+        msg = (
+            f"Daughters with parents {different_begin_frame.index[different_begin_frame].to_numpy()} "
+            f"don't have the same begin frame (B) - setting to minimum"
+        )
+        logger.warning(msg)
+
+        # Set all cells with parents to the minimum begin frame
+        begin_min = tracks_with_parents.groupby("P")["B"].transform("min")
+        tracks.loc[has_parents, "B"] = begin_min
+
+    return tracks
+
+
 def validate_mother_daughter_frames(tracks: pd.DataFrame) -> pd.DataFrame:
     """Validate that both daughter cells appear one frame after the mother's last frame."""
     # ignore parent ids of 0 (this means the parent is unknown)
-    tracks_with_parents = tracks.loc[tracks["P"] != 0, :]
+    cells_with_parents = tracks.loc[tracks["P"] != 0, :]
 
-    # For each tracked cell, its begin frame (B) must be one more than its parent's end frame (E)
-    tracks_with_parents = tracks_with_parents.merge(
+    cells_with_parents = cells_with_parents.merge(
         tracks[["L", "E"]], how="left", left_on="P", right_on="L", suffixes=("_track", "_parent")
     )
-    tracks_with_parents = tracks_with_parents[["L_track", "P", "B", "E_parent"]]
+    cells_with_parents = cells_with_parents[["L_track", "P", "B", "E_parent"]]
 
-    cells_are_invalid = tracks_with_parents["B"] - tracks_with_parents["E_parent"] != 1
+    # For each tracked cell, its begin frame (B) must be one more than its parent's end frame (E)
+    cells_are_invalid = cells_with_parents["B"] - cells_with_parents["E_parent"] != 1
     if cells_are_invalid.any():
-        invalid_labels = tracks_with_parents.loc[cells_are_invalid, "L_track"]
+        invalid_labels = cells_with_parents.loc[cells_are_invalid, "L_track"]
         msg = (
             f"Daughter cells must appear one frame after the mother's last frame. "
             f"Removing all cells connected to invalid labels: {invalid_labels.to_numpy()}"
@@ -235,7 +260,7 @@ def validate_right_censored_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
     return tracks
 
 
-def preprocess_ctc_file(input_ctc_filepath: Path, output_ctc_filepath: Path) -> None:
+def preprocess_ctc_file(input_ctc_filepath: Path, output_ctc_filepath: Path, fix_late_daughters: bool = False) -> None:
     """
     Preprocess Cell Tracking Challenge (CTC) format files.
 
@@ -251,6 +276,10 @@ def preprocess_ctc_file(input_ctc_filepath: Path, output_ctc_filepath: Path) -> 
     """
     tracks = pd.read_table(input_ctc_filepath, sep=r"\s+", header=None)
     validate_tracks_shape_dtypes(tracks)
+
+    if fix_late_daughters:
+        tracks = correct_late_daughters(tracks)
+
     tracks = validate_cell_begin_end_frames(tracks)
     tracks = validate_parents_in_labels(tracks)
     tracks = validate_parent_label_unequal(tracks)

@@ -2,6 +2,7 @@ import re
 from contextlib import nullcontext as does_not_raise
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -87,7 +88,7 @@ def test_validate_tracks(tracks_file, expected_warning, expected_remaining_label
 
 def test_valid_file_passes(tmp_path, test_data_dir):
     """Run a larger valid example file through the validation, checking no exceptions are raised."""
-    tracks_in_path = test_data_dir / "tracks_standard_format.txt"
+    tracks_in_path = test_data_dir / "tracks_valid_large.txt"
     tracks_out_path = tmp_path / "tracks_out.txt"
 
     preprocess_ctc_file(tracks_in_path, tracks_out_path)
@@ -129,3 +130,60 @@ def test_discard_related_cells(
         assert len(remaining_labels) == len(expected_remaining_labels)
         if len(expected_remaining_labels) > 0:
             assert remaining_labels.isin(expected_remaining_labels).all()
+
+
+@pytest.mark.parametrize(
+    "tracks_file,expected_warning,expected_output",
+    [
+        pytest.param(
+            "tracks_late_daughter.txt",
+            r"Daughters with parents \[1\] don't have the same begin frame",
+            # Output dataframe is identical to the input, except for cell 3 has had its begin frame reduced to 3
+            pd.DataFrame(
+                np.array(
+                    [
+                        [1, 0, 2, 0, 0],
+                        [2, 3, 4, 1, 0],
+                        [3, 3, 4, 1, 0],
+                        [4, 2, 4, 0, 0],
+                        [5, 5, 6, 4, 0],
+                        [6, 5, 6, 4, 0],
+                    ]
+                )
+            ),
+            id="Daughters appear one frame apart",
+        ),
+        pytest.param(
+            "tracks_two_trees.txt",
+            "",
+            # output is identical to input - just want to check that no changes are made when the tracks are valid
+            pd.DataFrame(
+                np.array(
+                    [
+                        [1, 0, 2, 0, 0],
+                        [2, 3, 4, 1, 0],
+                        [3, 3, 4, 1, 0],
+                        [4, 0, 2, 0, 0],
+                        [5, 3, 4, 4, 0],
+                        [6, 3, 4, 4, 0],
+                    ]
+                )
+            ),
+            id="Daughters appear on same frame",
+        ),
+    ],
+)
+def test_fix_late_daughters(tracks_file, expected_warning, expected_output, tmp_path, test_data_dir, caplog):
+    tracks_in_path = test_data_dir / tracks_file
+    tracks_out_path = tmp_path / "tracks_out.txt"
+    preprocess_ctc_file(tracks_in_path, tracks_out_path, fix_late_daughters=True)
+
+    # Check expected warning is given
+    pattern = re.compile(expected_warning)
+    assert pattern.search(caplog.text) is not None, "Expected warning doesn't match"
+
+    # Check output is correct
+    if tracks_out_path.exists:
+        processed_tracks = read_tracks(tracks_out_path)
+        expected_output.columns = ["L", "B", "E", "P", "R"]
+        assert processed_tracks.equals(expected_output)

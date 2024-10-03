@@ -48,7 +48,10 @@ ignore = [
     "D104",
     "D100",
     "PLR2004",
-    "PLR0913"
+    "PLR0913",
+    "FBT001",
+    "FBT002",
+    "PD101"
 ]
 per-file-ignores = {"track_converter/tests*" = [
     "INP001", # File is part of an implicit namespace package.
