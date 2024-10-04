@@ -6,6 +6,8 @@ from btrack.btypes import Tracklet
 from btrack.constants import Fates
 from btrack.io import HDF5FileHandler
 
+from track_converter.src.utils import discard_all_descendants
+
 logging.basicConfig(format="%(levelname)s: %(name)s: %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -18,8 +20,14 @@ def right_censor_terminate_fates(tracks: list[Tracklet], ctc_table: pd.DataFrame
     ctc_table["R"] = 0
 
     for track in tracks:
-        if track.fate in terminate_fates:
+        if (track.fate in terminate_fates) and (track.ID in ctc_table.L.to_numpy()):
             ctc_table.loc[ctc_table.L == track.ID, "R"] = 1
+
+            # If a track with terminate fate has children, remove them
+            if (ctc_table["P"] == track.ID).any():
+                msg = f"Track with id {track.ID} has a TERMINATE fate, but has children. Removing children..."
+                logger.warning(msg)
+                ctc_table = discard_all_descendants(ctc_table, track.ID)
 
     return ctc_table
 
@@ -38,6 +46,9 @@ def preprocess_btrack_file(input_btrack_filepath: Path, use_terminate_fates: boo
     # We only need the first four columns (LBEP) -
     # btrack has two additional for R (root track) and G (generational depth)
     ctc_table = pd.DataFrame(tracks_lbep[:, 0:4], columns=["L", "B", "E", "P"])
+
+    # btrack uses the cell label as the parent when it is unknown (rather than zero). Correct this to match CTC format.
+    ctc_table.loc[ctc_table["L"] == ctc_table["P"], "P"] = 0
 
     if use_terminate_fates:
         ctc_table = right_censor_terminate_fates(tracks, ctc_table)
