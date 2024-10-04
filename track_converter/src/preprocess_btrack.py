@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 def right_censor_terminate_fates(tracks: list[Tracklet], ctc_table: pd.DataFrame) -> pd.DataFrame:
     """Mark any track with a fate of TERMINATE_BACK, TERMINATE_BORDER or TERMINATE_LAZY as right-censored."""
+    logger.info("Marking cells with btrack TERMINATE fates as right-censored")
     terminate_fates = (Fates.TERMINATE, Fates.TERMINATE_BACK, Fates.TERMINATE_BORDER, Fates.TERMINATE_LAZY)
 
     # Add column for right-censoring (1 = right censored, 0 = not)
@@ -32,7 +33,27 @@ def right_censor_terminate_fates(tracks: list[Tracklet], ctc_table: pd.DataFrame
     return ctc_table
 
 
-def preprocess_btrack_file(input_btrack_filepath: Path, use_terminate_fates: bool = True) -> pd.DataFrame:
+def discard_false_positives(tracks: list[Tracklet], ctc_table: pd.DataFrame) -> pd.DataFrame:
+    """Remove any cells with a fate of FALSE_POSITIVE, as well as all of their descendants (if any)."""
+    logger.info("Removing cells with btrack FALSE_POSITIVE fate")
+
+    for track in tracks:
+        if (track.fate == Fates.FALSE_POSITIVE) and (track.ID in ctc_table.L.to_numpy()):
+            # Remove the false positive track
+            ctc_table = ctc_table.drop(ctc_table[track.ID == ctc_table.L].index)
+
+            # If a track with false positive fate has children, remove them
+            if (ctc_table["P"] == track.ID).any():
+                msg = f"Track with id {track.ID} has a FALSE_POSITIVE fate, but has children. Removing children..."
+                logger.warning(msg)
+                ctc_table = discard_all_descendants(ctc_table, track.ID)
+
+    return ctc_table
+
+
+def preprocess_btrack_file(
+    input_btrack_filepath: Path, use_terminate_fates: bool = True, remove_false_positives: bool = True
+) -> pd.DataFrame:
     """
     Preprocess btrack (.h5) format files.
 
@@ -52,6 +73,9 @@ def preprocess_btrack_file(input_btrack_filepath: Path, use_terminate_fates: boo
 
     if use_terminate_fates:
         ctc_table = right_censor_terminate_fates(tracks, ctc_table)
+
+    if remove_false_positives:
+        ctc_table = discard_false_positives(tracks, ctc_table)
 
     logger.info("Extracted CTC table from btrack .h5")
 
