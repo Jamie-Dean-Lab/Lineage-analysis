@@ -2,8 +2,40 @@ from contextlib import nullcontext as does_not_raise
 
 import pytest
 
-from track_converter.src.utils import discard_related_cells
+from track_converter.src.utils import discard_all_descendants, discard_related_cells
 from track_converter.tests.utils import read_tracks
+
+
+@pytest.mark.parametrize(
+    "tracks_file,cell_label,expected_remaining_labels",
+    [
+        # tracks where all cells are connected in one 'tree' with structure:
+        #    1
+        #   / \
+        #  2   3
+        #     / \
+        #    4   5
+        pytest.param(
+            "tracks_one_tree.txt",
+            1,
+            (1,),
+            id="one tree",
+        ),
+        # tracks where cells are connected into two 'trees' with structure:
+        #    1       4
+        #   / \     / \
+        #  2   3   5   6
+        pytest.param("tracks_two_trees.txt", 1, (1, 4, 5, 6), id="two trees"),
+    ],
+)
+def test_discard_all_descendants(tracks_file, cell_label, expected_remaining_labels, ctc_test_data_dir):
+    """Test discarding all descendants of a given cell in different cell lineages."""
+    tracks = read_tracks(ctc_test_data_dir / tracks_file)
+    tracks = discard_all_descendants(tracks, cell_label)
+
+    remaining_labels = tracks["L"]
+    assert len(remaining_labels) == len(expected_remaining_labels)
+    assert remaining_labels.isin(expected_remaining_labels).all()
 
 
 @pytest.mark.parametrize(
