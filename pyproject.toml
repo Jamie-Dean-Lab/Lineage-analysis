@@ -15,7 +15,8 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
 ]
 dependencies = [
-  "pandas"
+  "pandas",
+  "btrack"
 ]
 description = "A package to convert track formats"
 dynamic = ["version"]

@@ -11,7 +11,7 @@ from track_converter.src.preprocess_ctc import discard_related_cells, preprocess
 
 @pytest.fixture
 def test_data_dir():
-    return Path(__file__).parent.resolve() / "data"
+    return Path(__file__).parent.resolve() / "data" / "CTC"
 
 
 def read_tracks(tracks_path: Path):
