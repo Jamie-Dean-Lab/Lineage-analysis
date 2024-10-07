@@ -3762,27 +3762,7 @@ function ABCreadlineagestatefromtext( fullfilename::String )::Tuple{Array{Lineag
     flush(stdout)
     return state_hist, logweight_hist,logprob, uppars, lineagetree
 end     # end of ABCreadlineagestatefromtext function
-function ABCreadmultiplestatesfromtexts( trunkfilename::String, suffix::Array{String,1} )::Tuple{Array{Array{Lineagestate2,1},1},Array{Array{Float64,1},1},Array{Float64,1},Array{Uppars2,1},Lineagetree}
-    # run multiple ABCreadlineagestatefromtext commands and combine result
 
-    # get auxiliary parameters:
-    nochains::Int64 = length(suffix)        # number of given suffices
-    state_chains_hist::Array{Array{Lineagestate2,1},1} = Array{Array{Lineagestate2,1},1}(undef,nochains)
-    logweight_chains_hist::Array{Array{Float64,1},1} = Array{Array{Float64,1},1}(undef,nochains)
-    logprob_chains::Array{Float64,1} = Array{Float64,1}(undef,nochains)
-    uppars_chains::Array{Uppars2,1} = Array{Uppars2,1}(undef,nochains)
-    local lineagetree::Lineagetree, timeunit::Float64   # declare
-
-    # read inividual chains:
-    local fullfilename::String              # declare
-    for j_chain = 1:nochains
-        fullfilename = @sprintf( "%s_%s.txt", trunkfilename,suffix[j_chain] )
-        (state_chains_hist[j_chain],logweight_chains_hist[j_chain],logprob_chains[j_chain], uppars_chains[j_chain], lineagetree) = ABCreadlineagestatefromtext( fullfilename )
-        #@printf( " Info - ABCreadmultiplestatesfromtexts: target[%d][1] = [ %+1.5e, %+1.5e, %+1.5e,  %+1.5e, %+1.5e, %+1.5e ]\n", j_chain, target_chains_hist[j_chain][1].logtarget,target_chains_hist[j_chain][1].logtarget_temp,target_chains_hist[j_chain][1].logprior, target_chains_hist[j_chain][1].logevolcost[1],target_chains_hist[j_chain][1].loglklhcomps[1],target_chains_hist[j_chain][1].logpriorcomps[1] )
-    end     # end of chains loop
-
-    return state_chains_hist,logweight_chains_hist,logprob_chains, uppars_chains, lineagetree
-end     # end of ABCreadmultiplestatesfromtexts function
 function ABCreadmultiplestatesfromtexts( fullfilenames::Array{String,1} )::Tuple{Array{Array{Lineagestate2,1},1},Array{Array{Float64,1},1},Array{Float64,1},Array{Uppars2,1},Lineagetree}
     # run multiple ABCreadlineagestatefromtext commands and combine result
 
