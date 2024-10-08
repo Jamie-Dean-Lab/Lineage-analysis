@@ -1,4 +1,5 @@
 files: ^track_converter/
+exclude: .*\.xml$
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.6.3
