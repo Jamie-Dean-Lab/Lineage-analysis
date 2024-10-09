@@ -2,4 +2,7 @@ All mastodon test files were made using one of the example images that comes wit
 
 I then ran through the standard Mastodon workflow using `Plugins > Tracking > Detection` with the `LoG detector` (estimated object diameter of 25 microns and quality threshold of 10.0). Then, `Plugins > Tracking > Linking` with the `LAP linker` (allowing gap closing and track division, but not track fusion. All distances set to 50 microns).
 
-For two cells, the name of their last spot was changed to 'dead' by opening `TrackScheme`, right clicking on the spot and selecting `Edit spot name`
+Two cells were tagged as dead as follows:
+- Click `configure tags` in the main mastodon menu
+- Add a tagset called `dead_cells` with one possible value of `dead`
+- In TrackScheme, select a spot then `Edit > Tags > dead_cells > dead`
