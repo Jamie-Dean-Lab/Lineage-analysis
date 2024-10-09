@@ -28,12 +28,11 @@ def validate_tracks_shape_dtypes(tracks: pd.DataFrame) -> None:
         logger.error(msg)
         raise ValueError(msg)
 
-    # add right-censoring column (if it doesn't exist), defaulting to all zero
-    if ncols == 4:
-        tracks["R"] = 0
-
     # Re-name columns to LBEPR for easy access
-    tracks.columns = ["L", "B", "E", "P", "R"]
+    if len(tracks.columns) == 4:
+        tracks.columns = ["L", "B", "E", "P"]
+    elif len(tracks.columns) == 5:
+        tracks.columns = ["L", "B", "E", "P", "R"]
 
     # Check data type and ranges of columns
     cols_are_integers = tracks.apply(pd.api.types.is_integer_dtype, axis=0)
@@ -57,7 +56,7 @@ def validate_tracks_shape_dtypes(tracks: pd.DataFrame) -> None:
         logger.error(msg)
         raise ValueError(msg)
 
-    if not tracks["R"].isin((0, 1)).all():
+    if ("R" in tracks) and (not tracks["R"].isin((0, 1)).all()):
         msg = "all right-censoring flags (last column) must be 0 or 1"
         logger.error(msg)
         raise ValueError(msg)
@@ -181,9 +180,9 @@ def correct_late_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
     """
     # ignore parent ids of 0 (this means the parent is unknown)
     has_parents = tracks["P"] != 0
-    tracks_with_parents = tracks.loc[has_parents, :]
+    cells_with_parents = tracks.loc[has_parents, :]
 
-    different_begin_frame = tracks_with_parents.groupby("P")["B"].nunique() != 1
+    different_begin_frame = cells_with_parents.groupby("P")["B"].nunique() != 1
     if different_begin_frame.any():
         msg = (
             f"Daughters with parents {different_begin_frame.index[different_begin_frame].to_numpy()} "
@@ -192,7 +191,7 @@ def correct_late_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
         logger.warning(msg)
 
         # Set all cells with parents to the minimum begin frame
-        begin_min = tracks_with_parents.groupby("P")["B"].transform("min")
+        begin_min = cells_with_parents.groupby("P")["B"].transform("min")
         tracks.loc[has_parents, "B"] = begin_min
 
     return tracks
@@ -241,11 +240,28 @@ def validate_right_censored_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
     return tracks
 
 
+def right_censor_non_dividing_cells(tracks: pd.DataFrame) -> pd.DataFrame:
+    """Right censor all cell tracks that don't end in cell division."""
+    cells_with_daughters = tracks["L"].isin(tracks["P"])
+    tracks.loc[cells_with_daughters, "R"] = 0
+    tracks.loc[~cells_with_daughters, "R"] = 1
+
+    return tracks
+
+
+def _mark_dead_cells_as_not_right_censored(tracks: pd.DataFrame, dead_cell_labels: list[int]) -> pd.DataFrame:
+    tracks.loc[tracks.L.isin(dead_cell_labels), "R"] = 0
+
+    return tracks
+
+
 def preprocess_ctc_file(
     input_ctc_filepath: Path,
     output_ctc_filepath: Path,
     fix_late_daughters: bool = False,
     fix_missing_daughters: bool = False,
+    default_right_censor: bool = True,
+    dead_cell_labels: list[int] | None = None,
 ) -> None:
     """
     Preprocess Cell Tracking Challenge (CTC) format files.
@@ -259,9 +275,41 @@ def preprocess_ctc_file(
     R - right censoring flag (1=right-censored, 0=not). Note a 0 only means it is not manually declared as
     right-censored. It will still be considered right-censored by the processing code, if the last observed frame
     coincides with the end of the movie.
+
+    Parameters
+    ----------
+    input_ctc_filepath : Path
+        Filepath of cell tracking challenge txt file to process
+    output_ctc_filepath : Path
+        Filepath to save processed file as txt
+    fix_late_daughters : bool, optional
+        Whether to back-date any late daughters to the begin time (B) of the earlier daughter.
+    fix_missing_daughters : bool, optional
+        Whether to create a second daughter for any mother cells that only have one.
+    default_right_censor : bool, optional
+        Whether to right censor all cell tracks that don't end in cell division. Any cells provided as
+        'dead_cell_labels' will be excluded from this. Note that if your input CTC file already contains a
+        right-censoring column (5th column) this setting will be ignored.
+    dead_cell_labels : list[int] | None, optional
+        List of cell labels (L) to consider as dead cells (i.e mark as not right-censored). Note that if your input
+        CTC file already contains a right-censoring column (5th column) this setting will be ignored.
+
     """
     tracks = pd.read_table(input_ctc_filepath, sep=r"\s+", header=None)
     validate_tracks_shape_dtypes(tracks)
+
+    has_right_censoring_col = "R" in tracks
+    if not has_right_censoring_col and not default_right_censor:
+        msg = (
+            "Right-censoring information must be provided. Either directly via a right censoring column (5th column) "
+            "on a cell tracking format table, or by using the default_right_censor and dead_cell_labels options"
+        )
+        logger.error(msg)
+        raise ValueError(msg)
+
+    # add right-censoring column (if it doesn't exist), defaulting to all zero
+    if not has_right_censoring_col:
+        tracks["R"] = 0
 
     tracks = validate_parents_in_labels(tracks)
     tracks = validate_parent_label_unequal(tracks)
@@ -272,10 +320,17 @@ def preprocess_ctc_file(
     if fix_missing_daughters:
         tracks = correct_missing_daughters(tracks)
 
+    # only handle right-censoring options if the input file doesn't have a right-censoring column already
+    if not has_right_censoring_col:
+        if default_right_censor:
+            tracks = right_censor_non_dividing_cells(tracks)
+
+        if dead_cell_labels is not None:
+            tracks = _mark_dead_cells_as_not_right_censored(tracks, dead_cell_labels)
+
     tracks = validate_cell_begin_end_frames(tracks)
     tracks = validate_n_daughters(tracks)
     tracks = validate_mother_daughter_frames(tracks)
     tracks = validate_right_censored_daughters(tracks)
 
-    # save new file
     tracks.to_csv(output_ctc_filepath, sep=" ", header=False, index=False)

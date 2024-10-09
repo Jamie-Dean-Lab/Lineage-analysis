@@ -89,12 +89,12 @@ def test_valid_file_passes(tmp_path, ctc_test_data_dir):
             pd.DataFrame(
                 np.array(
                     [
-                        [1, 0, 2, 0, 0],
-                        [2, 3, 4, 1, 0],
-                        [3, 3, 4, 1, 0],
-                        [4, 2, 4, 0, 0],
-                        [5, 5, 6, 4, 0],
-                        [6, 5, 6, 4, 0],
+                        [1, 0, 2, 0],
+                        [2, 3, 4, 1],
+                        [3, 3, 4, 1],
+                        [4, 2, 4, 0],
+                        [5, 5, 6, 4],
+                        [6, 5, 6, 4],
                     ]
                 )
             ),
@@ -107,12 +107,12 @@ def test_valid_file_passes(tmp_path, ctc_test_data_dir):
             pd.DataFrame(
                 np.array(
                     [
-                        [1, 0, 2, 0, 0],
-                        [2, 3, 4, 1, 0],
-                        [3, 3, 4, 1, 0],
-                        [4, 0, 2, 0, 0],
-                        [5, 3, 4, 4, 0],
-                        [6, 3, 4, 4, 0],
+                        [1, 0, 2, 0],
+                        [2, 3, 4, 1],
+                        [3, 3, 4, 1],
+                        [4, 0, 2, 0],
+                        [5, 3, 4, 4],
+                        [6, 3, 4, 4],
                     ]
                 )
             ),
@@ -131,8 +131,9 @@ def test_fix_late_daughters(tracks_file, expected_warning, expected_output, tmp_
 
     # Check output is correct
     if tracks_out_path.exists:
-        processed_tracks = read_tracks(tracks_out_path)
-        expected_output.columns = ["L", "B", "E", "P", "R"]
+        # Only need first four columns, we're not concerned with right-censoring information here
+        processed_tracks = read_tracks(tracks_out_path).iloc[:, 0:4]
+        expected_output.columns = ["L", "B", "E", "P"]
         assert processed_tracks.equals(expected_output)
 
 
@@ -158,7 +159,7 @@ def test_fix_late_daughters(tracks_file, expected_warning, expected_output, tmp_
             id="Cell only has one daughter",
         ),
         pytest.param(
-            "tracks_two_trees.txt",
+            "tracks_two_trees_with_censoring_col.txt",
             "",
             # output is identical to input - just want to check that no changes are made when the tracks are valid
             pd.DataFrame(
@@ -180,7 +181,7 @@ def test_fix_late_daughters(tracks_file, expected_warning, expected_output, tmp_
 def test_fix_missing_daughters(tracks_file, expected_warning, expected_output, tmp_path, ctc_test_data_dir, caplog):
     tracks_in_path = ctc_test_data_dir / tracks_file
     tracks_out_path = tmp_path / "tracks_out.txt"
-    preprocess_ctc_file(tracks_in_path, tracks_out_path, fix_missing_daughters=True)
+    preprocess_ctc_file(tracks_in_path, tracks_out_path, fix_missing_daughters=True, default_right_censor=False)
 
     # Check expected warning is given
     pattern = re.compile(expected_warning)
@@ -191,3 +192,17 @@ def test_fix_missing_daughters(tracks_file, expected_warning, expected_output, t
         processed_tracks = read_tracks(tracks_out_path)
         expected_output.columns = ["L", "B", "E", "P", "R"]
         assert processed_tracks.equals(expected_output)
+
+
+def test_default_right_censor(ctc_test_data_dir, tmp_path):
+    tracks_in_path = ctc_test_data_dir / "tracks_one_tree.txt"
+    tracks_out_path = tmp_path / "tracks_out.txt"
+    preprocess_ctc_file(tracks_in_path, tracks_out_path, default_right_censor=False)
+
+    expected_right_censored = (2, 4, 5)
+    expected_not_right_censored = (1, 3)
+
+    if tracks_out_path.exists:
+        processed_tracks = read_tracks(tracks_out_path)
+        assert (processed_tracks.loc[processed_tracks.L.isin(expected_right_censored), "R"] == 1).all()
+        assert (processed_tracks.loc[processed_tracks.L.isin(expected_not_right_censored), "R"] == 0).all()
