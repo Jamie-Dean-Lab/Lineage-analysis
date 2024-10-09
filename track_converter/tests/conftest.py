@@ -11,3 +11,8 @@ def ctc_test_data_dir():
 @pytest.fixture
 def btrack_test_data_dir():
     return Path(__file__).parent.resolve() / "data" / "btrack"
+
+
+@pytest.fixture
+def trackmate_test_data_dir():
+    return Path(__file__).parent.resolve() / "data" / "trackmate"

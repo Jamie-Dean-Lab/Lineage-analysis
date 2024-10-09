@@ -93,7 +93,9 @@ def _convert_to_ctc(spots: pd.DataFrame, edges: pd.DataFrame, tracks: pd.DataFra
         "E": spots.groupby("ctc_label", sort=True).FRAME.max(),
         "P": spots.groupby("ctc_label", sort=True).parent_ctc_label.max(),
     }
-    return pd.DataFrame(data=ctc_columns)
+    ctc_table = pd.DataFrame(data=ctc_columns)
+
+    return ctc_table.reset_index(drop=True)
 
 
 def preprocess_trackmate_file(
