@@ -14,6 +14,7 @@ def _read_trackmate_csv(csv_filepath: Path) -> pd.DataFrame:
 
 
 def _convert_to_ctc(spots: pd.DataFrame, edges: pd.DataFrame, tracks: pd.DataFrame) -> pd.DataFrame:
+    """Convert Trackmate spots/edges/tracks tables to CTC format."""
     # don't allow any merges between cells
     tracks_are_invalid = tracks.NUMBER_MERGES > 0
     if (tracks_are_invalid).any():
@@ -31,6 +32,8 @@ def _convert_to_ctc(spots: pd.DataFrame, edges: pd.DataFrame, tracks: pd.DataFra
     # Add column to keep track of the parent ctc label (for the first spot in each cell track)
     spots["parent_ctc_label"] = 0
 
+    # Construct a graph of each Trackmate track (i.e. a cell and all of its descendants) and split it into individual
+    # cell tracks (each with its own ctc_label)
     ctc_label = 1
     for track_id in spots.TRACK_ID.unique():
         track_spots = spots.loc[track_id == spots.TRACK_ID, :]
@@ -40,22 +43,32 @@ def _convert_to_ctc(spots: pd.DataFrame, edges: pd.DataFrame, tracks: pd.DataFra
         track_graph.add_nodes_from(track_spots.ID)
         track_graph.add_edges_from(list(zip(track_edges.SPOT_SOURCE_ID, track_edges.SPOT_TARGET_ID, strict=False)))
 
-        # proper error messages
-        # check no cycles
-        nx.is_directed_acyclic_graph(track_graph)
-        # check it is a connected directed tree with each node having, at most, one parent
-        nx.is_arborescence(track_graph)
+        if not nx.is_directed_acyclic_graph(track_graph):
+            msg = f"Graph of track id {track_id} contains cycles - tracks should be acyclic"
+            logger.error(msg)
+            raise ValueError(msg)
+
+        if not nx.is_arborescence(track_graph):
+            msg = (
+                f"Graph of track id {track_id} isn't an 'arborescence' i.e. it isn't a connected tree with each node "
+                f"having at most one parent. Does your track contain merges between cells?"
+            )
+            logger.error(msg)
+            raise ValueError(msg)
 
         root = [node for node, degree in track_graph.in_degree() if degree == 0]
         if len(root) != 1:
-            # couldn't find root
-            pass
+            msg = f"Couldn't find root of track id {track_id}"
+            logger.error(msg)
+            raise ValueError(msg)
 
+        # loop through nodes via depth first search from the root node
         for node in nx.dfs_preorder_nodes(track_graph, source=root[0]):
             node_out_degree = track_graph.out_degree[node]
             if node_out_degree > 2:
-                # invalid!
-                pass
+                msg = f"Spot with id {node} has more than 2 children."
+                logger.error(msg)
+                raise ValueError(msg)
 
             spots.loc[node == spots.ID, "ctc_label"] = ctc_label
 
@@ -70,11 +83,7 @@ def _convert_to_ctc(spots: pd.DataFrame, edges: pd.DataFrame, tracks: pd.DataFra
                 # this is a leaf of the graph, and therefore the last node in this cell track
                 ctc_label += 1
 
-    # Check all spots are assigned labels
-
-    # check each track doesn't have larger than one row with a parent id that isn't zero
-
-    # Construct table
+    # Construct CTC table
     ctc_labels = spots["ctc_label"].unique()
     ctc_labels.sort()
 
