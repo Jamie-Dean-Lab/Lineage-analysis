@@ -2,6 +2,20 @@ using Printf
 using Dates
 using LogExpFunctions
 
+# This is a mapping betweene supported model names and an integer number
+# representing that model.
+const ALLOWED_MODELS = Dict{String,UInt64}(
+    "perfect_FW" => 1, # simple FrechetWeibull model with global parameters
+    "clock_FW" => 2, # clock-modulated FrechetWeibull model
+    "RW_FW" => 3, # FrechetWeibull model with rw-inheritance
+    "2DRW_FW" => 4, # FrechetWeibull model with 2d rw-inheritance
+    "2DRW_F" => 9, # FrechetWeibull model with 2d rw-inheritance, divisions-only
+    "perfect_GE" => 11, # simple GammaExponetial model with global parameters
+    "clock_GE" => 12, # clock-modulated GammaExponetial model
+    "RW_GE" => 13, # GammaExponetial model with rw-inheritance
+    "2DRW_GE" => 14, # GammaExponetial model with2d rw-inheritance
+)
+
 include("readlineagefile.jl")
 include("Lineagetree.jl")
 include("mydistributions.jl")
@@ -9,6 +23,8 @@ include("LineageMCmodel2.jl")
 include("LineageABCmodel.jl")
 #plotlyjs()
 
+# Helper type to define a sentinel for default values of keyword options (`nothing` being
+# the abscence of an explicit value).
 const Maybe{T} = Union{T, Nothing}
 
 function controlgetlineageABCdynamics(;
@@ -16,7 +32,7 @@ function controlgetlineageABCdynamics(;
                                       filename::Maybe{String}=nothing,
                                       comment::Maybe{String}=nothing,
                                       nochains::Maybe=nothing, # number of independent chains for convergence statistic.  Must be a number convertable to `UInt64`o
-                                      model::Maybe{Integer}=nothing, # Must be set by the user! '1' for FrechWeib-model with global paramters, '2' for FrechWeib-model with clock, '3' for FrechWeib-model with rw-inheritance, '4' for FrechWeib-model with 2d rw-inheritance, '11' fr GammaExponential with global parameters, '12' for GammaExponential with clock, '13' for GammaExponential with rw-inheritance, '14' for GammaExponential with 2d rw-inheritance
+                                      model::Maybe{String}=nothing, # Must be set by the user!
                                       timeresolution::Maybe{Float64}=nothing, # for getting priors right; in relation to hours.  Must be set by users!
                                       MCmax::Maybe{Integer}=nothing, # last iteration
                                       subsample::Maybe{Integer}=nothing, # subsampling frequency
@@ -46,14 +62,19 @@ function controlgetlineageABCdynamics(;
     if isnothing(filename)
         error("The input `filename` must be set explicitly")
     end
+
     if isnothing(model)
         error("`model` must be set explicitly")
     end
+    if !(model in keys(ALLOWED_MODELS))
+        error("`model` is \"$(model)\", allowed models are $(join(keys(ALLOWED_MODELS), ", ", " and "))")
+    end
+    # Map the `model` string to the corresponding number.
+    model = ALLOWED_MODELS[model]
+
     if isnothing(timeresolution)
         error("`timeresolution` must be set explicitly")
     end
-    # TODO: change the type of `model` to a custom datatype.
-    model = UInt64(model)
 
     # For some input arguments we allow any `Integer` type, but we want to
     # convert them to `UInt64` for the rest of the work.
@@ -80,7 +101,6 @@ function controlgetlineageABCdynamics(;
         nobranches_sim::UInt64 = UInt64(5)          # number of initial cells/branches
         without_sim::Bool = true                    # 'true' for output of simulation function, 'false' otherwise
         
-        local pars_glob_sim::Array{Float64,1} = 
         #pars_glob_sim = [ 452.0, 5.0, 3000.0, 2.0 ]
         #model2_sim::UInt64 = UInt64(1);         pars_glob2_sim::Array{Float64,1} = pars_glob_sim
         #model2_sim::UInt64 = UInt64(2);         pars_glob2_sim::Array{Float64,1} = vcat(pars_glob_sim,[ 0.5, 12*24.0, 0.0 ])         # clock parameters extra
@@ -269,6 +289,7 @@ function getcov( parlist1::Array{Float64,1}, parlist2::Array{Float64,1}, issymme
 
     return mean(C_r), std(C_r), p_here, C_r
 end     # end of getcov function
+
 function simulatelineagetree2( pars_glob::Array{Float64,1}, model::UInt64, nobranches::UInt64,nocells::UInt64, without::Int64=0 )
     # simulates lineagetrees with given model according to LineageMCmodel2
     if( without>=1 )
