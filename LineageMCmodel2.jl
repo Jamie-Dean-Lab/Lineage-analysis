@@ -57,7 +57,7 @@ mutable struct Uppars2
     outputfile::String
     tempering::String                   # "none", "exponential"
 
-    model::UInt
+    model::String
     priors_glob::Array{Fulldistr,1}     # noglobpars
     overalllognormalisation::Float64    # overall normalisation constant of model; target gets normalised by dividing by overall normalisation
     timeunit::Float64                   # time between consecutive frames
@@ -97,7 +97,7 @@ end     # end of Uppars struct
 
 #include("simulatedannealingmaximiser2.jl")
 
-function runmultipleLineageMCmodels( lineagetree::Lineagetree, nochains::UInt, model::UInt,timeunit::Float64,tempering::String, comment::String,timestamp::DateTime, MCstart::UInt,burnin::UInt,MCmax::UInt,subsample::UInt, state_init::Lineagestate2,pars_stps::Array{Float64,1}, nomothersamples::UInt,nomotherburnin::UInt, without::Int64,withwriteoutputtext::Bool )
+function runmultipleLineageMCmodels( lineagetree::Lineagetree, nochains::UInt, model::String,timeunit::Float64,tempering::String, comment::String,timestamp::DateTime, MCstart::UInt,burnin::UInt,MCmax::UInt,subsample::UInt, state_init::Lineagestate2,pars_stps::Array{Float64,1}, nomothersamples::UInt,nomotherburnin::UInt, without::Int64,withwriteoutputtext::Bool )
     # runs several lineageMCmodels in parallel
 
     # set auxiliary parameters:
@@ -337,20 +337,20 @@ function runlineageMCmodel( lineagetree::Lineagetree, state::Lineagestate2,targe
     flush(stdout)
     return state_hist,target_hist, uppars
 end     # end of runlineageMCmodel function
-function initialiseLineageMCmodel2( lineagetree::Lineagetree, model::UInt,timeunit::Float64,tempering::String, comment::String,chaincomment::String,timestamp::DateTime, MCstart::UInt,burnin::UInt,MCmax::UInt,subsample::UInt, state_init::Lineagestate2,pars_stps::Array{Float64,1}, nomothersamples::UInt,nomotherburnin::UInt, without::Int64,withwriteoutputtext::Bool )
+function initialiseLineageMCmodel2( lineagetree::Lineagetree, model::String,timeunit::Float64,tempering::String, comment::String,chaincomment::String,timestamp::DateTime, MCstart::UInt,burnin::UInt,MCmax::UInt,subsample::UInt, state_init::Lineagestate2,pars_stps::Array{Float64,1}, nomothersamples::UInt,nomotherburnin::UInt, without::Int64,withwriteoutputtext::Bool )
     # initialise parameters
 
     # get parameters:
     nocells = lineagetree.nocells                           # number of cells in data/lineagetree
     (noups, noglobpars,nohide,nolocpars) = getMCmodelnoups2( model, nocells )
     if( size(state_init.pars_glob,1)!=noglobpars )
-        @printf( " (%s) Warning - ABCinitialiseLineageMCmodel (%d): Missmatch of number of global parameteters and initial state (%d vs %d) for model %d.\n", chaincomment,0, noglobpars, size(state_init.pars_glob,1), model )
+        println(" (", chaincomment, ") Warning - ABCinitialiseLineageMCmodel (0): Missmatch of number of global parameteters and initial state (", noglobpars, " vs ", size(state_init.pars_glob,1), ") for model ", model, ".")
     end     # end if incompatible size
 
     # get uppars:
     (statefunctions,targetfunctions, dthdivdistr) = deepcopy( getstateandtargetfunctions( model ) )
     priors_glob = Array{Fulldistr,1}(undef,noglobpars)      # declare
-    if( model==1 )                                          # simple FrechetWeibull model
+    if model == "perfect_FW"
         # ...Frechet:
         let pars_here = [0.0,100.0]./timeunit
             priors_glob[1] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
@@ -365,7 +365,7 @@ function initialiseLineageMCmodel2( lineagetree::Lineagetree, model::UInt,timeun
         let pars_here = [0.0,10.0, 1.0] # shifted to avoid [0,1]
             priors_glob[4] = getFulldistributionfromparameters( "shiftedcutoffGauss", pars_here )
         end     # end let par_here
-    elseif( model==2 )                                      # clock-modulated FrechetWeibull model
+    elseif model == "clock_FW"
         # ...Frechet:
         let pars_here = [0.0,100.0]./timeunit
             priors_glob[1] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
@@ -390,7 +390,7 @@ function initialiseLineageMCmodel2( lineagetree::Lineagetree, model::UInt,timeun
         let pars_here = [0.0,2*pi]
             priors_glob[7] = getFulldistributionfromparameters( "rectangle", pars_here )
         end     # end of let par_here
-    elseif( model==3 )                                      # rw-inheritance FrechetWeibull model
+    elseif model == "RW_FW"
         # ...Frechet:
         let pars_here = [0.0,100.0]./timeunit
             priors_glob[1] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
@@ -412,7 +412,7 @@ function initialiseLineageMCmodel2( lineagetree::Lineagetree, model::UInt,timeun
         let pars_here = [0.0,0.5]
             priors_glob[6] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
         end     # end let par_here
-    elseif( model==4 )                                      # 2D rw-inheritance FrechetWeibull model
+    elseif model == "2DRW_FW"
         # ...Frechet:
         let pars_here = [0.0,100.0]./timeunit
             priors_glob[1] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
@@ -446,7 +446,7 @@ function initialiseLineageMCmodel2( lineagetree::Lineagetree, model::UInt,timeun
         let pars_here = [0.0,0.5]
             priors_glob[10] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
         end     # end let par_here
-    elseif( model==9 )                                      # 2D rw-inheritance FrechetWeibull model, divisions-only
+    elseif model == "2DRW_F"
         # ...Frechet:
         let pars_here = [0.0,100.0]./timeunit
             priors_glob[1] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
@@ -473,7 +473,7 @@ function initialiseLineageMCmodel2( lineagetree::Lineagetree, model::UInt,timeun
         let pars_here = [0.0,0.5]
             priors_glob[8] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
         end     # end let par_here
-    elseif( model==11 )                                     # simple GammaExponential model
+    elseif model == "perfect_GE"
         # ...scale:
         let pars_here = [0.0,50.0]./timeunit
             priors_glob[1] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
@@ -487,7 +487,7 @@ function initialiseLineageMCmodel2( lineagetree::Lineagetree, model::UInt,timeun
             #priors_glob[3] = getFulldistributionfromparameters( "rectangle", pars_here )   # pars_here = [0.0,1.0]
             priors_glob[3] = getFulldistributionfromparameters( "beta", pars_here )
         end     # end let par_here
-    elseif( model==12 )                                     # clock-modulated GammaExponential model
+    elseif model == "clock_GE"
         # ...scale:
         let pars_here = [0.0,50.0]./timeunit
             priors_glob[1] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
@@ -511,7 +511,7 @@ function initialiseLineageMCmodel2( lineagetree::Lineagetree, model::UInt,timeun
         let pars_here = [0.0,2*pi]
             priors_glob[6] = getFulldistributionfromparameters( "rectangle", pars_here )
         end     # end of let par_here
-    elseif( model==13 )                                     # rw-inheritance GammaExponential model
+    elseif model == "RW_GE"
         # ...scale:
         let pars_here = [0.0,50.0]./timeunit
             priors_glob[1] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
@@ -532,7 +532,7 @@ function initialiseLineageMCmodel2( lineagetree::Lineagetree, model::UInt,timeun
         let pars_here = [0.0,0.5]
             priors_glob[5] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
         end     # end let par_here
-    elseif( model==14 )                                     # 2D rw-inheritance GammaExponential model
+    elseif model == "2DRW_GE"
         # ...scale:
         let pars_here = [0.0,50.0]./timeunit
             priors_glob[1] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
@@ -566,11 +566,11 @@ function initialiseLineageMCmodel2( lineagetree::Lineagetree, model::UInt,timeun
             priors_glob[9] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
         end     # end let par_here
     else                                                    # unknown model
-        @printf( " Warning - initialiseLineageMCmodel2: Unknown model %d.\n", model )
+        println(" Warning - initialiseLineageMCmodel2: Unknown model ", model, ".")
     end     # end of distinguishing models
-    if( (model==1) || (model==11) )                         # models without need of unknownmothersamples
+    if model in ("perfect_FW", "clock_FW") # models without need of unknownmothersamples
         if( without>=2 )
-            @printf( " Info - initialiseLineageMCmodel2: Automatically set nomotherburnin %d-->%d, nomothersamples %d-->%d, as model %d has no mother samples.\n", nomotherburnin,0, nomothersamples,0, model )
+            println(" Info - initialiseLineageMCmodel2: Automatically set nomotherburnin ", nomotherburnin, "-->0, nomothersamples ", nomothersamples, "-->0, as model ", model, " has no mother samples.")
         end     # end if without
         nomotherburnin = UInt(0)
     end     # end if model without unknownmothersamples
@@ -908,15 +908,15 @@ function getallpars_fromprior( lineagetree::Lineagetree, state_curr::Lineagestat
             statefunctions.getevolpars( pars_glob,pars_evol[mother,:], view(pars_evol, j_cell,:), uppars )
             loghastingsterm += targetfunctions.getevolpars( state_curr.pars_glob,state_curr.pars_evol[mother,:],state_curr.pars_evol[j_cell,:], uppars ) - targetfunctions.getevolpars( pars_glob,pars_evol[mother,:],pars_evol[j_cell,:], uppars )
             # cell-wise parameters, depending on approximate times:
-            if( uppars.model in (1,3,4, 9, 11,13,14) )  # simple or (2d) rw-inheritance model; ie pars_cell not time-dependent
+            if uppars.model in ("perfect_FW", "RW_FW", "2DRW_FW", "2DRW_F", "perfect_GE", "RW_GE", "2DRW_GE")  # simple or (2d) rw-inheritance model; ie pars_cell not time-dependent
                 statefunctions.getcellpars( pars_glob,pars_evol[j_cell,:],zeros(2), view(pars_cell, j_cell,:), uppars )  # times are buffer only
                 pars_cell_prop_buffer .= deepcopy( pars_cell[j_cell,:] )
                 pars_cell_curr_buffer .= deepcopy( state_curr.pars_cell[j_cell,:] )
-            elseif( (uppars.model==2) || (uppars.model==12) )   # clock-modulated model; ie pars_cell deterministic, but time-dependent
+            elseif uppars.model in ("clock_FW", "clock_GE") # clock-modulated model; ie pars_cell deterministic, but time-dependent
                 statefunctions.getcellpars( pars_glob,pars_evol[j_cell,:],[times_cell[mother,2],+Inf], view(pars_cell_prop_buffer, :), uppars ) # only birth-time matters
                 pars_cell_curr_buffer .= deepcopy( state_curr.pars_cell[j_cell,:] ) # different from pars_cell, as times are different
             else                            # unknown model
-                @printf( " (%s) Warning - getallpars_fromprior (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+                println(" (", uppars.chaincomment, ") Warning - getallpars_fromprior (", uppars.MCit, "): Unknown model ", uppars.model, ".")
             end     # end of distinguishing models
             # cell-wise times:
             # ...appearance:
@@ -939,14 +939,14 @@ function getallpars_fromprior( lineagetree::Lineagetree, state_curr::Lineagestat
                 loghastingsterm = -Inf
             end     # end if able to sample times
             # cell-wise parameters, depending on coreect times:
-            if( uppars.model in (1,3,4, 9, 11,13,14) ) # simple or rw-inheritance model; ie pars_cell not time-dependent
+            if uppars.model in ("perfect_FW", "RW_FW", "2DRW_FW", "2DRW_F", "perfect_GE", "RW_GE", "2DRW_GE") # simple or rw-inheritance model; ie pars_cell not time-dependent
                 # just keep pars_cell, as allocated before setting the times
-            elseif( (uppars.model==2) || (uppars.model==12) )   # clock-modulated model; ie pars_cell deterministic, but time-dependent
+            elseif uppars.model in ("clock_FW", "clock_GE") # clock-modulated model; ie pars_cell deterministic, but time-dependent
                 statefunctions.getcellpars( pars_glob,pars_evol[j_cell,:],times_cell[j_cell,:], view(pars_cell, j_cell,:), uppars )
                 loghastingsterm += targetfunctions.getcellpars( state_curr.pars_glob,state_curr.pars_evol[j_cell,:],state_curr.times_cell[j_cell,:], state_curr.pars_cell[j_cell,:], uppars )
                 loghastingsterm -= targetfunctions.getcellpars( pars_glob,pars_evol[j_cell,:],times_cell[j_cell,:], pars_cell[j_cell,:], uppars )
             else                            # unknown model
-                @printf( " (%s) Warning - getallpars_fromprior (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+                println(" (", uppars.chaincomment, ") Warning - getallpars_fromprior (", uppars.MCit, "): Unknown model ", uppars.model, ".")
             end     # end of distinguishing models
         else                                # ie mother unknown
             # sample all parameters jointly:
@@ -1069,7 +1069,7 @@ function getglobparsjt_FWscaleshape_rw( state_curr::Lineagestate2,target_curr::T
     # for divisions: cellfate==2, for deaths: cellfate==1
     #@printf( " (%s) Info - getglobparsjt_FWscaleshape_rw (%d): j_fate = %d, j_up = %d\n", uppars.chaincomment,uppars.MCit, j_fate, j_up )
 
-    if( uppars.model in (1,2,3,4) )                                             # models with Frechet-Weibull distribution
+    if uppars.model in ("perfect_FW", "clock_FW", "RW_FW", "2DRW_FW") # models with Frechet-Weibull distribution
         upperthreshold = Float64(1e5)                                           # upper threshold for scale factor - just for numerical purposes
         loghastingsterm = 0.0                                                   # initialise
         if( j_fate==1 )                                                         # death parameters
@@ -1104,12 +1104,12 @@ function getglobparsjt_FWscaleshape_rw( state_curr::Lineagestate2,target_curr::T
                 end     # end if not converged
             end     # end of start times loop
             # get loghastingsterm:
-            if( (uppars.model==1) || (uppars.model==2) )                        # global models
+            if uppars.model in ("perfect_FW", "clock_FW") # global models
                 loghastingsterm += (logfac_curr - logfac_prop)                  # how scale-parameter gets multiplied
-            elseif( (uppars.model==3) || (uppars.model==4) )                    # (2d) rw-inheritance models
+            elseif uppars.model in ("RW_FW", "2DRW_FW") # (2d) rw-inheritance models
                 loghastingsterm += (logfac_curr - logfac_prop)#*(1+uppars.nocells)# how global and cell-wise scale-parameter gets multiplied
             else                                                                # unknown model
-                @printf( " (%s) Warning - getglobparsjt_FWscaleshape_rw (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+                println(" (", uppars.chaincomment, ") Warning - getglobparsjt_FWscaleshape_rw (", uppars.MCit, "): Unknown model ", uppars.model, ".")
             end     # end of distinguishing models
             celllistids = collect(Int64, 1:uppars.nocells)                      # all cells affected, as changed global parameter
             for j_cell = UInt64.(celllistids)                                   # should not change, but re-compute to avoid numerical errors
@@ -1148,12 +1148,12 @@ function getglobparsjt_FWscaleshape_rw( state_curr::Lineagestate2,target_curr::T
                 end     # end if not converged
             end     # end of start times loop
             # get loghastingsterm:
-            if( (uppars.model==1) || (uppars.model==2) )                        # global models
+            if uppars.model in ("perfect_FW", "clock_FW") # global models
                 loghastingsterm += (logfac_curr - logfac_prop)                  # how scale-parameter gets multiplied
-            elseif( (uppars.model==3) || (uppars.model==4))                     # 2d rw-inheritance models
+            elseif uppars.model in ("RW_FW", "2DRW_FW") # 2d rw-inheritance models
                 loghastingsterm += (logfac_curr - logfac_prop)#*(1+uppars.nocells)# how global and cell-wise scale-parameter gets multiplied
             else                                                                # unknown model
-                @printf( " (%s) Warning - getglobparsjt_FWscaleshape_rw (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+                println(" (", uppars.chaincomment, ") Warning - getglobparsjt_FWscaleshape_rw (", uppars.MCit, "): Unknown model ", uppars.model, ".")
             end     # end of distinguishing models
             celllistids = collect(Int64, 1:uppars.nocells)                      # all cells affected, as changed global parameter
             for j_cell = UInt64.(celllistids)                                   # should not change, but re-compute to avoid numerical errors
@@ -1183,13 +1183,14 @@ function getglobparsjt_FWscaleshape_rw( state_curr::Lineagestate2,target_curr::T
 
     return state_prop, celllistids, loghastingsterm, mockupdate
 end     # end of getglobparsjt_FWscaleshape_rw function
+
 function getglobpars_rw_m3( lineagetree::Lineagetree,state_curr::Lineagestate2,target_curr::Target2, state_prop::Lineagestate2, j_globpar::UInt64,j_up::UInt64, statefunctions::Statefunctions,targetfunctions::Targetfunctions, dthdivdistr::DthDivdistr, uppars::Uppars2 )
     # rw-proposal for global parameters
     # jointly also updates cellpars, but not evolpars
     # assumes state_prop has same values as state_curr or is continuation of independent updates
     #@printf( " (%s) Info - getglobpars_rw_m3 (%d): Start new globparjt update, globpar=%d,j_up=%d.\n", uppars.chaincomment,uppars.MCit, j_globpar,j_up )
 
-    if( (uppars.model==3) || (uppars.model==4) )        # (2d) rw-inheritance model
+    if uppars.model in ("RW_FW", "2DRW_FW") # (2d) rw-inheritance model
         # set auxiliary parameters:
         mockupdate = false                              # no mockupdate unless otherwise stated
         cellorder = collect(1:uppars.nocells)[ sortperm(lineagetree.datawd[:,2]) ]  # cells in order of birth time
@@ -1218,10 +1219,11 @@ function getglobpars_rw_m3( lineagetree::Lineagetree,state_curr::Lineagestate2,t
 
     return state_prop, celllistids, loghastingsterm, mockupdate
 end     # end of getglobpars_rw_m3 function
+
 function getglobpars_Gauss_m3( state_curr::Lineagestate2,target_curr::Target2, state_prop::Lineagestate2, j_up::UInt64, statefunctions::Statefunctions,targetfunctions::Targetfunctions, uppars::Uppars2 )
     # rw-proposal for global parameters and evol-parameters of model 3, to keep cellpars constant
 
-    if( uppars.model==3 )                                                               # rw-inheritance model
+    if uppars.model == ("RW_FW")
         currentmean = mean(state_prop.pars_evol[:,1])
         sigma_eq = getequilibriumparametersofGaussianchain( hcat(state_prop.pars_glob[uppars.nolocpars+1]), hcat(abs(state_prop.pars_glob[uppars.nolocpars+2])), uppars )[1][1]
         newmean = sampleGaussian( [1.0,sigma_eq/sqrt(uppars.nocells)] )
@@ -1243,7 +1245,7 @@ function getglobpars_Gauss_m3( state_curr::Lineagestate2,target_curr::Target2, s
             (state_prop, loghastingsterm_here) = getcellpars_fromprior( state_curr, state_prop, jj_cell,j_up, statefunctions,targetfunctions, uppars )[[1,3]]   # j_up not actually used here
             loghastingsterm += loghastingsterm_here                                     # should be zero
         end     # end of updating all neighbouring cells
-    elseif( uppars.model==4 )                                                           # 2d rw-inheritance model
+    elseif uppars.model == ("2DRW_FW")
         currentmean = mean(state_prop.pars_evol,dims=1)[:]
         (hiddenmatrix, sigma) = gethiddenmatrix_m4( state_prop.pars_glob, uppars )
         sigma_eq = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )[1]
@@ -1274,12 +1276,13 @@ function getglobpars_Gauss_m3( state_curr::Lineagestate2,target_curr::Target2, s
 
     return state_prop, celllistids, loghastingsterm, mockupdate
 end     # end of getglobpars_Gauss_m3 function
+
 function getglobpars_gamma_potsigma_m3( state_curr::Lineagestate2, state_prop::Lineagestate2, j_hide::UInt64,j_up::UInt64, statefunctions::Statefunctions,targetfunctions::Targetfunctions, uppars::Uppars2 )
     # independence proposal with gamma-distribution for sigma
     #@printf( " (%s) Info - getglobpars_gamma_potsigma_m3 (%d): j_globpar = %d, j_up = %d.\n", uppars.chaincomment,uppars.MCit, j_globpar, j_up )
 
     # get auxiliary parameters:
-    if( uppars.model==3 )                               # rw-inheritance model
+    if uppars.model == ("RW_FW")
         j_globpar = uppars.nolocpars + 2                # sigma index
         if( (uppars.priors_glob[j_globpar].typeno==1) || (uppars.priors_glob[j_globpar].typeno==3) )# rectangle or cutoffGauss
             alpha_prior = 1.0 - (3/2);  invtheta_prior = 0.0
@@ -1306,7 +1309,7 @@ function getglobpars_gamma_potsigma_m3( state_curr::Lineagestate2, state_prop::L
             (state_prop, loghastingsterm_here) = getcellpars_fromprior( state_curr, state_prop, j_cell,j_up, statefunctions,targetfunctions, uppars )[[1,3]]   # j_up not actually used here
             loghastingsterm += loghastingsterm_here     # should be zero
         end     # end of updating all neighbouring cells
-    elseif( uppars.model==4 )                           # 2d rw-inheritance model
+    elseif uppars.model == ("2DRW_FW")
         j_globpar = uppars.nolocpars + 4 + j_hide       # sigma index
         if( (uppars.priors_glob[j_globpar].typeno==1) || (uppars.priors_glob[j_globpar].typeno==3) )# rectangle or cutoffGauss
             alpha_prior = 1.0 - (3/2);  invtheta_prior = 0.0
@@ -1362,6 +1365,7 @@ function getglobpars_gamma_potsigma_m3( state_curr::Lineagestate2, state_prop::L
     #end     # end if graphical output
     return state_prop, celllistids, loghastingsterm, mockupdate
 end     # end of getglobpars_gamma_potsigma_m3 function
+
 function getevolpars_fromprior( lineagetree::Lineagetree,state_curr::Lineagestate2, state_prop::Lineagestate2, j_cell::UInt64,j_up::UInt64, statefunctions::Statefunctions,targetfunctions::Targetfunctions, uppars::Uppars2 )
     # updates evol pars from prior
     # only takes mother into account, not successors
@@ -1412,6 +1416,7 @@ function getevolpars_fromprior( lineagetree::Lineagetree,state_curr::Lineagestat
 
     return state_prop, celllistids, loghastingsterm, mockupdate
 end     # end of getevolpars_fromprior function
+
 function getevolparsjt_rw( lineagetree::Lineagetree,state_curr::Lineagestate2,target_curr::Target2, state_prop::Lineagestate2, j_cell::UInt64,j_hide::UInt64,j_up::UInt64, statefunctions::Statefunctions,targetfunctions::Targetfunctions, uppars::Uppars2 )
     # rw-proposal for cell-wise parameters
     # assumes state_prop has same values as state_curr or is continuation of independent updates
@@ -1432,20 +1437,21 @@ function getevolparsjt_rw( lineagetree::Lineagetree,state_curr::Lineagestate2,ta
     
     return state_prop, celllistids, loghastingsterm, mockupdate
 end     # end of getevolparsjt_rw function
+
 function getevolparsjt_nearbycells_rw( lineagetree::Lineagetree,state_curr::Lineagestate2,target_curr::Target2, state_prop::Lineagestate2, j_cell::UInt64,j_hide::UInt64,j_up::UInt64, statefunctions::Statefunctions,targetfunctions::Targetfunctions, uppars::Uppars2 )
     # rw-proposal for cell-wise parameters jointly for nearby cells
     # assumes state_prop has same values as state_curr or is continuation of independent updates
 
     # get auxiliary parameters:
-    if( (uppars.model==1) || (uppars.model==2) )            # simple model, clock-modulated model
+    if uppars.model in ("perfect_FW", "clock_FW") # simple model, clock-modulated model
         myf = exp(-1);                                      # just look at one neighbour in each direction
-    elseif( uppars.model==3 )                               # rw-inheritance model
+    elseif uppars.model == ("RW_FW")
         myf = getlargestabseigenvaluepart( hcat(state_prop.pars_glob[uppars.nolocpars+1]), uppars )[1]
-    elseif( uppars.model==4 )                               # 2d rw-inheritance model
+    elseif uppars.model == ("2DRW_FW")
         hiddenmatrix = gethiddenmatrix_m4( state_prop.pars_glob, uppars )[1]
         myf = getlargestabseigenvaluepart( hiddenmatrix, uppars )[1]
     else
-        @printf( " (%s) Warning - getevolparsjt_nearbycells_rw (%d): Not applicable for model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+        println(" (", uppars.chaincomment, ") Warning - getevolparsjt_nearbycells_rw (", uppars.MCit, "): Not applicable for model ", uppars.model, ".")
     end     # end of distinguishing cells
     corlength = UInt64(ceil( -1/log(myf) ))                             # sets number of generations within range
     (allcells,otherdaughters) = getcloserelatives( lineagetree, Int64(j_cell), corlength )  # otherdaughters are daughters that exist, but are too far away
@@ -1464,6 +1470,7 @@ function getevolparsjt_nearbycells_rw( lineagetree::Lineagetree,state_curr::Line
 
     return state_prop, celllistids, loghastingsterm, mockupdate
 end     # end of getevolparsjt_nearbycells_rw function
+
 function getcellpars_fromprior( state_curr::Lineagestate2, state_prop::Lineagestate2, j_cell::UInt64,j_up::UInt64, statefunctions::Statefunctions,targetfunctions::Targetfunctions, uppars::Uppars2 )
     # updates cell pars from prior
     # assumes state_prop has same values as state_curr or is continuation of independent updates
@@ -1478,6 +1485,7 @@ function getcellpars_fromprior( state_curr::Lineagestate2, state_prop::Lineagest
 
     return state_prop, celllistids, loghastingsterm, mockupdate
 end     # end of getcellpars_fromprior function
+
 function gettimes_looseend_ind( lineagetree::Lineagetree,state_curr::Lineagestate2, state_prop::Lineagestate2, j_cell::UInt64,j_time::UInt64, j_up::UInt64, statefunctions::Statefunctions,targetfunctions::Targetfunctions, dthdivdistr::DthDivdistr, uppars::Uppars2 )
     # updates time pars from approximated posterior
     # does not scale with temperature
@@ -1537,6 +1545,7 @@ function gettimes_looseend_ind( lineagetree::Lineagetree,state_curr::Lineagestat
 
     return state_prop, celllistids, loghastingsterm, mockupdate
 end     # end of gettimes_looseend_ind function
+
 function gettimes_looseend_Gaussind( lineagetree::Lineagetree,state_curr::Lineagestate2,target_curr::Target2, state_prop::Lineagestate2, j_cell::UInt64,j_time::UInt64, j_up::UInt64, statefunctions::Statefunctions,targetfunctions::Targetfunctions, uppars::Uppars2 )
     # updates time pars from Gaussian approximation to posterior
     # assumes state_prop has same values as state_curr
@@ -1552,10 +1561,10 @@ function gettimes_looseend_Gaussind( lineagetree::Lineagetree,state_curr::Lineag
             mockupdate = true
             celllistids = Int64[]
         else                                        # mother unknown
-            if( uppars.model in (1,2,3,4) )         # Frechet-Weibull models
+            if uppars.model in ("perfect_FW", "clock_FW", "RW_FW", "2DRW_FW") # Frechet-Weibull models
                 (mymean,mystd) = getmeanstdforFrechetWeibull( state_prop.pars_cell[j_cell,:], getlifedata(lineagetree,Int64(j_cell))[2],target_curr.temp,upperthreshold, uppars )
             else                                    # not implemented model
-                @printf( " (%s) Warning - gettimes_looseend_Gaussind (%d): Update not suitable for model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+                println(" (", uppars.chaincomment, ") Warning - gettimes_looseend_Gaussind (", uppars.MCit, "): Update not suitable for model ", uppars.model, ".")
             end     # end of distinguishing models
             if( mymean<upperthreshold )
                 xbounds = MArray{Tuple{2},Float64}( [0.0, 1000/uppars.timeunit] .+ (state_prop.times_cell[j_cell,2]-lineagetree.datawd[j_cell,2]) )
@@ -1575,10 +1584,10 @@ function gettimes_looseend_Gaussind( lineagetree::Lineagetree,state_curr::Lineag
             mockupdate = true
             celllistids = Int64[]
         else                                        # fate unknown
-            if( uppars.model in (1,2,3) )           # Frechet-Weibull models
+            if uppars.model in ("perfect_FW", "clock_FW", "RW_FW") # Frechet-Weibull models
                 (mymean,mystd) = getmeanstdforFrechetWeibull( state_prop.pars_cell[j_cell,:], cellfate,target_curr.temp,upperthreshold, uppars )
             else                                    # not implemented model
-                @printf( " (%s) Warning - gettimes_looseend_Gaussind (%d): Update not suitable for model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+                println(" (", uppars.chaincomment, ") Warning - gettimes_looseend_Gaussind (", uppars.MCit, "): Update not suitable for model ", uppars.model, ".")
             end     # end of distinguishing models
             if( mymean<upperthreshold )
                 xbounds = MArray{Tuple{2},Float64}( [0.0, 1000/uppars.timeunit] .+ (lineagetree.datawd[j_cell,3]-state_prop.times_cell[j_cell,1]) )
@@ -1601,10 +1610,10 @@ function gettimes_looseend_Gaussind( lineagetree::Lineagetree,state_curr::Lineag
         loghastingsterm += loghastingsterm_here
         if( jj_cell==j_cell )                       # loghastings-contribution, for proposing current times_cell from proposed pars_cell
             # get mean,std for new proposal, to compute probability for reverse proposal:
-            if( uppars.model in (1,2,3,4) )         # Frechet-Weibull models
+            if uppars.model in ("perfect_FW", "clock_FW", "RW_FW", "2DRW_FW") # Frechet-Weibull models
                 (mymean,mystd) = getmeanstdforFrechetWeibull( state_prop.pars_cell[jj_cell,:], getlifedata(lineagetree,Int64(jj_cell))[2],target_curr.temp,upperthreshold, uppars )
             else                                    # not implemented model
-                @printf( " (%s) Warning - gettimes_looseend_Gaussind (%d): Update not suitable for model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+                println(" (", uppars.chaincomment, ") Warning - gettimes_looseend_Gaussind (", uppars.MCit, "): Update not suitable for model ", uppars.model, ".")
             end     # end of distinguishing models
             if( mymean<upperthreshold )
                 loghastingsterm += logwindowGaussian_distr( vcat([mymean,mystd],xbounds), [state_curr.times_cell[j_cell,2]-state_curr.times_cell[j_cell,1]] )[1]
@@ -1619,6 +1628,7 @@ function gettimes_looseend_Gaussind( lineagetree::Lineagetree,state_curr::Lineag
 
     return state_prop, celllistids, loghastingsterm, mockupdate
 end     # end of gettimes_looseend_Gaussind function
+
 function gettimes_rw( lineagetree::Lineagetree,state_curr::Lineagestate2,target_curr::Target2, state_prop::Lineagestate2, j_cell::UInt64,j_time::UInt64,j_up::UInt64, statefunctions::Statefunctions,targetfunctions::Targetfunctions, uppars::Uppars2 )
     # rw-proposal for times
     # assumes state_prop has same values as state_curr or is continuation of independent updates, in which pars_cell has not been updated yet
@@ -1648,6 +1658,7 @@ function gettimes_rw( lineagetree::Lineagetree,state_curr::Lineagestate2,target_
 
     return state_prop, celllistids, loghastingsterm, mockupdate
 end     # end of gettimes_rw function
+
 function getupdate_nuts( lineagetree::Lineagetree, state_curr::Lineagestate2,target_curr::Target2, state_prop::Lineagestate2,target_prop::Target2, j_up::UInt64, statefunctions::Statefunctions,targetfunctions::Targetfunctions, dthdivdistr::DthDivdistr, uppars::Uppars2 )
     # carries out a single nuts step
     #@printf( " (%s) Info - getupdate_nuts (%d): Start nuts update (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
@@ -1657,20 +1668,20 @@ function getupdate_nuts( lineagetree::Lineagetree, state_curr::Lineagestate2,tar
     mockupdate = false                      # no mockupdate unless otherwise stated
     celllistids = collect(Int64, 1:uppars.nocells)  # all cells affected, as changed global parameter
     noindeptimes = sum(uppars.indeptimes)   # number of independent times
-    if( uppars.model==1 )                   # simple model
+    if uppars.model == "perfect_FW"
         listvalues = getlistfromstate_m1( state_prop, uppars ); indeptimes_here = listvalues[(end+1-noindeptimes):end]  # last noindeptimes elements are for independent times
         getstatefromlist_nuts = x -> getstatefromlist_m1( lineagetree, vcat(x,indeptimes_here),statefunctions, uppars )
         getlistfromstate_nuts = state -> getlistfromstate_m1( state, uppars )[1:(end-noindeptimes)]
-    elseif( uppars.model==2 )               # clock-modulated model
+    elseif uppars.model == "clock_FW"
         listvalues = getlistfromstate_m2( state_prop, uppars ); indeptimes_here = listvalues[(end+1-noindeptimes):end]  # last noindeptimes elements are for independent times
         getstatefromlist_nuts = x -> getstatefromlist_m2( lineagetree, vcat(x,indeptimes_here),statefunctions, uppars )
         getlistfromstate_nuts = state -> getlistfromstate_m2( state, uppars )[1:(end-noindeptimes)]
-    elseif( uppars.model==3 )               # rw-inheritance model
+    elseif uppars.model== "RW_FW"
         listvalues = getlistfromstate_m3( state_prop, uppars ); indeptimes_here = listvalues[(end+1-noindeptimes):end]  # last noindeptimes elements are for independent times
         getstatefromlist_nuts = x -> getstatefromlist_m3( lineagetree, vcat(x,indeptimes_here),statefunctions, uppars )
         getlistfromstate_nuts = state -> getlistfromstate_m3( state, uppars )[1:(end-noindeptimes)]
     else                                    # unknown model
-        @printf( " (%s) Warning - getupdate_nuts (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+        println(" (", uppars.chaincomment, ") Warning - getupdate_nuts (", uppars.MCit, "): Unknown model ", uppars.model, ".")
     end     # end of distinguishing models
     logtarget = ( x->getlineagetarget( lineagetree, getstatefromlist_nuts(deepcopy(x)), deepcopy(target_prop), targetfunctions, dthdivdistr, uppars, [-1], false ).logtarget )
     gradient = ( ()->NaN )                  # use approximate scheme
@@ -1711,7 +1722,7 @@ function outputsettings( lineagetree::Lineagetree, uppars::Uppars2 )
     @printf( " (%s)  outputfile: \t%s\n", uppars.chaincomment, uppars.outputfile )
     @printf( " (%s)  comment:    \t%s\n", uppars.chaincomment, uppars.comment )
     @printf( " (%s)  timestamp:  \t%04d-%02d-%02d_%02d-%02d-%02d\n", uppars.chaincomment, year(uppars.timestamp),month(uppars.timestamp),day(uppars.timestamp), hour(uppars.timestamp),minute(uppars.timestamp),second(uppars.timestamp) )
-    @printf( " (%s)  model:      \t%d\n", uppars.chaincomment, uppars.model )
+    @printf( " (%s)  model:      \t%s\n", uppars.chaincomment, uppars.model )
     @printf( " (%s)  noglobpars: \t%d\n", uppars.chaincomment, uppars.noglobpars )
     @printf( " (%s)  nohide:     \t%d\n", uppars.chaincomment, uppars.nohide )
     @printf( " (%s)  nolocpars:  \t%d\n", uppars.chaincomment, uppars.nolocpars )
@@ -1790,14 +1801,14 @@ function outputstate( state::Lineagestate2,target::Target2, uppars::Uppars2 )
     end     # end if actual tempering
     @printf( " (%s)  global:\n", uppars.chaincomment )
     @printf( " (%s)   [ %s]\n", uppars.chaincomment, join([@sprintf("%+12.5e ",j) for j in state.pars_glob]) )
-    if( uppars.model in (1,2,3,4) )     # Frechet-Weibull models
+    if uppars.model in ("perfect_FW", "clock_FW", "RW_FW", "2DRW_FW") # Frechet-Weibull models
         (mean_div,std_div, mean_dth,std_dth, prob_dth) = estimateFrechetWeibullstats( state.pars_glob[1:uppars.nolocpars] )
         @printf( " (%s)   lifestats: div = %1.5e +- %1.5e,   dth = %1.5e +- %1.5e,   prob_dth = %1.5e\n", uppars.chaincomment, mean_div,std_div, mean_dth,std_dth, prob_dth )
     end     # end of distinguishing models
-    if( uppars.model==3 )       # rw-inheritance model
+    if uppars.model == "RW_FW"
         (sigma_eq, largestabsev) = getequilibriumparametersofGaussianchain( hcat(state.pars_glob[uppars.nolocpars+1]), hcat(abs(state.pars_glob[uppars.nolocpars+2])), uppars )
         @printf( " (%s)   eqstats:   sigma_eq = %1.5e, f = %1.5e   (sigma_eq_div=%1.5e, sigma_eq_dth=%1.5e)\n", uppars.chaincomment, sigma_eq[1], largestabsev, sigma_eq[1]*state.pars_glob[1],sigma_eq[1]*state.pars_glob[3] )
-    elseif( uppars.model==4 )   # 2d rw-inheritance model
+    elseif uppars.model == "2DRW_FW"
         (hiddenmatrix, sigma) = gethiddenmatrix_m4( state.pars_glob, uppars )
         (sigma_eq, largestabsev) = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )
         scaledsigma = sigma_eq*state.pars_glob[[1,3]]
@@ -1839,6 +1850,7 @@ function outputstate( state::Lineagestate2,target::Target2, uppars::Uppars2 )
     end     # end of times loop
     flush(stdout)
 end     # end of outputstate function
+
 function outputtarget( target::Target2, uppars::Uppars2 )
     # outputs target to control-window
 
@@ -1890,6 +1902,7 @@ function outputtarget( target::Target2, uppars::Uppars2 )
     end      # end if skipsome
     flush(stdout)
 end     # end of outputtarget function
+
 function comparestates( state1::Lineagestate2,state2::Lineagestate2, uppars::Uppars2 )
     # compares two states, if identical up to tolerance
 
@@ -2084,7 +2097,7 @@ function graphicaloutputstate( lineagetree::Lineagetree, state::Lineagestate2, t
     end     # end of parameters loop
 
     # plot pars cell as scatter plot:
-    if( uppars.model>1 )
+    if  uppars.model != "perfect_FW" 
         nogenmax = 1
         for j_locpar = collect(1:uppars.nolocpars)
             p4 = plot( title=@sprintf("cell loc parameter %d per generation, ch %s, it %d", j_locpar,uppars.chaincomment,uppars.MCit),xlabel=@sprintf("cell loc parameter %d",j_locpar),ylabel=@sprintf("cell loc parameter %d",j_locpar), aspect_ratio=1 )
@@ -2103,6 +2116,7 @@ function graphicaloutputstate( lineagetree::Lineagetree, state::Lineagestate2, t
         end     # end of parameters loop
     end     # end if not first model
 end     # end of graphicaloutputstate function
+
 function getpararrayfromstatearray( state_hist::Array{Lineagestate2,1}, fieldname::String, index::UInt )
     # gets array of particular parameter from array of states
 
@@ -2115,6 +2129,7 @@ function getpararrayfromstatearray( state_hist::Array{Lineagestate2,1}, fieldnam
     end     # end of history loop
     return pararray
 end     # end of getpararrayfromstatearray function
+
 function getpararrayfromstatearray( state_chains_hist::Array{Array{Lineagestate2,1},1}, fieldname::String, index::UInt )
     # gets array of particular parameter from array of states
 
@@ -2130,6 +2145,7 @@ function getpararrayfromstatearray( state_chains_hist::Array{Array{Lineagestate2
     end     # end of chains loop
     return pararray
 end     # end of getpararrayfromstatearray function
+
 function getpararrayfromstatearray( target_hist::Array{Target2,1}, fieldname::String, index::UInt )
     # gets array of particular parameter from array of states
 
@@ -2142,6 +2158,7 @@ function getpararrayfromstatearray( target_hist::Array{Target2,1}, fieldname::St
     end     # end of history loop
     return pararray
 end     # end of getpararrayfromstatearray function
+
 function analysemultipleLineageMCmodels( lineagetree::Lineagetree, state_chains_hist::Array{Array{Lineagestate2,1},1},target_chains_hist::Array{Array{Target2,1},1}, uppars_chains::Array{Uppars2,1}, withgraphical::Bool=false )
     # joint post-analysis
 
@@ -2189,7 +2206,7 @@ function analysemultipleLineageMCmodels( lineagetree::Lineagetree, state_chains_
             display(p2)
         end     # end if withgraphical
     end     # end of parameters loop
-    if( (mymodel==4) || (mymodel==14) )         # 2d rw-inheritance model
+    if mymodel in ("2DRW_FW", "2DRW_GE") # 2d rw-inheritance model
         eigenvalues_hist = zeros(3,nochains,myMCmax-myMCstart+1)    # for each cell last row is '1' for real positive eigenvalues, '2' for real non-positive eigenvalues, '3' for complex eigenvalues; first row is first eigenvalue for real eigenvalues, or real part for complex eigenvalues; second row is second eigenvalue for real eigenvalues, or abs imaginary part for complex eigenvalues
         for j_chain = 1:nochains
             for j_it = 1:(myMCmax-myMCstart+1)
@@ -2425,7 +2442,7 @@ function writelineagestatetotext2( lineagetree::Lineagetree, state_curr::Lineage
             write( myfile, @sprintf("comment:     \t%s\n", uppars.comment) )
             write( myfile, @sprintf("chaincomment:\t%s\n", uppars.chaincomment) )
             write( myfile, @sprintf("timestamp:   \t%04d-%02d-%02d_%02d-%02d-%02d\n", year(uppars.timestamp),month(uppars.timestamp),day(uppars.timestamp), hour(uppars.timestamp),minute(uppars.timestamp),second(uppars.timestamp)) )
-            write( myfile, @sprintf("model:       \t%d\n", uppars.model) )
+            write( myfile, @sprintf("model:       \t%s\n", uppars.model) )
             write( myfile, @sprintf("noglobpars:  \t%d\n", uppars.noglobpars) )
             write( myfile, @sprintf("nohide:      \t%d\n", uppars.nohide) )
             write( myfile, @sprintf("nolocpars:   \t%d\n", uppars.nolocpars) )
@@ -2480,7 +2497,7 @@ function readlineagestatefromtext2( fullfilename::String )
         whatitis = findfirst( "timestamp:   \t",newline );  timestamp = String( newline[(whatitis[end]+1):lastindex(newline)] )
         df = dateformat"y-m-d_H-M-S"; timestamp = DateTime( timestamp, df )     # transform to DateTime given the dateformat
         newline = readline(myfile)          # model
-        whatitis = findfirst( "model:       \t",newline );  model = parse( UInt64, newline[(whatitis[end]+1):lastindex(newline)] )
+        whatitis = findfirst( "model:       \t",newline );  model = String(newline[(whatitis[end]+1):lastindex(newline)])
         newline = readline(myfile)          # noglobpars
         whatitis = findfirst( "noglobpars:  \t",newline );  noglobpars = parse( UInt64, newline[(whatitis[end]+1):lastindex(newline)] )
         newline = readline(myfile)          # nohide
@@ -2524,7 +2541,7 @@ function readlineagestatefromtext2( fullfilename::String )
 
         (noups, noglobpars_2,nohide_2,nolocpars_2) = getMCmodelnoups2( model, nocells )
         if( (noglobpars_2!=noglobpars) || (nohide_2!=nohide) || (nolocpars_2!=nolocpars) )
-            @printf( " (%s) Warning - readlineagestatefromtext2 (%d): Wrong parameter numbers for model %d, version %d: %d vs %d, %d vs %d, %d vs %d.\n", chaincomment,MCmax, model,version, noglobpars,noglobpars_2, nohide,nohide_2, nolocpars,nolocpars_2 )
+            @printf( " (%s) Warning - readlineagestatefromtext2 (%d): Wrong parameter numbers for model %s, version %d: %d vs %d, %d vs %d, %d vs %d.\n", chaincomment,MCmax, model,version, noglobpars,noglobpars_2, nohide,nohide_2, nolocpars,nolocpars_2 )
         end     # end if read something wrong
         pars_stps = ones(noups); pars_stps[2] = 2E-4
         without = 0                         # no control-window output, except warnings
@@ -2535,18 +2552,18 @@ function readlineagestatefromtext2( fullfilename::String )
 
         state_hist = Array{Lineagestate2,1}(undef,MCmax);  target_hist = Array{Target2,1}(undef,MCmax)  # initialise
         logevolcost = zeros(nocells);   loglklhcomps = zeros(nocells);  logpriorcomps = zeros(nocells)  # initialise
-        if( uppars.model==1 )               # simple model
+        if uppars.model == "perfect_FW"
             getstatefromlist = x->getstatefromlist_m1( lineagetree, x,statefunctions, uppars )          # has to be in-line definition
-        elseif( uppars.model==2 )           # clock-modulated model
+        elseif uppars.model == "clock_FW"
             getstatefromlist = x->getstatefromlist_m2( lineagetree, x,statefunctions, uppars )          # has to be in-line definition
-        elseif( uppars.model==3 )           # rw-inheritance model
+        elseif uppars.model == "RW_FW"
             getstatefromlist = x->getstatefromlist_m3( lineagetree, x,statefunctions, uppars )          # has to be in-line definition
-        elseif( uppars.model==4 )           # rw-inheritance model
+        elseif uppars.model == "2DRW_FW"
             getstatefromlist = x->getstatefromlist_m4( lineagetree, x,statefunctions, uppars )          # has to be in-line definition
-        elseif( uppars.model==9 )           # rw-inheritance model
+        elseif uppars.model == "2DRW_F"
             getstatefromlist = x->getstatefromlist_m9( lineagetree, x,statefunctions, uppars )          # has to be in-line definition
         else                                # unknown model
-            @printf( " (%s) Warning - readlineagestatefromtext2 (%d): Unknown model %d.\n", chaincomment,MCmax, uppars.model )
+            println(" (", chaincomment, ") Warning - readlineagestatefromtext2 (", MCmax, "): Unknown model ", uppars.model, ".")
         end     # end of distinguishing models
 
         # read initial state:
@@ -2600,112 +2617,113 @@ function readmultiplestatesfromtexts2( trunkfilename::String, suffix::Array{Stri
     return state_chains_hist,target_chains_hist, uppars_chains, lineagetree
 end     # end of readmultiplestatesfromtexts2 function
 
-function getMCmodelnoups2( model::UInt64, nocells::UInt64 )
+function getMCmodelnoups2( model::String, nocells::UInt64 )
     # gives number of updates in MCmodel
 
-    if( model==1 )                                          # simple FrechetWeibull model
+    if model == "perfect_FW"
         noglobpars = UInt64( 4 )                            # number of global parameters; local
         nohide = UInt64( 0 )                                # number of hidden inherited parameters; none
         nolocpars = UInt64( 4 )                             # number of local parameters to determine times; Frechet-Weibull
         noups = 1 + 1 + noglobpars + 2 + noglobpars + 0 + 0 + 1 + nohide + 2*nocells + 2*nocells + 2*nocells      # independence + getupdate_nuts + globparsjt_rw + getglobparsjt_FWscaleshape_rw + getglobpars_rw_m3 + getglobpars_Gauss_m3 + getglobpars_gamma_potsigma_m3 + gettimes_looseend_ind + gettimes_looseend_Gaussind + gettimes_rw
-    elseif( model==2 )                                      # clock-modulated FrechetWeibull model
+    elseif model == "clock_FW"
         noglobpars = UInt64( 4 + 3 )                        # number of global parameters; local + clock
         nohide = UInt64( 0 )                                # number of hidden inherited parameters; none
         nolocpars = UInt64( 4 )                             # number of local parameters to determine times; Frechet-Weibull
         noups = 1 + 1 + noglobpars + 2 + noglobpars + 0 + 0 + 1 + nohide + 2*nocells + 2*nocells + 2*nocells      # independence + getupdate_nuts + globparsjt_rw + getglobpars_Gauss_m3 + getglobparsjt_FWscaleshape_rw + getglobpars_rw_m3 + getglobpars_gamma_potsigma_m3 + gettimes_looseend_ind + gettimes_looseend_Gaussind + gettimes_rw
-    elseif( model==3 )                                      # rw-inheritance FrechetWeibull model
+    elseif model == "RW_FW"
         noglobpars = UInt64( 4 + 2 )                        # number of global parameters; local + f + sigma
         nohide = UInt64( 1 )                                # number of hidden inherited parameters; one scale of scale-parameters for each cell
         nolocpars = UInt64( 4 )                             # number of local parameters to determine times; Frechet-Weibull
         noups = 1 + 1 + noglobpars + 2 + noglobpars + 1 + nohide + nohide*nocells + nohide*nocells + 2*nocells + 2*nocells + 2*nocells      # independence + getupdate_nuts + globparsjt_rw + getglobparsjt_FWscaleshape_rw + getglobpars_rw_m3 + getglobpars_Gauss_m3 + getglobpars_gamma_potsigma_m3 + getevolparsjt_rw + getevolparsjt_nearbycells_rw + gettimes_looseend_ind + gettimes_looseend_Gaussind + gettimes_rw
-    elseif( model==4 )                                      # 2d rw-inheritance FrechetWeibull model
+    elseif model == "2DRW_FW"
         noglobpars = UInt64( 4 + 4 + 2 )                    # number of global parameters; local + hiddenmatrix[:] + diag(sigma)
         nohide = UInt64( 2 )                                # number of hidden inherited parameters; one scale of scale-parameters for each cell
         nolocpars = UInt64( 4 )                             # number of local parameters to determine times; Frechet-Weibull
         noups = 1 + 1 + noglobpars + 2 + noglobpars + 1 + nohide + nohide*nocells + nohide*nocells + 2*nocells + 2*nocells + 2*nocells      # independence + getupdate_nuts + globparsjt_rw + getglobparsjt_FWscaleshape_rw + getglobpars_rw_m3 + getglobpars_Gauss_m3 + getglobpars_gamma_potsigma_m3 + getevolparsjt_rw + getevolparsjt_nearbycells_rw + gettimes_looseend_ind + gettimes_looseend_Gaussind + gettimes_rw
-    elseif( model==9 )                                      # 2d rw-inheritance FrechetWeibull model, divisions-only
+    elseif model == "2DRW_F"
         noglobpars = UInt64( 2 + 4 + 2 )                    # number of global parameters; local + hiddenmatrix[:] + diag(sigma)
         nohide = UInt64( 2 )                                # number of hidden inherited parameters; one scale of scale-parameters for each cell
         nolocpars = UInt64( 2 )                             # number of local parameters to determine times; Frechet
         noups = 1 + 1 + noglobpars + 2 + noglobpars + 1 + nohide + nohide*nocells + nohide*nocells + 2*nocells + 2*nocells + 2*nocells      # independence + getupdate_nuts + globparsjt_rw + getglobparsjt_FWscaleshape_rw + getglobpars_rw_m3 + getglobpars_Gauss_m3 + getglobpars_gamma_potsigma_m3 + getevolparsjt_rw + getevolparsjt_nearbycells_rw + gettimes_looseend_ind + gettimes_looseend_Gaussind + gettimes_rw
-    elseif( model==11 )                                     # simple GammaExponetial model
+    elseif model == "perfect_GE"
         noglobpars = UInt64( 3 )                            # number of global parameters; local
         nohide = UInt64( 0 )                                # number of hidden inherited parameters; none
         nolocpars = UInt64( 3 )                             # number of local parameters to determine times; GammaExponential
         noups = 1 + 1 + noglobpars + 2 + noglobpars + 0 + 0 + 1 + nohide + 2*nocells + 2*nocells + 2*nocells      # independence + getupdate_nuts + globparsjt_rw + getglobparsjt_FWscaleshape_rw + getglobpars_rw_m3 + getglobpars_Gauss_m3 + getglobpars_gamma_potsigma_m3 + gettimes_looseend_ind + gettimes_looseend_Gaussind + gettimes_rw
-    elseif( model==12 )                                     # clock-modulated GammaExponetial model
+    elseif model == "clock_GE"
         noglobpars = UInt64( 3 + 3 )                        # number of global parameters; local + clock
         nohide = UInt64( 0 )                                # number of hidden inherited parameters; none
         nolocpars = UInt64( 3 )                             # number of local parameters to determine times; GammaExponential
         noups = 1 + 1 + noglobpars + 2 + noglobpars + 0 + 0 + 1 + nohide + 2*nocells + 2*nocells + 2*nocells      # independence + getupdate_nuts + globparsjt_rw + getglobpars_Gauss_m3 + getglobparsjt_FWscaleshape_rw + getglobpars_rw_m3 + getglobpars_gamma_potsigma_m3 + gettimes_looseend_ind + gettimes_looseend_Gaussind + gettimes_rw
-    elseif( model==13 )                                     # rw-inheritance GammaExponetial model
+    elseif model == "RW_GE"
         noglobpars = UInt64( 3 + 2 )                        # number of global parameters; local + f + sigma
         nohide = UInt64( 1 )                                # number of hidden inherited parameters; one scale of scale-parameters for each cell
         nolocpars = UInt64( 3 )                             # number of local parameters to determine times; GammaExponential
         noups = 1 + 1 + noglobpars + 2 + noglobpars + 1 + nohide + nohide*nocells + nohide*nocells + 2*nocells + 2*nocells + 2*nocells      # independence + getupdate_nuts + globparsjt_rw + getglobparsjt_FWscaleshape_rw + getglobpars_rw_m3 + getglobpars_Gauss_m3 + getglobpars_gamma_potsigma_m3 + getevolparsjt_rw + getevolparsjt_nearbycells_rw + gettimes_looseend_ind + gettimes_looseend_Gaussind + gettimes_rw
-    elseif( model==14 )                                     # 2d rw-inheritance GammaExponetial model
+    elseif model == "2DRW_GE"
         noglobpars = UInt64( 3 + 4 + 2 )                    # number of global parameters; local + hiddenmatrix[:] + diag(sigma)
         nohide = UInt64( 2 )                                # number of hidden inherited parameters; one scale of scale-parameters for each cell
         nolocpars = UInt64( 3 )                             # number of local parameters to determine times; GammaExponential
         noups = 1 + 1 + noglobpars + 2 + noglobpars + 1 + nohide + nohide*nocells + nohide*nocells + 2*nocells + 2*nocells + 2*nocells      # independence + getupdate_nuts + globparsjt_rw + getglobparsjt_FWscaleshape_rw + getglobpars_rw_m3 + getglobpars_Gauss_m3 + getglobpars_gamma_potsigma_m3 + getevolparsjt_rw + getevolparsjt_nearbycells_rw + gettimes_looseend_ind + gettimes_looseend_Gaussind + gettimes_rw
     else    # unknown model
-        @printf( " Warning - getMCmodelnoups2: Unknown model %d.\n", model )
+        println( " Warning - getMCmodelnoups2: Unknown model ", model, ".")
     end     # end of distinguishing models
 
     return noups, noglobpars,nohide,nolocpars
 end     # end of getMCmodelnoups2 function
-function getstateandtargetfunctions( model::UInt64 )
+
+function getstateandtargetfunctions( model::String )
     # defines state- and targetfunctions for the given model
 
-    if( model==1 )                                   # simple FrechetWeibull model
+    if model == "perfect_FW"
         # death-division functions:
         dthdivdistr = getDthDivdistributionfromparameters( "FrechetWeibull" )
         # state- and targetfunctions:
         statefunctions = Statefunctions( (x1,x2,x3,x4)->stfnctn_getevolpars_m1(x1,x2,x3,x4), (x1,x2,x3,x4,x5)->stfnctn_getunknownmotherpars_m1(x1,x2,x3,x4,dthdivdistr,x5), (x1,x2,x3,x4,x5)->stfnctn_getcellpars_m1(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->stfnctn_getcelltimes_m1(x1,x2,x3,dthdivdistr,x4), (x1,x2,x3)->stfnctn_updateunknownmotherpars_m1(x1,x2,dthdivdistr,x3) )
         targetfunctions = Targetfunctions( (x1,x2,x3,x4)->trgtfnctn_getevolpars_m1(x1,x2,x3,x4), (x1,x2,x3,x4,x5,x6,x7,x8,x9,x10)->trgtfnctn_getunknownmotherpars_m1(x1,x2,x3,x4,x5,x6,x7,x8,x9,dthdivdistr,x10), (x1,x2,x3,x4,x5)->trgtfnctn_getcellpars_m1(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->trgtfnctn_getcelltimes_m1(x1,x2,x3,dthdivdistr,x4) )
-    elseif( model==2 )                               # clock-modulated FrechetWeibull model
+    elseif model == "clock_FW"
         # death-division functions:
         dthdivdistr = getDthDivdistributionfromparameters( "FrechetWeibull" )
         # state- and targetfunctions:
         statefunctions = Statefunctions( (x1,x2,x3,x4)->stfnctn_getevolpars_m2(x1,x2,x3,x4), (x1,x2,x3,x4,x5)->stfnctn_getunknownmotherpars_m2(x1,x2,x3,x4,dthdivdistr,x5), (x1,x2,x3,x4,x5)->stfnctn_getcellpars_m2(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->stfnctn_getcelltimes_m2(x1,x2,x3,dthdivdistr,x4), (x1,x2,x3)->stfnctn_updateunknownmotherpars_m2(x1,x2,dthdivdistr,x3) )
         targetfunctions = Targetfunctions( (x1,x2,x3,x4)->trgtfnctn_getevolpars_m2(x1,x2,x3,x4), (x1,x2,x3,x4,x5,x6,x7,x8,x9,x10)->trgtfnctn_getunknownmotherpars_m2(x1,x2,x3,x4,x5,x6,x7,x8,x9,dthdivdistr,x10), (x1,x2,x3,x4,x5)->trgtfnctn_getcellpars_m2(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->trgtfnctn_getcelltimes_m2(x1,x2,x3,dthdivdistr,x4) )
-    elseif( model==3 )                               # rw-inheritance FrechetWeibull model
+    elseif model == "RW_FW"
         # death-division functions:
         dthdivdistr = getDthDivdistributionfromparameters( "FrechetWeibull" )
         # state- and targetfunctions:
         statefunctions = Statefunctions( (x1,x2,x3,x4)->stfnctn_getevolpars_m3(x1,x2,x3,x4), (x1,x2,x3,x4,x5)->stfnctn_getunknownmotherpars_m3(x1,x2,x3,x4,dthdivdistr,x5), (x1,x2,x3,x4,x5)->stfnctn_getcellpars_m3(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->stfnctn_getcelltimes_m3(x1,x2,x3,dthdivdistr,x4), (x1,x2,x3)->stfnctn_updateunknownmotherpars_m3(x1,x2,dthdivdistr,x3) )
         targetfunctions = Targetfunctions( (x1,x2,x3,x4)->trgtfnctn_getevolpars_m3(x1,x2,x3,x4), (x1,x2,x3,x4,x5,x6,x7,x8,x9,x10)->trgtfnctn_getunknownmotherpars_m3(x1,x2,x3,x4,x5,x6,x7,x8,x9,dthdivdistr,x10), (x1,x2,x3,x4,x5)->trgtfnctn_getcellpars_m3(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->trgtfnctn_getcelltimes_m3(x1,x2,x3,dthdivdistr,x4) )
-    elseif( model==4 )                               # 2d rw-inheritance FrechetWeibull model
+    elseif model == "2DRW_FW"
         # death-division functions:
         dthdivdistr = getDthDivdistributionfromparameters( "FrechetWeibull" )
         # state- and targetfunctions:
         statefunctions = Statefunctions( (x1,x2,x3,x4)->stfnctn_getevolpars_m4(x1,x2,x3,x4), (x1,x2,x3,x4,x5)->stfnctn_getunknownmotherpars_m4(x1,x2,x3,x4,dthdivdistr,x5), (x1,x2,x3,x4,x5)->stfnctn_getcellpars_m4(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->stfnctn_getcelltimes_m4(x1,x2,x3,dthdivdistr,x4), (x1,x2,x3)->stfnctn_updateunknownmotherpars_m4(x1,x2,dthdivdistr,x3) )
         targetfunctions = Targetfunctions( (x1,x2,x3,x4)->trgtfnctn_getevolpars_m4(x1,x2,x3,x4), (x1,x2,x3,x4,x5,x6,x7,x8,x9,x10)->trgtfnctn_getunknownmotherpars_m4(x1,x2,x3,x4,x5,x6,x7,x8,x9,dthdivdistr,x10), (x1,x2,x3,x4,x5)->trgtfnctn_getcellpars_m4(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->trgtfnctn_getcelltimes_m4(x1,x2,x3,dthdivdistr,x4) )
-    elseif( model==9 )                               # 2d rw-inheritance FrechetWeibull model, divisions-only
+    elseif model == "2DRW_F"
         # death-division functions:
         dthdivdistr = getDthDivdistributionfromparameters( "Frechet" )
         # state- and targetfunctions:
         statefunctions = Statefunctions( (x1,x2,x3,x4)->stfnctn_getevolpars_m9(x1,x2,x3,x4), (x1,x2,x3,x4,x5)->stfnctn_getunknownmotherpars_m9(x1,x2,x3,x4,dthdivdistr,x5), (x1,x2,x3,x4,x5)->stfnctn_getcellpars_m9(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->stfnctn_getcelltimes_m9(x1,x2,x3,dthdivdistr,x4), (x1,x2,x3)->stfnctn_updateunknownmotherpars_m9(x1,x2,dthdivdistr,x3) )
         targetfunctions = Targetfunctions( (x1,x2,x3,x4)->trgtfnctn_getevolpars_m9(x1,x2,x3,x4), (x1,x2,x3,x4,x5,x6,x7,x8,x9,x10)->trgtfnctn_getunknownmotherpars_m9(x1,x2,x3,x4,x5,x6,x7,x8,x9,dthdivdistr,x10), (x1,x2,x3,x4,x5)->trgtfnctn_getcellpars_m9(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->trgtfnctn_getcelltimes_m9(x1,x2,x3,dthdivdistr,x4) )
-    elseif( model==11 )                              # simple GammaExponential model
+    elseif model == "perfect_GE"
         # death-division functions:
         dthdivdistr = getDthDivdistributionfromparameters( "GammaExponential" )
         # state- and targetfunctions:
         statefunctions = Statefunctions( (x1,x2,x3,x4)->stfnctn_getevolpars_m11(x1,x2,x3,x4), (x1,x2,x3,x4,x5)->stfnctn_getunknownmotherpars_m11(x1,x2,x3,x4,dthdivdistr,x5), (x1,x2,x3,x4,x5)->stfnctn_getcellpars_m11(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->stfnctn_getcelltimes_m11(x1,x2,x3,dthdivdistr,x4), (x1,x2,x3)->stfnctn_updateunknownmotherpars_m11(x1,x2,dthdivdistr,x3) )
         targetfunctions = Targetfunctions( (x1,x2,x3,x4)->trgtfnctn_getevolpars_m11(x1,x2,x3,x4), (x1,x2,x3,x4,x5,x6,x7,x8,x9,x10)->trgtfnctn_getunknownmotherpars_m11(x1,x2,x3,x4,x5,x6,x7,x8,x9,dthdivdistr,x10), (x1,x2,x3,x4,x5)->trgtfnctn_getcellpars_m11(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->trgtfnctn_getcelltimes_m11(x1,x2,x3,dthdivdistr,x4) )
-    elseif( model==12 )                              # clock-modulated GammaExponential model
+    elseif  model == "clock_GE"
         # death-division functions:
         dthdivdistr = getDthDivdistributionfromparameters( "GammaExponential" )
         # state- and targetfunctions:
         statefunctions = Statefunctions( (x1,x2,x3,x4)->stfnctn_getevolpars_m12(x1,x2,x3,x4), (x1,x2,x3,x4,x5)->stfnctn_getunknownmotherpars_m12(x1,x2,x3,x4,dthdivdistr,x5), (x1,x2,x3,x4,x5)->stfnctn_getcellpars_m12(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->stfnctn_getcelltimes_m12(x1,x2,x3,dthdivdistr,x4), (x1,x2,x3)->stfnctn_updateunknownmotherpars_m12(x1,x2,dthdivdistr,x3) )
         targetfunctions = Targetfunctions( (x1,x2,x3,x4)->trgtfnctn_getevolpars_m12(x1,x2,x3,x4), (x1,x2,x3,x4,x5,x6,x7,x8,x9,x10)->trgtfnctn_getunknownmotherpars_m12(x1,x2,x3,x4,x5,x6,x7,x8,x9,dthdivdistr,x10), (x1,x2,x3,x4,x5)->trgtfnctn_getcellpars_m12(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->trgtfnctn_getcelltimes_m12(x1,x2,x3,dthdivdistr,x4) )
-    elseif( model==13 )                              # rw-inheritance GammaExponential model
+    elseif model == "RW_GE"
         # death-division functions:
         dthdivdistr = getDthDivdistributionfromparameters( "GammaExponential" )
         # state- and targetfunctions:
         statefunctions = Statefunctions( (x1,x2,x3,x4)->stfnctn_getevolpars_m13(x1,x2,x3,x4), (x1,x2,x3,x4,x5)->stfnctn_getunknownmotherpars_m13(x1,x2,x3,x4,dthdivdistr,x5), (x1,x2,x3,x4,x5)->stfnctn_getcellpars_m13(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->stfnctn_getcelltimes_m13(x1,x2,x3,dthdivdistr,x4), (x1,x2,x3)->stfnctn_updateunknownmotherpars_m13(x1,x2,dthdivdistr,x3) )
         targetfunctions = Targetfunctions( (x1,x2,x3,x4)->trgtfnctn_getevolpars_m13(x1,x2,x3,x4), (x1,x2,x3,x4,x5,x6,x7,x8,x9,x10)->trgtfnctn_getunknownmotherpars_m13(x1,x2,x3,x4,x5,x6,x7,x8,x9,dthdivdistr,x10), (x1,x2,x3,x4,x5)->trgtfnctn_getcellpars_m13(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->trgtfnctn_getcelltimes_m13(x1,x2,x3,dthdivdistr,x4) )
-    elseif( model==14 )                              # 2d rw-inheritance GammaExponential model
+    elseif model == "2DRW_GE"
         # death-division functions:
         #dthdivdistr = getDthDivdistributionfromparameters( "GammaExponential" )
         dthdivdistr = getDthDivdistributionfromparameters( "GammaExponential" )
@@ -2713,38 +2731,40 @@ function getstateandtargetfunctions( model::UInt64 )
         statefunctions = Statefunctions( (x1,x2,x3,x4)->stfnctn_getevolpars_m14(x1,x2,x3,x4), (x1,x2,x3,x4,x5)->stfnctn_getunknownmotherpars_m14(x1,x2,x3,x4,dthdivdistr,x5), (x1,x2,x3,x4,x5)->stfnctn_getcellpars_m14(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->stfnctn_getcelltimes_m14(x1,x2,x3,dthdivdistr,x4), (x1,x2,x3)->stfnctn_updateunknownmotherpars_m14(x1,x2,dthdivdistr,x3) )
         targetfunctions = Targetfunctions( (x1,x2,x3,x4)->trgtfnctn_getevolpars_m14(x1,x2,x3,x4), (x1,x2,x3,x4,x5,x6,x7,x8,x9,x10)->trgtfnctn_getunknownmotherpars_m14(x1,x2,x3,x4,x5,x6,x7,x8,x9,dthdivdistr,x10), (x1,x2,x3,x4,x5)->trgtfnctn_getcellpars_m14(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->trgtfnctn_getcelltimes_m14(x1,x2,x3,dthdivdistr,x4) )
     else                                            # unknown model
-        @printf( " Warning - getstateandtargetfunctions: Unknown model %d.\n", model )
+        println( " Warning - getstateandtargetfunctions: Unknown model ", model, ".")
     end     # end of distinguishing models
     
     return statefunctions,targetfunctions, dthdivdistr
 end     # end of getstateandtargetfunctions function
+
 function getlistfromstate( state::Lineagestate2, uppars::Uppars2 )
     # summarises the model-specific getlistfromstate_m functions
 
-    if( uppars.model==1 )       # simple FrechetWeibull model
+    if uppars.model == "perfect_FW"
         listvalues = getlistfromstate_m1( state, uppars )
-    elseif( uppars.model==2 )   # clock-modulated FrechetWeibull model
+    elseif uppars.model == "clock_FW"
         listvalues = getlistfromstate_m2( state, uppars )
-    elseif( uppars.model==3 )   # rw-inheritance FrechetWeibull model
+    elseif uppars.model == "RW_FW"
         listvalues = getlistfromstate_m3( state, uppars )
-    elseif( uppars.model==4 )   # 2d rw-inheritance FrechetWeibull model
+    elseif uppars.model == "2DRW_FW"
         listvalues = getlistfromstate_m4( state, uppars )
-    elseif( uppars.model==9 )   # 2d rw-inheritance FrechetWeibull model, divisions-only
+    elseif uppars.model == "2DRW_F"
         listvalues = getlistfromstate_m9( state, uppars )
-    elseif( uppars.model==11 )  # simple GammaExponential model
+    elseif uppars.model == "perfect_GE"
         listvalues = getlistfromstate_m1( state, uppars )
-    elseif( uppars.model==12 )  # clock-modulated GammaExponential model
+    elseif uppars.model == "clock_GE"
         listvalues = getlistfromstate_m2( state, uppars )
-    elseif( uppars.model==13 )  # rw-inheritance GammaExponential model
+    elseif uppars.model == "RW_GE"
         listvalues = getlistfromstate_m3( state, uppars )
-    elseif( uppars.model==14 )  # 2d rw-inheritance GammaExponential model
+    elseif uppars.model == "2DRW_GE"
         listvalues = getlistfromstate_m4( state, uppars )
     else                        # unknown model
-        @printf( " (%s) Warning - getlistfromstate (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+        println(" (", uppars.chaincomment, ") Warning - getlistfromstate (", uppars.MCit, "): Unknown model ", uppars.model, ".")
     end     # end of distinguishing models
 
     return listvalues
 end     # end of getlistfromstate function
+
 function getlargestabseigenvaluepart( hiddenmatrix::Array{Float64,2}, uppars::Uppars2 )::Tuple{Float64,Array{ComplexF64,2},Array{ComplexF64,1}}
     # computes largest absolute value of real part of eigenvalues
 
@@ -2752,32 +2772,33 @@ function getlargestabseigenvaluepart( hiddenmatrix::Array{Float64,2}, uppars::Up
         @printf( " (%s) Warning - getlargetstabseigenvaluepart (%d): Bad hiddenmatrix = [ %s].\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in hiddenmatrix[:]]) )
     end     # end if pathological input
     local largestabsev::Float64, eigenvectors::Array{ComplexF64,2}, eigenvalues::Array{ComplexF64,1}    # declare
-    if( (uppars.model==3) || (uppars.model==13) )   # 1D inheritance model
+    if uppars.model in ("RW_FW", "RW_GE") # 1D inheritance model
         largestabsev = deepcopy(abs(hiddenmatrix[1]))
         eigenvectors = hcat([one(ComplexF64)]); eigenvalues = vcat(ComplexF64(hiddenmatrix[1]))
-    elseif( (uppars.model==4) || (uppars.model==14) )   # higher dimensional inheritance model
+    elseif uppars.model in ("2DRW_FW", "2DRW_GE") # higher dimensional inheritance model
         eigenstruct = eigen(hiddenmatrix); largestabsev = maximum(abs.(eigenstruct.values)) #largestabsev = maximum(abs.(real.(eigenstruct.values)))
         eigenvectors = eigenstruct.vectors; eigenvalues = eigenstruct.values
-    elseif( uppars.model==9 )   # higher dimensional inheritance model, divisions-only
+    elseif uppars.model == "2DRW_F" # higher dimensional inheritance model, divisions-only
         eigenstruct = eigen(hiddenmatrix); largestabsev = maximum(abs.(eigenstruct.values)) #largestabsev = maximum(abs.(real.(eigenstruct.values)))
         eigenvectors = eigenstruct.vectors; eigenvalues = eigenstruct.values
     else                        # unknown model
-        @printf( " (%s) Warning - getlargestabseigenvaluepart (%d): Request not suitable for model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+        println(" (", uppars.chaincomment, ") Warning - getlargestabseigenvaluepart (", uppars.MCit, "): Request not suitable for model ", uppars.model, ".")
     end     # end of distinguishing models
 
     return largestabsev, eigenvectors,eigenvalues
 end     # end of getlargestabseigenvaluepart function
+
 function getequilibriumparametersofGaussianchain( hiddenmatrix::Array{Float64,2}, sigma::Array{Float64,2}, uppars::Uppars2 )::Tuple{Array{Float64},Float64}
     # computes the equilibrium parameters of Markov chain with x -> hiddenmatrix*x + sigma*(standard Gaussian)
 
-    if( (uppars.model==3) || (uppars.model==13) )   # 1D inheritance model
+    if uppars.model in ("RW_FW", "RW_GE") # 1D inheritance model
         (largestabsev,eigenvalues) = getlargestabseigenvaluepart( hiddenmatrix, uppars )[[1,3]]
         if( largestabsev<1 )    # stationary state exists
             sigma_eq = [ abs(sigma[1])/sqrt(1-eigenvalues[1]^2) ]
         else                    # eigenvalue too large for stationary state
             sigma_eq = hcat(NaN)
         end     # end if eigenvalue too large
-    elseif( (uppars.model==4) || (uppars.model==14) )   # higher dimensional inheritance model
+    elseif uppars.model in ("2DRW_FW", "2DRW_GE") # higher dimensional inheritance model
         (largestabsev, eigenvectors,eigenvalues) = getlargestabseigenvaluepart( hiddenmatrix, uppars )
         if( largestabsev<1 )    # stationary state exists
             inveigenvec = inv(eigenvectors)
@@ -2804,14 +2825,14 @@ function getequilibriumparametersofGaussianchain( hiddenmatrix::Array{Float64,2}
         else                    # eigenvalue too large for stationary state
             sigma_eq = [ NaN NaN; NaN NaN ]
         end     # end if eigenvalue too large
-    elseif( uppars.model==9 )   # higher dimensional inheritance model, division-only
+    elseif uppars.model == "2DRW_F" # higher dimensional inheritance model, divisions-only
         (largestabsev, eigenvectors,eigenvalues) = getlargestabseigenvaluepart( hiddenmatrix, uppars )
         if( largestabsev<1 )    # stationary state exists
             inveigenvec = inv(eigenvectors)
             sigma_eq_here = real.( eigenvectors*( ( inveigenvec*(sigma'*sigma)*(inveigenvec') )./(1 .-eigenvalues*(eigenvalues')) )*(eigenvectors') )     # 'real' to avoid numerical errors
             sigma_eq = sqrt(sigma_eq_here)       # sigma_eq'*sigma_eq is variance
             if( !all(isreal, sigma_eq) )
-                @printf( " (%s) Warning - getequilibriumparametersofGaussianchain (%d): Got imaginary sigma_eq:", uppars.chaincomment,uppars.MCit )
+                printf( " (", uppars.chaincomment, ") Warning - getequilibriumparametersofGaussianchain (", uppars.MCit, "): Got imaginary sigma_eq:")
                 display( hiddenmatrix )
                 display( sigma_eq_here )
                 display( issymmetric( sigma_eq_here ) )
@@ -2832,11 +2853,12 @@ function getequilibriumparametersofGaussianchain( hiddenmatrix::Array{Float64,2}
             sigma_eq = [ NaN NaN; NaN NaN ]
         end     # end if eigenvalue too large
     else                        # unknown model
-        @printf( " (%s) Warning - getequilibriumparametersofGaussianchain (%d): Request not valid for model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+        println(" (", uppars.chaincomment, ") Warning - getequilibriumparametersofGaussianchain (", uppars.MCit, "): Request not valid for model ", uppars.model, ".")
     end     # end of distinguishing models
 
     return sigma_eq, largestabsev
 end     # end of getequilibriumparametersofGaussianchain function
+
 function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Float64,1},MArray},unknownmothersamples::Unknownmotherequilibriumsamples, mygetunknownmotherpars::Function,mygetevolpars::Function,mygetcellpars::Function, mygetevoltrgt::Function,mygetcelltrgt::Function,mygetcelltimestrgt::Function, dthdivdistr::DthDivdistr, uppars::Uppars2, overwritenomotherburnin::Int64=-1 )::Int64
     # samples lifetime and inheritance parameters for unknown mothers
     #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): pars_glob = [ %s].\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in pars_glob]) )
@@ -2850,51 +2872,51 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
     starttime::Float64 = unknownmothersamples.starttime         # short-hand
     pars_cell_here::MArray{Tuple{Int64(uppars.nolocpars)},Float64} = @MArray zeros(Int64(uppars.nolocpars))                 # initialise
     myfac::Float64 = 0.0                                        # initialise rescaling factor of pars_cell_here vs pars_glob
-    if( uppars.model==1 )                                       # simple FrechetWeibull model
+    if uppars.model == "perfect_FW" # simple FrechetWeibull model
         initialisationtype = 1                                  # overwrite, as analytically correct to initialise like this
         pars_cell_here .= pars_glob[1:uppars.nolocpars]         # models with first couple of parameters in pars_glob coinciding with global means of pars_cell
         myfac = 1.0                                             # no rescaling
-    elseif( uppars.model==2 )                                   # clock-modulated FrechetWeibull model
+    elseif uppars.model == "clock_FW"
         pars_cell_here .= pars_glob[1:uppars.nolocpars]
         myfac = max( 0.01, (1-pars_glob[uppars.nolocpars+1]) )  # fastest possible generation
         pars_cell_here[[1,3]] .*= myfac
-    elseif( uppars.model==3 )                                   # rw-inheritance FrechetWeibull model
+    elseif uppars.model == "RW_FW"
         pars_cell_here .= pars_glob[1:uppars.nolocpars]
         hiddenmatrix = hcat( pars_glob[uppars.nolocpars+1] )
         sigma = hcat( pars_glob[uppars.nolocpars+2] )
         sigma_eq = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )[1][1]     # matrix with single element
         myfac = max( 0.01, (1-3*sigma_eq) )
         pars_cell_here[[1,3]] .*= myfac
-    elseif( uppars.model==4 )                                   # 2D rw-inheritance FrechetWeibull model
+    elseif uppars.model == "2DRW_FW"
         pars_cell_here .= pars_glob[1:uppars.nolocpars]
         (hiddenmatrix, sigma) = gethiddenmatrix_m4( pars_glob, uppars )
         sigma_eq = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )[1]
         sigma_eq_here = max( sigma_eq[1,1], sigma_eq[2,2] )
         myfac = max( 0.01, (1-3*sigma_eq_here) )
         pars_cell_here[[1,3]] .*= myfac
-    elseif( uppars.model==9 )                                   # 2D rw-inheritance FrechetWeibull model; division-only
+    elseif uppars.model == "2DRW_F"
         pars_cell_here .= pars_glob[1:uppars.nolocpars]
         (hiddenmatrix, sigma) = gethiddenmatrix_m4( pars_glob, uppars ) # same for model 9
         sigma_eq = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )[1]
         sigma_eq_here = max( sigma_eq[1,1], sigma_eq[2,2] )
         myfac = max( 0.01, (1-3*sigma_eq_here) )
         pars_cell_here[1] *= myfac
-    elseif( uppars.model==11 )                                  # simple GammaExponential model
+    elseif uppars.model == "perfect_GE"
         initialisationtype = 1                                  # overwrite, as analytically correct to initialise like this
         pars_cell_here .= pars_glob[1:uppars.nolocpars]         # models with first couple of parameters in pars_glob coinciding with global means of pars_cell
         myfac = 1.0                                             # no rescaling
-    elseif( uppars.model==12 )                                  # clock-modulated GammaExponential model
+    elseif uppars.model == "clock_GE"
         pars_cell_here .= pars_glob[1:uppars.nolocpars]
         myfac = max( 0.01, (1-pars_glob[uppars.nolocpars+1]) )  # fastest possible generation
         pars_cell_here[1] *= myfac
-    elseif( uppars.model==13 )                                  # rw-inheritance GammaExponential model
+    elseif uppars.model == "RW_GE"
         pars_cell_here .= pars_glob[1:uppars.nolocpars]
         hiddenmatrix = hcat( pars_glob[uppars.nolocpars+1] )
         sigma = hcat( pars_glob[uppars.nolocpars+2] )
         sigma_eq = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )[1][1]     # matrix with single element
         myfac = max( 0.01, (1-3*sigma_eq) )
         pars_cell_here[1] *= myfac
-    elseif( uppars.model==14 )                                  # 2D rw-inheritance GammaExponential model
+    elseif uppars.model == "2DRW_GE"
         pars_cell_here .= pars_glob[1:uppars.nolocpars]
         (hiddenmatrix, sigma) = gethiddenmatrix_m4( pars_glob, uppars )
         sigma_eq = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )[1]
@@ -2902,9 +2924,9 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
         myfac = max( 0.01, (1-3*sigma_eq_here) )
         pars_cell_here[1] *= myfac
     else                                                        # unknown model
-        @printf( " Warning - getjointequilibriumparameterswithnetgrowth: Model %d is not compatible for determining 'typical' pars_cell.\n", uppars.model )
+        println(" Warning - getjointequilibriumparameterswithnetgrowth: Model ", uppars.model, " is not compatible for determining 'typical' pars_cell.")
     end     # end if models with appropriate formatting of pars_glob
-    if( uppars.model in (1,2,3,4) )                             # division- and death-model with FrechetWeibull
+    if uppars.model in ("perfect_FW", "clock_FW", "RW_FW", "2DRW_FW") # division- and death-model with FrechetWeibull
         (mean_div,std_div, mean_dth,std_dth, prob_dth) = estimateFrechetWeibullstats(pars_cell_here, UInt64(1000))
         mymean = deepcopy(mean_div); mystd = deepcopy(std_div)
         if( prob_dth==0.0 )                                     # only divisions
@@ -2914,11 +2936,11 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
         else                                                    # both
             meaninterdivisiontime = deepcopy( (mean_div*(1-prob_dth) + mean_dth*prob_dth)/(myfac) )   # convex combination; try to get upper bound, so /myfac instead of *myfac
         end     # end of distinguishing deathprobabilities
-    elseif( uppars.model==9 )                                   # divisions-only model
+    elseif uppars.model == "2DRW_F" # divisions-only model
         (mean_div,std_div, mean_dth,std_dth, prob_dth) = getFrechetstats(pars_cell_here)
         mymean = deepcopy(mean_div); mystd = deepcopy(std_div)
         meaninterdivisiontime = deepcopy( mean_div/(myfac) )    # no deaths; try to get upper bound, so /myfac instead of *myfac
-    elseif( uppars.model in (11,12,13,14) )                     # division- and death-model with GammaExponential
+    elseif uppars.model in ("perfect_GE", "clock_GE", "RW_GE", "2DRW_GE") # division- and death-model with GammaExponential
         (mean_div,std_div, mean_dth,std_dth, prob_dth) = estimateGammaExponentialstats(pars_cell_here, UInt64(1000))
         mymean = deepcopy(mean_div); mystd = deepcopy(std_div)
         if( (prob_dth==0.0) || isnan(mean_dth) )                # (effectively) only divisions
@@ -2929,33 +2951,33 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
             meaninterdivisiontime = deepcopy( (mean_div*(1-prob_dth) + mean_dth*prob_dth)/myfac )   # convex combination; try to get upper bound, so /myfac instead of *myfac
         end     # end of distinguishing deathprobabilities
     else                                                        # unknown model
-        @printf( " Warning - getjointequilibriumparameterswithnetgrowth: Model %d is not compatible for determining means.\n", uppars.model )
+        println(" Warning - getjointequilibriumparameterswithnetgrowth: Model ", uppars.model, " is not compatible for determining means.")
     end     # end of distinguishing models
     #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): div = %1.5e+-%1.5e, dth = %1.5e+-%1.5e, prob_dth = %1.5e (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, mean_div,std_div, mean_dth,std_dth, prob_dth, (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
-    if( (uppars.without>=3) && !isfinite(mystd) )
+    if !(uppars.without in ("perfect_FW", "clock_FW", "RW_FW")) && !isfinite(mystd)
         @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Bad std for divisions %1.5e+-%1.5e, pars_cell_here = [ %s].\n", uppars.chaincomment,uppars.MCit, mymean,mystd, join([@sprintf("%+1.5e ",j) for j in pars_cell_here]) )
     end     # end if without
     #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): mean comparison %1.5e (bth) vs %1.5e (div only)(after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, meaninterdivisiontime, mymean, (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
     # ...set how to get the initial evol-pars:
-    if( (uppars.model==1) || (uppars.model==11) )               # simple model
+    if uppars.model in ("perfect_FW", "perfect_GE") # simple model
         samplefirstevolpars = (()->( zeros(uppars.nohide) ))
-    elseif( (uppars.model==2) || (uppars.model==12) )           # clock-modulated model
+    elseif uppars.model in ("clock_FW", "clock_GE") # clock-modulated model
         samplefirstevolpars = (()->( zeros(uppars.nohide) ))
-    elseif( (uppars.model==3) || (uppars.model==13) )           # rw-inheritance model
+    elseif uppars.model in ("RW_FW", "RW_GE") # rw-inheritance model
         hiddenmatrix = hcat( pars_glob[uppars.nolocpars+1] )
         sigma = hcat( pars_glob[uppars.nolocpars+2] )
         sigma_eq = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )[1]
         samplefirstevolpars = (()->vcat( sigma_eq*randn() ) .+ 1.0)
-    elseif( (uppars.model==4) || (uppars.model==14) )           # 2d rw-inheritance model
+    elseif uppars.model in ("2DRW_FW", "2DRW_GE") # 2d rw-inheritance model
         (hiddenmatrix, sigma) = gethiddenmatrix_m4( pars_glob, uppars )
         sigma_eq = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )[1]
         samplefirstevolpars = (()->vcat( sigma_eq*randn(2) ) .+ 1.0)
-    elseif( uppars.model==9 )                                   # 2d rw-inheritance model; division-only
+    elseif uppars.model == "2DRW_F" # 2d rw-inheritance model; division-only
         (hiddenmatrix, sigma) = gethiddenmatrix_m4( pars_glob, uppars ) # same for model 9
         sigma_eq = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )[1]
         samplefirstevolpars = (()->vcat( sigma_eq*randn(2) ) .+ 1.0)
     else                                                        # unknown model
-        @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+        println(" (", uppars.chaincomment, ") Warning - getjointequilibriumparameterswithnetgrowth (", uppars.MCit, "): Unknown model ", uppars.model, ".")
     end     # end of distinguishing models
     # ...get naive estamates for equilibrium parameters:
     uppercdflimit::Float64 = (1-1e-3)
@@ -2992,14 +3014,14 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
                 #unknownmothersamples.time_cell_eq[j_sample,1] = unknownmothersamples.starttime - rand()
                 unknownmothersamples.weights_eq[j_sample] = 1.0
             end     # end of sampling unknownmothersamples
-            if( (uppars.model==1) || (uppars.model==11) )       # simple models
+            if uppars.model in ("perfect_FW", "perfect_GE") # simple models
                 for j_sample = 1:unknownmothersamples.nomothersamples
                     j_time = mysamples_eigen[j_sample]
                     unknownmothersamples.pars_cell_eq[j_sample,:] .= pars_glob[1:uppars.nolocpars]
                     unknownmothersamples.time_cell_eq[j_sample,2] = unknownmothersamples.starttime + abs(timerange_eigen[j_time] + dt_eigen*(rand()-0.5))
                     unknownmothersamples.time_cell_eq[j_sample,1] = -unknownmothersamples.time_cell_eq[j_sample,2]
                 end     # end of samples loop
-            elseif( (uppars.model==2) || (uppars.model==12) )   # clock models
+            elseif uppars.model in ("clock_FW", "clock_GE") # clock models
                 for j_sample = 1:unknownmothersamples.nomothersamples
                     j_scale1 = ceil(Int64,mysamples_eigen[j_sample]/notimes)
                     j_time = mysamples_eigen[j_sample] - (j_scale1-1)*notimes
@@ -3007,7 +3029,7 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
                     unknownmothersamples.time_cell_eq[j_sample,2] = unknownmothersamples.starttime + abs(timerange_eigen[j_time] + dt_eigen*(rand()-0.5))
                     unknownmothersamples.time_cell_eq[j_sample,1] = -unknownmothersamples.time_cell_eq[j_sample,2]
                 end     # end of samples loop
-            elseif( (uppars.model==3) || (uppars.model==13) )   # RW models
+            elseif uppars.model in ("RW_FW", "RW_GE") # RW models
                 for j_sample = 1:unknownmothersamples.nomothersamples
                     j_scale1 = ceil(Int64,mysamples_eigen[j_sample]/notimes)
                     j_time = mysamples_eigen[j_sample] - (j_scale1-1)*notimes 
@@ -3016,7 +3038,7 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
                     unknownmothersamples.time_cell_eq[j_sample,2] = unknownmothersamples.starttime + abs(timerange_eigen[j_time] + dt_eigen*(rand()-0.5))
                     unknownmothersamples.time_cell_eq[j_sample,1] = -unknownmothersamples.time_cell_eq[j_sample,2]
                 end     # end of samples loop
-            elseif( uppars.model in (4,9,14) )                  # 2DRW models
+            elseif uppars.model in ("2DRW_FW", "2DRW_F", "2DRW_GE") # 2DRW models
                 for j_sample = 1:unknownmothersamples.nomothersamples
                     j_scale2 = ceil(Int64,mysamples_eigen[j_sample]/(notimes*noscales))
                     j_scale1 = ceil(Int64,(mysamples_eigen[j_sample] - (j_scale2-1)*(notimes*noscales))/notimes)
@@ -3028,7 +3050,7 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
                     unknownmothersamples.time_cell_eq[j_sample,1] = -unknownmothersamples.time_cell_eq[j_sample,2]
                 end     # end of samples loop
             else                                                # unknown model
-                @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+                println(" (", uppars.chaincomment, ") Warning - getjointequilibriumparameterswithnetgrowth (", uppars.MCit, "): Unknown model ", uppars.model, ".")
             end     # end of distinguishing models
             #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): After discretisation approximation, convflag %d (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, convflag,  (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
             #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Discr init: avgfate %5.3f(%5.3f), div=%9.3e+-%9.3e, dth=%9.3e+-%9.3e, times=[%+1.1e..%1.1e..%+1.1e](%1.0e)(beta=%+1.3e(%+1.3e))(after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, mean(unknownmothersamples.fate_cell_eq),2-prob_dth_eigen, mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2]),std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2]), mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2]),std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2]), timerange_eigen[1],dt_eigen,timerange_eigen[end], notemps, beta,beta_init, (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
@@ -3050,11 +3072,11 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
                 @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Already trying to initialise since %1.3f sec, with %d samples (prob_dth2=%1.4f, beta_init=%1.4f)(threadid %d/%d).\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-t_1)/Millisecond(1000),notemps, prob_dth2,beta_init, Threads.threadid(),Threads.nthreads() )
                 @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  div = %1.5e+-%1.5e, dth = %1.5e+-%1.5e, prob_dth = %1.5e (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, mean_div,std_div, mean_dth,std_dth, prob_dth, (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
                 @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  pars_glob = [ %s] (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in pars_glob]), (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
-                if( (uppars.model==3) || (uppars.model==13) )   # hidden factor model
+                if uppars.model in ("RW_FW", "RW_GE") # hidden factor model
                     hiddenmatrix = hcat( pars_glob[uppars.nolocpars+1] ); sigma = hcat( pars_glob[uppars.nolocpars+2] )
                     (sigma_eq, largestabsev) = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )
                     @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  sigma_eq = [ %s], largestabsev = %+1.5e (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in sigma_eq]), largestabsev, (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
-                elseif( uppars.model in (4,9,14) )              # 2D hidden factors model
+                elseif uppars.model in ("2DRW_FW", "2DRW_F", "2DRW_GE") # 2D hidden factors model
                     (hiddenmatrix, sigma) = gethiddenmatrix_m4( pars_glob, uppars )
                     (sigma_eq, largestabsev) = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )
                     (largestabsev, eigenvalues) = getlargestabseigenvaluepart( hiddenmatrix, uppars )[[1,3]]
@@ -3261,7 +3283,7 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
     if( !isfinite(mystd) )                                  # finite mystd
         totaltime = max(3*mystd*myfac,totaltime)            # to make sure, also tail gets updated at least once
     end     # end if mystd non-pathological
-    if( (uppars.model==2) || (uppars.model==12) )           # clock models
+    if uppars.model in ("clock_FW", "clock_GE") # clock models
         totaltime = ceil(Int64, totaltime/pars_glob[uppars.nolocpars+2])*pars_glob[uppars.nolocpars+2]  # make sure totaltime is multiple of period, in case of a required restart
     end     # end if clock models
     #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): meaninterdivisiontime %+1.5e, totaltime %+1.5e, latest initialised event %+1.5e, starttime %+1.5e.\n",  uppars.chaincomment,uppars.MCit, meaninterdivisiontime,totaltime, maximum(unknownmothersamples.time_cell_eq[:,2]),starttime ); flush(stdout)
@@ -3294,11 +3316,11 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
                 @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  nomotherburnin %d/%d, meaninterdivtime %+1.5e, p_div_eq_pred %1.5e, mystd %1.5e, myfac %1.5e; lambda = %+1.5e+-%1.5e.\n", uppars.chaincomment,uppars.MCit, nomotherburnin_here,uppars.nomotherburnin, meaninterdivisiontime, p_div_eq_pred, mystd, myfac, mean(lambda_here),std(lambda_here)  )
                 @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  div = %1.5e+-%1.5e, dth = %1.5e+-%1.5e, prob_dth = %1.5e (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, mean_div,std_div, mean_dth,std_dth, prob_dth, (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
                 @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  pars_glob = [ %s] (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in pars_glob]), (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
-                if( (uppars.model==3) || (uppars.model==13) )   # hidden factor model
+                if uppars.model in ("RW_FW", "RW_GE") # hidden factor model
                     hiddenmatrix = hcat( pars_glob[uppars.nolocpars+1] ); sigma = hcat( pars_glob[uppars.nolocpars+2] )
                     (sigma_eq, largestabsev) = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )
                     @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  sigma_eq = [ %s], largestabsev = %+1.5e (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in sigma_eq]), largestabsev, (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
-                elseif( uppars.model in (4,9,14) )          # 2D hidden factors model
+                elseif uppars.model in ("2DRW_FW", "2DRW_F", "2DRW_GE") # 2D hidden factors model
                     (hiddenmatrix, sigma) = gethiddenmatrix_m4( pars_glob, uppars )
                     (sigma_eq, largestabsev) = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )
                     (largestabsev, eigenvalues) = getlargestabseigenvaluepart( hiddenmatrix, uppars )[[1,3]]
@@ -3384,9 +3406,9 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
                     @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Initial newendtime not small enough: newendtime = %1.5e, newbirthtime = %1.5e, currenttime = %1.5e; next: times_cell[%d] = [ %s], other: times_cell[%d] = [ %s]\n", uppars.chaincomment,uppars.MCit, newendtime,newbirthtime, currenttime, sample_next, join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.time_cell_eq[sample_next,:]]), sample_othr, join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.time_cell_eq[sample_othr,:]]) )
                     @printf( " (%s)  ...: fate_eq mean = %+1.5e, ratio of stillnaivelyinitialised = %d(mean %+1.5e), difftimes %+1.5e, startofburnin %+1.5e, starttime %+1.5e, totaltime %+1.5e.\n", uppars.chaincomment, mean(unknownmothersamples.fate_cell_eq), stillnaivelyinitialised[sample_next],mean(stillnaivelyinitialised.==0), currenttime-newbirthtime, starttime-totaltime, starttime, totaltime )
                     @printf( " (%s)  ...: pars_cell_here = [ %s] (pars_glob = [ %s]).\n", uppars.chaincomment, join([@sprintf("%+1.5e ", j) for j in pars_cell_here]), join([@sprintf("%+1.5e ", j) for j in pars_glob]) ) 
-                    if( uppars.model in (1,2,3,4) )             # FrechetWeibull distribution
+                    if uppars.model in ("perfect_FW", "clock_FW", "RW_FW", "2DRW_FW") # FrechetWeibull distribution
                         display( estimateFrechetWeibullcombstats(pars_cell_here) )
-                    elseif( uppars.model in (11,12,13,14) )     # GammaExponential distribution
+                    elseif uppars.model in ("perfect_GE", "clock_GE", "RW_GE", "2DRW_GE") # GammaExponential distribution
                         display( estimateGammaExponentialcombstats(pars_cell_here) )
                     end      # end of distinguishing models
                     #=
@@ -3555,6 +3577,7 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
 
     return convflag       # equilibrium samples
 end     # end of getjointequilibriumparameterswithnetgrowth function
+
 function getdiscretisedjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Float64,1},MArray}, starttime::Float64, mygetcellpars::Function, mygetevoltrgt::Function, dthdivdistr::DthDivdistr, uppars::Uppars2 )::Tuple{Array{Float64,1},Array{Float64,1}, Array{Float64,3},Array{Float64,3}, Float64, Array{Float64,1},Array{Float64}, Float64,Array{Float64,1}, Int64}
     # discretise time and scale-parameters and solve for eigenvectors of largest absolute eigenvalue
 
@@ -3566,22 +3589,22 @@ function getdiscretisedjointequilibriumparameterswithnetgrowth( pars_glob::Union
     timerange::Array{Float64,1} = zeros(notimes)        # allocate
     local scalerange::Array{Float64}, ds::Array{Float64,1}, nonoscales::Int64# declare (shape depends on nohide)
     local mean_div::Float64, mean_std::Float64
-    if( uppars.model in (1,2,3,4) )                     # Frechet-Weibull models
+    if uppars.model in ("perfect_FW", "clock_FW", "RW_FW", "2DRW_FW") # Frechet-Weibull models
         (mean_div,mean_std) = estimateFrechetWeibullstats( pars_glob[1:uppars.nolocpars], UInt64(1000) )[1:2]
-    elseif( uppars.model==9 )                           # Frechet-models
+    elseif uppars.model == "2DRW_F" # Frechet-models
         (mean_div,mean_std) = getFrechetstats( pars_glob[1:uppars.nolocpars], UInt64(1000) )[1:2]
-    elseif( uppars.model in (11,12,13,14) )             # Gamma-Exponential
+    elseif uppars.model in ("perfect_GE", "clock_GE", "RW_GE", "2DRW_GE") # Gamma-Exponential
         (mean_div,mean_std) = estimateGammaExponentialstats( pars_glob[1:uppars.nolocpars], UInt64(0) )[1:2]
     else                                                # unknown model
-        @printf( " (%s) Warning - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+        println(" (", uppars.chaincomment, ") Warning - getdiscretisedjointequilibriumparameterswithnetgrowth (", uppars.MCit, "): Unknown model ", uppars.model, ".")
     end     # end of distinguishing models
-    if( (uppars.model==1) || (uppars.model==11) )       # simple model
+    if uppars.model in ("perfect_FW", "perfect_GE") # simple model
         scalerange = [1.0]; noscales = UInt64(1); ds = [1.0]; nonoscales = 0
-    elseif( (uppars.model==2) || (uppars.model==12) )   # clock model
+    elseif uppars.model in ("clock_FW", "clock_GE") # clock model
         scalerange = collect(range( 1-pars_glob[uppars.nolocpars+2], 1+pars_glob[uppars.nolocpars+2], noscales))
         ds = [ scalerange[2]-scalerange[1] ]
         nonoscales = 1
-    elseif( (uppars.model==3) || (uppars.model==13) )   # RW model
+    elseif uppars.model in ("RW_FW", "RW_GE") # RW model
         hiddenmatrix = hcat( pars_glob[uppars.nolocpars+1] )
         sigma = hcat( pars_glob[uppars.nolocpars+2] )
         sigma_eq = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )[1][1]     # matrix with single element
@@ -3591,7 +3614,7 @@ function getdiscretisedjointequilibriumparameterswithnetgrowth( pars_glob::Union
             ds[j_hide] = scalerange[2,j_hide]-scalerange[1,j_hide]
         end     # end of individual scale for each hidden factor
         nonoscales = 1
-    elseif( uppars.model in (4,9,14) )                  # 2DRW model
+    elseif uppars.model in ("2DRW_FW", "2DRW_F", "2DRW_GE") # 2DRW model
         (hiddenmatrix, sigma) = gethiddenmatrix_m4( pars_glob, uppars )
         sigma_eq = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )[1]
         scalerange = zeros(noscales,uppars.nohide); ds = zeros(uppars.nohide)
@@ -3601,7 +3624,7 @@ function getdiscretisedjointequilibriumparameterswithnetgrowth( pars_glob::Union
         end     # end of individual scale for each hidden factor
         nonoscales = 2
     else                                                # unkwnown model
-        @printf( " (%s) Warning - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+        println(" (", uppars.chaincomment, ") Warning - getdiscretisedjointequilibriumparameterswithnetgrowth (", uppars.MCit, "): Unknown model ", uppars.model, ".")
     end     # end of distinguishing model
     timerange .= reverse( collect(range(0.0, scalerange[end,1]*(mean_div+3*mean_std), Int64(notimes))) )   # timepoint zero at end
     dt::Float64 = timerange[1]-timerange[2]             # time-increment (not reverse order with time 0 at end)
@@ -3630,7 +3653,7 @@ function getdiscretisedjointequilibriumparameterswithnetgrowth( pars_glob::Union
     #@printf( " (%s) Info - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): After time-progression allocation %1.3f sec.\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-t1)/Millisecond(1000) ); flush(stdout)
     # ...birth of new cells:
     if( uppars.nohide==0 )                                      # simple model or clock
-        if( (uppars.model==1) || (uppars.model==11) )           # has nonoscales==0
+        if uppars.model in ("perfect_FW", "perfect_GE") # has nonoscales==0
             pars_cell_here = deepcopy(pars_glob[1:uppars.nolocpars])    # same for all indices
             divdistr_here .= 2.0 .*exp.(dthdivdistr.get_logdistrfate(pars_cell_here,timerange,2) .+ log(dt))
             newhere = notimes
@@ -3639,7 +3662,7 @@ function getdiscretisedjointequilibriumparameterswithnetgrowth( pars_glob::Union
             myvalues[(1:newhere).+sofar] .= divdistr_here
             sofar += newhere
         else
-            @printf( " (%s) Warning - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Model %d not yet implemented.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+            println(" (", uppars.chaincomment, ") Warning - getdiscretisedjointequilibriumparameterswithnetgrowth (", uppars.MCit, "): Model ", uppars.model, " not yet implemented.")
         end     # end of distinguishing models
     elseif( uppars.nohide==1 )                                  # ie singe hidden factor; should also have nonoscales==1
         for to_scale = 1:noscales
@@ -3745,7 +3768,7 @@ function getdiscretisedjointequilibriumparameterswithnetgrowth( pars_glob::Union
     dthdistr_here::Array{Float64,1} = zeros(notimes)            # inintialise
     sofar = 0; newhere = 0                                      # reset
     if( uppars.nohide==0 )                                      # simple model or clock
-        if( (uppars.model==1) || (uppars.model==11) )           # has nonoscales==0
+        if uppars.model in ("perfect_FW", "perfect_GE") # has nonoscales==0
             pars_cell_here = deepcopy(pars_glob[1:uppars.nolocpars])    # same for all indices
             dthdistr_here .= exp.(dthdivdistr.get_logdistrfate(pars_cell_here,timerange,1) .+ log(dt))
             newhere = notimes
@@ -3754,7 +3777,7 @@ function getdiscretisedjointequilibriumparameterswithnetgrowth( pars_glob::Union
             myvalues[(1:newhere).+sofar] .= dthdistr_here
             sofar += newhere
         else
-            @printf( " (%s) Warning - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Model %d not yet implemented.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+            println(" (", uppars.chaincomment, ") Warning - getdiscretisedjointequilibriumparameterswithnetgrowth (", uppars.MCit, "): Model ", uppars.model, " not yet implemented.")
         end     # end of distinguishing models
     elseif( uppars.nohide==1 )                                  # ie singe hidden factor; should also have nonoscales==1
         for to_scale = 1:noscales
@@ -3884,6 +3907,7 @@ function getdiscretisedjointequilibriumparameterswithnetgrowth( pars_glob::Union
     #@printf( " (%s) Info - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Done now %1.3f sec.\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-t1)/Millisecond(1000) ); flush(stdout)
     return myevec_div,myevec_dth, myevec_div_reshaped,myevec_dth_reshaped, myeval_div, timerange,scalerange, dt,ds, errorflag
 end     # end of getdiscretisedjointequilibriumparameterswithnetgrowth function
+
 function getsamplefromjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Float64,1},MArray}, unknownmothersamples::Unknownmotherequilibriumsamples, lineagexbounds::Union{Array{Float64,1},MArray}, fate_cell_cond::Int64, myupdateunknownmotherpars::Function, dthdivdistr::DthDivdistr, uppars::Uppars2 )::Tuple{UInt64,Bool}
     # selects a suitable sample from the joint equilibrium distribution
     #@printf( " (%s) Info - getsamplefromjointequilibriumparameterswithnetgrowth (%d): Start now with pars_glob = [ %s], lineagexbounds = [ %s],fate_cell_cond = %d.\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in pars_glob]), join([@sprintf("%+1.5e ",j) for j in lineagexbounds]), fate_cell_cond )
@@ -3938,6 +3962,7 @@ function getsamplefromjointequilibriumparameterswithnetgrowth( pars_glob::Union{
     
     return j_sample, false      # reject_this_for_sure==false
 end     # end of getsamplefromjointequilibriumparameterswithnetgrowth function
+
 function getjointequilibriumparameterswithnetgrowth_distr( pars_evol_here::Union{Array{Float64,1},MArray},pars_cell_here::Union{Array{Float64,1},MArray}, times_cell_here::Union{Array{Float64,1},MArray},fate_here::Int64, fate_cell_cond::Int64, lineagexbounds::Union{Array{Float64,1},MArray}, pars_glob::Union{Array{Float64,1},MArray},unknownmothersamples::Unknownmotherequilibriumsamples, dthdivdistr::DthDivdistr, uppars::Uppars2 )::Tuple{Float64,Float64}
     # gives log of distribution of current unknownmothersamples
     # via kernel density estimator, using Silverman[1986]-rule to get bandwith (+cutoff at zero)
@@ -4120,13 +4145,14 @@ function getjointequilibriumparameterswithnetgrowth_distr( pars_evol_here::Union
 
     return logevolcost, loglklh
 end     # end of getjointequilibriumparameterswithnetgrowth_distr function
+
 function getjointpriorrejection( pars_glob::Union{Array{Float64,1},MArray}, dthdivdistr::DthDivdistr, uppars::Uppars2 )
     # logprior term due to cut-offs
 
     local logprior::Float64                         # declare
     mindivprob::Float64 = 1e-4                      # minimum division probability
     mindivprob = 1.0 - mindivprob; mindivprob = log(mindivprob) # log(1-min)
-    if( (uppars.model==1) )                         # simple FrechetWeibull model
+    if uppars.model == "perfect_FW"
         logprior = -uppars.overalllognormalisation
         if( any(pars_glob.<=0) )                    # should not have negative global parameters
             logprior = -Inf
@@ -4136,7 +4162,7 @@ function getjointpriorrejection( pars_glob::Union{Array{Float64,1},MArray}, dthd
                 logprior = -Inf
             end     # end if too little probability to divide
         end     # end if negative global parameters
-    elseif( (uppars.model==2) )                     # clock-modulated FrechetWeibull model
+    elseif uppars.model == "clock_FW"
         logprior = -uppars.overalllognormalisation
         if( any(pars_glob.<=0) )                    # should not have negative global parameters
             logprior = -Inf
@@ -4148,7 +4174,7 @@ function getjointpriorrejection( pars_glob::Union{Array{Float64,1},MArray}, dthd
                 logprior = -Inf
             end     # end if too little probability to divide
         end     # end if negative global parameters
-    elseif( (uppars.model==3) )                     # inheritance FrechetWeibull model; also check "joint" condition on eigenvalues (ie, if single hiddenmatrix entry is too large)
+    elseif uppars.model == "RW_FW" # also check "joint" condition on eigenvalues (ie, if single hiddenmatrix entry is too large)
         if( any(pars_glob[1:uppars.nolocpars].<=0) )# should not have negative global parameters
             logprior = -Inf
         else                                        # all global parameters are positive, check death probability
@@ -4163,7 +4189,7 @@ function getjointpriorrejection( pars_glob::Union{Array{Float64,1},MArray}, dthd
                 logprior = -Inf                     # impossible
             end     # end if outside of support
         end     # end if negative global parameters
-    elseif( uppars.model==4 )                       # 2d inheritance FrechetWeibull model; also check joint condition on eigenvalues
+    elseif uppars.model == "2DRW_FW" # also check joint condition on eigenvalues
         if( any(pars_glob[1:uppars.nolocpars].<=0) )# should not have negative global parameters
             logprior = -Inf
         else                                        # all global parameters are positive, check death probability
@@ -4179,7 +4205,7 @@ function getjointpriorrejection( pars_glob::Union{Array{Float64,1},MArray}, dthd
                 logprior = -Inf                     # impossible
             end     # end if outside of support
         end     # end if negative global parameters
-    elseif( uppars.model==9 )                       # 2d inheritance FrechetWeibull model, only-divisions
+    elseif uppars.model == "2DRW_F"
         if( any(pars_glob[1:uppars.nolocpars].<=0) )# should not have negative global parameters
             logprior = -Inf
         else                                        # all global parameters are positive, check death probability
@@ -4195,7 +4221,7 @@ function getjointpriorrejection( pars_glob::Union{Array{Float64,1},MArray}, dthd
                 logprior = -Inf                     # impossible
             end     # end if outside of support
         end     # end if negative global parameters
-    elseif( (uppars.model==11) )                    # simple GammaExponential model
+    elseif uppars.model == "perfect_GE"
         logprior = -uppars.overalllognormalisation
         if( any(pars_glob.<=0) || (pars_glob[3]>1) )# should not have negative global parameters
             logprior = -Inf
@@ -4205,7 +4231,7 @@ function getjointpriorrejection( pars_glob::Union{Array{Float64,1},MArray}, dthd
                 logprior = -Inf
             end     # end if too little probability to divide
         end     # end if negative global parameters
-    elseif( (uppars.model==12) )                    # clock-modulated GammaExponential model
+    elseif uppars.model == "clock_GE"
         logprior = -uppars.overalllognormalisation
         if( any(pars_glob.<=0) || (pars_glob[3]>1) )# should not have negative global parameters
             logprior = -Inf
@@ -4217,7 +4243,7 @@ function getjointpriorrejection( pars_glob::Union{Array{Float64,1},MArray}, dthd
                 logprior = -Inf
             end     # end if too little probability to divide
         end     # end if negative global parameters
-    elseif( (uppars.model==13) )                    # inheritance GammaExponential model; also check "joint" condition on eigenvalues (ie, if single hiddenmatrix entry is too large)
+    elseif uppars.model == "RW_GE" # also check "joint" condition on eigenvalues (ie, if single hiddenmatrix entry is too large)
         if( any(pars_glob[1:uppars.nolocpars].<=0) || (pars_glob[3]>1) )    # should not have negative global parameters
             logprior = -Inf
         else                                        # all global parameters are positive, check death probability
@@ -4232,7 +4258,7 @@ function getjointpriorrejection( pars_glob::Union{Array{Float64,1},MArray}, dthd
                 logprior = -Inf                     # impossible
             end     # end if outside of support
         end     # end if negative global parameters
-    elseif( uppars.model==14 )                      # 2d inheritance GammaExponential model; also check joint condition on eigenvalues
+    elseif uppars.model == "2DRW_GE" # also check joint condition on eigenvalues
         if( any(pars_glob[1:uppars.nolocpars].<=0) || (pars_glob[3]>1) )    # should not have negative global parameters
             logprior = -Inf
         else                                        # all global parameters are positive, check death probability
@@ -4249,41 +4275,43 @@ function getjointpriorrejection( pars_glob::Union{Array{Float64,1},MArray}, dthd
             end     # end if outside of support
         end     # end if negative global parameters
     else                                            # unknown model_for_simulated
-        @printf( " (%s) Warning - getjointpriorrejection (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+        println(" (", uppars.chaincomment, ") Warning - getjointpriorrejection (", uppars.MCit, "): Unknown model ", uppars.model, ".")
     end     # end of distinguishing models
 
     return logprior::Float64
 end     # end of getjointpriorrejection function
+
 function gethiddenmatrix_m4( pars_glob::Union{Array{Float64,1},MArray}, uppars::Uppars2 )::Tuple{Array{Float64,2},Array{Float64,2}}
     # constructs the hidden matrix and standard deviation matrix sigma from the global parameters for model 4
 
     hiddenmatrix::Array{Float64,2} = zeros(2,2); sigma::Array{Float64,2} = zeros(2,2)   # initialise
-    if( uppars.model==4 )               # 2d rw-inheritance FrechetWeibull model
+    if uppars.model == "2DRW_FW"
         hiddenmatrix[:] .= pars_glob[uppars.nolocpars.+collect(1:4)]
         sigma[1,1] = abs(pars_glob[uppars.nolocpars+4+1])
         sigma[2,2] = abs(pars_glob[uppars.nolocpars+4+2])
-    elseif( uppars.model==9 )           # 2d rw-inheritance FrechetWeibull model, divisions-only
+    elseif uppars.model == "2DRW_F"
         hiddenmatrix[:] .= pars_glob[uppars.nolocpars.+collect(1:4)]
         #sigma .= diagm( abs.(pars_glob[(uppars.nolocpars+4).+collect(1:2)]) )
         sigma[1,1] = abs(pars_glob[uppars.nolocpars+4+1])
         sigma[2,2] = abs(pars_glob[uppars.nolocpars+4+2])
-    elseif( uppars.model==14 )          # 2d rw-inheritance GammaExonential model
+    elseif uppars.model == "2DRW_GE"
         hiddenmatrix[:] .= pars_glob[uppars.nolocpars.+collect(1:4)]
         sigma[1,1] = abs(pars_glob[uppars.nolocpars+4+1])
         sigma[2,2] = abs(pars_glob[uppars.nolocpars+4+2])
     else                                # unknown model
-        @printf( " (%s) Warning - gethiddenmatrix_m4 (%d): Unknown model %d.", uppars.chaincomment,uppars.MCit, uppars.model )
+        println(" (", uppars.chaincomment, ") Warning - gethiddenmatrix_m4 (", uppars.MCit, "): Unknown model ", uppars.model, ".")
     end     # end if 2d rw-inheritance model
     return hiddenmatrix, sigma
 end     # end of gethiidenmatrix_m4 function
+
 function getnormalisation( uppars::Uppars2 )
     # computes normalisation of model 4 given the priors
 
-    if( uppars.model in (1,2,11,12) )                   # simple model or clock-modulated model
+    if uppars.model in ("perfect_FW", "clock_FW", "perfect_GE", "clock_GE") # simple model or clock-modulated model
         mynormalisation = 1.0
-    elseif( (uppars.model==3) || (uppars.model==13) )   # rw-inheritance model
+    elseif uppars.model in ("RW_FW", "RW_GE") # rw-inheritance model
         mynormalisation = erf( 1/(sqrt(2)*uppars.priors_glob[uppars.nolocpars+1].get_std()) )
-    elseif( (uppars.model==4) || (uppars.model==14) )   # 2d rw-inheritance model
+    elseif uppars.model in ("2DRW_FW", "2DRW_GE") # 2d rw-inheritance model
         if( (uppars.priors_glob[uppars.nolocpars+1].typeno==UInt64(2)) && (uppars.priors_glob[uppars.nolocpars+1].get_mean()==0) )  # needs to be Gaussian with zero mean
             if( uppars.priors_glob[uppars.nolocpars+1].get_std()==uppars.priors_glob[uppars.nolocpars+2].get_std()==uppars.priors_glob[uppars.nolocpars+3].get_std()==uppars.priors_glob[uppars.nolocpars+4].get_std() )    # ie same prior for all matrix entries
                 sigma_here = uppars.priors_glob[uppars.nolocpars+1].get_std()       # assume distribution is Gaussian and the parameters are the same for all matrix entries
@@ -4303,7 +4331,7 @@ function getnormalisation( uppars::Uppars2 )
         else    # ie wrong prior distribution
             @printf( " (%s) Warning - getnormalisation (%d): Got wrong type or mean: %d, %+1.5e\n", uppars.chaincomment,uppars.MCit, uppars.priors_glob[uppars.nolocpars+1].typeno,uppars.priors_glob[uppars.nolocpars+1].get_mean() )
         end     # end if wrong prior distribution
-    elseif( uppars.model==9 )                           # 2d rw-inheritance model, divisions-only
+    elseif uppars.model == "2DRW_F" # 2d rw-inheritance model, divisions-only
         if( (uppars.priors_glob[uppars.nolocpars+1].typeno==UInt64(2)) && (uppars.priors_glob[uppars.nolocpars+1].get_mean()==0) )      # needs to be Gaussian with zero mean
             if( uppars.priors_glob[uppars.nolocpars+1].get_std()==uppars.priors_glob[uppars.nolocpars+2].get_std()==uppars.priors_glob[uppars.nolocpars+3].get_std()==uppars.priors_glob[uppars.nolocpars+4].get_std() )    # ie same prior for all matrix entries
                 sigma_here = uppars.priors_glob[uppars.nolocpars+1].get_std()       # assume distribution is Gaussian and the parameters are the same for all matrix entries
@@ -4324,10 +4352,11 @@ function getnormalisation( uppars::Uppars2 )
             @printf( " (%s) Warning - getnormalisation (%d): Got wrong type or mean: %d, %+1.5e\n", uppars.chaincomment,uppars.MCit, uppars.priors_glob[uppars.nolocpars+1].typeno,uppars.priors_glob[uppars.nolocpars+1].get_mean() )
         end     # end if wrong prior distribution   
     else                                                # unknown model
-        @printf( " (%s) Warning - getnormalisation (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+        println(" (uppars.chaincomment) Warning - getnormalisation (", uppars.MCit, "): Unknown model ", uppars.model, ".")
     end     # end of distinguishing models
     return mynormalisation
 end     # end of getnormalisation function
+
 function getmeanstdforFrechetWeibull( pars::Union{Array{Float64,1},MArray}, cellfate::Int64,temp::Float64,upperthreshold::Float64, uppars::Uppars2 )
     # computes mean and std of FrechetWeibull distribution
 
