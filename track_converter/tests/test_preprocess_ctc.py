@@ -194,13 +194,36 @@ def test_fix_missing_daughters(tracks_file, expected_warning, expected_output, t
         assert processed_tracks.equals(expected_output)
 
 
-def test_default_right_censor(ctc_test_data_dir, tmp_path):
+@pytest.mark.parametrize(
+    "dead_cell_labels,expected_right_censored,expected_not_right_censored",
+    [
+        pytest.param(
+            (),
+            (2, 4, 5),
+            (1, 3),
+            id="Without dead cell labels",
+        ),
+        pytest.param(
+            (2, 5),
+            (4,),
+            (1, 2, 3, 5),
+            id="With dead cell labels",
+        ),
+    ],
+)
+def test_default_right_censor(
+    dead_cell_labels, expected_right_censored, expected_not_right_censored, ctc_test_data_dir, tmp_path
+):
+    """Test setting non-dividing cells as right-censored by default (with and without specifying any dead cells)."""
     tracks_in_path = ctc_test_data_dir / "tracks_one_tree.txt"
     tracks_out_path = tmp_path / "tracks_out.txt"
-    preprocess_ctc_file(tracks_in_path, tracks_out_path, default_right_censor=False)
 
-    expected_right_censored = (2, 4, 5)
-    expected_not_right_censored = (1, 3)
+    if len(dead_cell_labels) > 0:
+        preprocess_ctc_file(
+            tracks_in_path, tracks_out_path, default_right_censor=True, dead_cell_labels=dead_cell_labels
+        )
+    else:
+        preprocess_ctc_file(tracks_in_path, tracks_out_path, default_right_censor=True)
 
     if tracks_out_path.exists:
         processed_tracks = read_tracks(tracks_out_path)
