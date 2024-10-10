@@ -2,6 +2,22 @@ using Printf
 using Dates
 using LogExpFunctions
 
+# This is a mapping betweene supported model names and an integer number representing that
+# model, to be used inside CUDA kernels where we couldn't use strings.  Another option could
+# be to use enums, which make life easier in CUDA kernels (no need to use hacks), but are
+# just slightly less nice for error handling (but strings aren't ideal either).
+const ALLOWED_MODELS = Dict{String,UInt32}(
+    "perfect_FW" => 1, # simple FrechetWeibull model with global parameters
+    "clock_FW" => 2, # clock-modulated FrechetWeibull model
+    "RW_FW" => 3, # FrechetWeibull model with rw-inheritance
+    "2DRW_FW" => 4, # FrechetWeibull model with 2d rw-inheritance
+    "2DRW_F" => 9, # FrechetWeibull model with 2d rw-inheritance, divisions-only
+    "perfect_GE" => 11, # simple GammaExponetial model with global parameters
+    "clock_GE" => 12, # clock-modulated GammaExponetial model
+    "RW_GE" => 13, # GammaExponetial model with rw-inheritance
+    "2DRW_GE" => 14, # GammaExponetial model with2d rw-inheritance
+)
+
 include("readlineagefile.jl")
 include("Lineagetree.jl")
 include("mydistributions.jl")
@@ -9,6 +25,8 @@ include("LineageMCmodel2.jl")
 include("LineageABCmodel.jl")
 #plotlyjs()
 
+# Helper type to define a sentinel for default values of keyword options (`nothing` being
+# the abscence of an explicit value).
 const Maybe{T} = Union{T, Nothing}
 
 function controlgetlineageABCdynamics(;
@@ -16,7 +34,7 @@ function controlgetlineageABCdynamics(;
                                       filename::Maybe{String}=nothing,
                                       comment::Maybe{String}=nothing,
                                       nochains::Maybe=nothing, # number of independent chains for convergence statistic.  Must be a number convertable to `UInt64`o
-                                      model::Maybe{Integer}=nothing, # Must be set by the user! '1' for FrechWeib-model with global paramters, '2' for FrechWeib-model with clock, '3' for FrechWeib-model with rw-inheritance, '4' for FrechWeib-model with 2d rw-inheritance, '11' fr GammaExponential with global parameters, '12' for GammaExponential with clock, '13' for GammaExponential with rw-inheritance, '14' for GammaExponential with 2d rw-inheritance
+                                      model::Maybe{String}=nothing, # Must be set by the user!
                                       timeunit::Maybe{Float64}=nothing, # for getting priors right; in relation to hours.  Must be set by users!
                                       MCmax::Maybe{Integer}=nothing, # last iteration
                                       subsample::Maybe{Integer}=nothing, # subsampling frequency
@@ -36,7 +54,6 @@ function controlgetlineageABCdynamics(;
     # to call this from an external driver script and not having to keep in-sync
     # default values of arguments in multiple places.
     trunkfilename = something(trunkfilename, "")
-    filename = something(filename, "2024-04-08_13-03-47_Simulation2_cells=3,model=2,pars=[ +4.52000e+02 +5.00000e+00 +3.00000e+03 +2.00000e+00 +5.00000e-01 +2.88000e+02 +0.")
     comment = something(comment, "for_m2extrasmalltestdata")
     auxiliaryfoldertrunkname::String="Auxfiles"
     useRAM = something(useRAM, true)
@@ -44,14 +61,18 @@ function controlgetlineageABCdynamics(;
     without = something(without, 1)
     withwriteoutputtext = something(withwriteoutputtext, true)
 
+    if isnothing(filename)
+        error("The input `filename` must be set explicitly")
+    end
     if isnothing(model)
         error("`model` must be set explicitly")
+    end
+    if !(model in keys(ALLOWED_MODELS))
+        error("`model` is \"$(model)\", allowed models are $(join(keys(ALLOWED_MODELS), ", ", " and "))")
     end
     if isnothing(timeunit)
         error("`timeunit` must be set explicitly")
     end
-    # TODO: change the type of `model` to a custom datatype.
-    model = UInt64(model)
 
     # For some input arguments we allow any `Integer` type, but we want to
     # convert them to `UInt64` for the rest of the work.
@@ -78,7 +99,6 @@ function controlgetlineageABCdynamics(;
         nobranches_sim::UInt64 = UInt64(5)          # number of initial cells/branches
         without_sim::Bool = true                    # 'true' for output of simulation function, 'false' otherwise
         
-        local pars_glob_sim::Array{Float64,1} = 
         #pars_glob_sim = [ 452.0, 5.0, 3000.0, 2.0 ]
         #model2_sim::UInt64 = UInt64(1);         pars_glob2_sim::Array{Float64,1} = pars_glob_sim
         #model2_sim::UInt64 = UInt64(2);         pars_glob2_sim::Array{Float64,1} = vcat(pars_glob_sim,[ 0.5, 12*24.0, 0.0 ])         # clock parameters extra
@@ -88,16 +108,20 @@ function controlgetlineageABCdynamics(;
         #model2_sim::UInt64 = UInt64(11);        pars_glob2_sim::Array{Float64,1} = pars_glob_sim
         #model2_sim::UInt64 = UInt64(12);        pars_glob2_sim::Array{Float64,1} = vcat(pars_glob_sim,[ 0.5, 12*24.0, 0.0 ])         # clock parameters extra
         #model2_sim::UInt64 = UInt64(13);        pars_glob2_sim::Array{Float64,1} = vcat(pars_glob_sim,[ 0.7, 0.2 ])                 # f, sigma extra
-        model2_sim::UInt64 = UInt64(14);        pars_glob2_sim::Array{Float64,1} = vcat(pars_glob_sim,[ 0.25, +0.65, -0.7, +0.95, 0.2,0.1 ])   # inhmatrix, sigma1,sigma2 extra
-        hiddenmatrix::Array{Float64,2} = zeros(2,2); hiddenmatrix[:] = pars_glob2_sim[4 .+ collect(1:4)]; eigenstruct = eigen(hiddenmatrix); @printf( " Info - controlgetlineageABCdynamics: eigenvalues: %+1.3f%+1.3fi, %+1.3f%+1.3fi.\n", real(eigenstruct.values[1]),imag(eigenstruct.values[1]), real(eigenstruct.values[2]),imag(eigenstruct.values[2]) )
+        model2_sim::String = "2DRW_GE"
+        pars_glob2_sim::Vector{Float64} = vcat(pars_glob_sim,[ 0.25, +0.65, -0.7, +0.95, 0.2,0.1 ])   # inhmatrix, sigma1,sigma2 extra
+        hiddenmatrix::Array{Float64,2} = zeros(2,2)
+        hiddenmatrix[:] = pars_glob2_sim[4 .+ collect(1:4)]
+        eigenstruct = eigen(hiddenmatrix)
+        @printf( " Info - controlgetlineageABCdynamics: eigenvalues: %+1.3f%+1.3fi, %+1.3f%+1.3fi.\n", real(eigenstruct.values[1]),imag(eigenstruct.values[1]), real(eigenstruct.values[2]),imag(eigenstruct.values[2]) )
         (mylineagetree, datawd) = simulatelineagetree2( pars_glob2_sim, model2_sim, nobranches_sim,minnocells_sim, Int64(without_sim) )[[1,2]]
         outputfilename = writelineagetree( mylineagetree, mylineagetree.name )
-        if( (model2_sim==1)|(model2_sim==2)|(model2_sim==3)|(model2_sim==4) )  # FrechetWeibull models
+        if model2_sim in ("perfect_FW", "clock_FW", "RW_FW", "2DRW_FW") # FrechetWeibull models
             (mean_div,std_div, mean_dth,std_dth, prob_dth) = estimateFrechetWeibullstats(pars_glob_sim)
-        elseif( (model2_sim==11)|(model2_sim==12)|(model2_sim==13)|(model2_sim==14) )   # GammaExponential model2_sim
+        elseif model2_sim in ("perfect_GE", "clock_GE", "RW_GE", "2DRW_GE") # GammaExponential model2_sim
             (mean_div,std_div, mean_dth,std_dth, prob_dth) = estimateGammaExponentialstats(pars_glob_sim)
         else                                        # unknown
-            @printf( " Warning - controlgetlineageABCdynamics: Unknown model %d.\n", model_2sim )
+            println(" Warning - controlgetlineageABCdynamics: Unknown model ", model2_sim, ".")
         end     # end of distinguishing models
         @printf( " Info - controlgetlineageABCdynamics: Stats from birth: div = %1.5e+-%1.5e, dth = %1.5e+-%1.5e, prob_dth = %1.5e.\n", mean_div,std_div, mean_dth,std_dth, prob_dth )
     end     # end if read or simulate
@@ -106,26 +130,26 @@ function controlgetlineageABCdynamics(;
     nounknownmothercells::UInt64 = sum(mylineagetree.datawd[:,4].<=0)   # number of cells with unknown mother
     @printf( " Info - controlgetlineageABCdynamics: Number of cells in dataset: %d, number of generations: %d (%d times), cells with unknown mother: %d.\n", Int64(nocells), Int64(maxgen), sum(nogenpercell.==maxgen), nounknownmothercells ); flush(stdout)
     
-    if( model==1 )                                  # simple FrechetWeibull model
+    if model == "perfect_FW"
         comment = @sprintf( "simple-model_%s", comment )
-    elseif( model==2 )                              # clock-modulated FrechetWeibull model
+    elseif model == "clock_FW"
         comment = @sprintf( "clock-model_%s", comment )
-    elseif( model==3 )                              # rw-inheritance FrechetWeibull model
+    elseif model == "RW_FW"
         comment = @sprintf( "rw-model_%s", comment )
-    elseif( model==4 )                              # 2d rw-inheritance FrechetWeibull model
+    elseif model == "2DRW_FW"
         comment = @sprintf( "2drw-model_%s", comment )
-    elseif( model==9 )                              # 2d rw-inheritance FrechetWeibull model, divisions-only
+    elseif model == "2DRW_F"
         comment = @sprintf( "2drwdivo-model_%s", comment )
-    elseif( model==11 )                             # simple GammaExponential model
+    elseif model == "perfect_GE"
         comment = @sprintf( "simple-GE-model_%s", comment )
-    elseif( model==12 )                             # clock-modulated GammaExponential model
+    elseif model == "clock_GE"
         comment = @sprintf( "clock-GE-model_%s", comment )
-    elseif( model==13 )                             # rw-inheritance GammaExponential model
+    elseif model == "RW_GE"
         comment = @sprintf( "rw-GE-model_%s", comment )
-    elseif( model==14 )                             # 2d rw-inheritance GammaExponential model
+    elseif model == "2DRW_GE"
         comment = @sprintf( "2drw-GE-model_%s", comment )
     else                                            # unknown model
-        comment = @sprintf( "%d-model_%s", model, comment )
+        comment = @sprintf( "%s-model_%s", model, comment )
     end     # end of distinguishing models
     timestamp::DateTime = DateTime(now())           # timestamp for all independent chains
 
@@ -267,11 +291,12 @@ function getcov( parlist1::Array{Float64,1}, parlist2::Array{Float64,1}, issymme
 
     return mean(C_r), std(C_r), p_here, C_r
 end     # end of getcov function
-function simulatelineagetree2( pars_glob::Array{Float64,1}, model::UInt64, nobranches::UInt64,nocells::UInt64, without::Int64=0 )
+
+function simulatelineagetree2( pars_glob::Array{Float64,1}, model::String, nobranches::UInt64,nocells::UInt64, without::Int64=0 )
     # simulates lineagetrees with given model according to LineageMCmodel2
     if( without>=1 )
         t1 = DateTime(now())                            # for timer
-        @printf( " Info - simulatelineagetree2: Start simulating model %d, nobranches %d, nocells %d, pars_glob = [ %s].\n", model,nobranches,nocells, join([@sprintf("%+1.5e ",j) for j in pars_glob]) )
+        println(" Info - simulatelineagetree2: Start simulating model ", model, ", nobranches ", nobranches, ", nocells ", nocells, ", pars_glob = [ ", join(@sprintf("%+1.5e ",j) for j in pars_glob), "].")
     end     # end if without
 
     # set auxiliary parameters:
@@ -285,10 +310,10 @@ function simulatelineagetree2( pars_glob::Array{Float64,1}, model::UInt64, nobra
     # ....estimate mean event-time:
     (noups::UInt64, noglobpars::UInt64,nohide::UInt64,nolocpars::UInt64) = getMCmodelnoups2( model, UInt64(1) )
     local pars_cell_here::Array{Float64,1}                  # declare
-    if( (model==1) | (model==2) | (model==3) | (model==4) | (model==9) | (model==11) | (model==12) | (model==13) | (model==14) )    # models with first couple of parameters in pars_glob coinciding with global means of pars_cell
+    if model in keys(ALLOWED_MODELS) # models with first couple of parameters in pars_glob coinciding with global means of pars_cell
         pars_cell_here = pars_glob[1:nolocpars]
     else
-        @printf( " Warning - simulatelineagetree2: Model %d is not compatible for determining 'typical' pars_cell.\n", model )
+        println(" Warning - simulatelineagetree2: Model ", model, " is not compatible for determining 'typical' pars_cell.")
     end     # end if models with appropriate formatting of pars_glob
     nomotherburnin::UInt64 = UInt64(100)
     nomothersamples::UInt64 = UInt64(noequilibriumsamples)
@@ -388,7 +413,7 @@ function simulatelineagetree2( pars_glob::Array{Float64,1}, model::UInt64, nobra
 
     # output:
     timestamp = DateTime(now())                             # timestamp for when simulation was created
-    fullfilename::String = @sprintf( "%04d-%02d-%02d_%02d-%02d-%02d_Simulation2_cells=%d,model=%d,pars=[ %s].txt", year(timestamp),month(timestamp),day(timestamp), hour(timestamp),minute(timestamp),second(timestamp), j_cell,model, join([@sprintf("%+1.5e ",j) for j in pars_glob[:,1] ]) )
+    fullfilename::String = @sprintf( "%04d-%02d-%02d_%02d-%02d-%02d_Simulation2_cells=%d,model=%s,pars=[ %s].txt", year(timestamp),month(timestamp),day(timestamp), hour(timestamp),minute(timestamp),second(timestamp), j_cell,model, join([@sprintf("%+1.5e ",j) for j in pars_glob[:,1] ]) )
     lineagedata::Array{Int64,2} = Int64.( cat( round.(datawd[:,1]), ceil.(datawd[:,2]),min.(floor(totalsimulationtime),floor.(datawd[:,3])), max.(0,round.(datawd[:,4])), dims=2 ) )
     mylineagetree::Lineagetree =  initialiseLineagetree(fullfilename,lineagedata, -1)      # lineagetree
     if( without>=1 )
