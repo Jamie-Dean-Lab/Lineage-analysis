@@ -62,7 +62,7 @@ def convert_to_ctc(
     edge_source_id_col: str,
     edge_target_id_col: str,
     track_id_col: str | None = None,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Convert tables of spots/edges information into the CTC format.
 
@@ -88,8 +88,10 @@ def convert_to_ctc(
 
     Returns
     -------
-    pd.DataFrame
+    ctc_table : pd.DataFrame
         Tracks converted to CTC format i.e. 4 columns (L B E P)
+    spots : pd.DataFrame
+        The input spots DataFrame with an added column 'ctc_label' indicating which CTC label (L) each spot belongs to
 
     """
     # Add column to spots to keep track of which ctc_label they are assigned to
@@ -173,5 +175,6 @@ def convert_to_ctc(
         "P": spots.groupby("ctc_label", sort=True).parent_ctc_label.max(),
     }
     ctc_table = pd.DataFrame(data=ctc_columns)
+    ctc_table = ctc_table.reset_index(drop=True)
 
-    return ctc_table.reset_index(drop=True)
+    return ctc_table, spots.drop(["parent_ctc_label"], axis=1)

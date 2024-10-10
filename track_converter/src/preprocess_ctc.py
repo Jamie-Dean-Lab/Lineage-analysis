@@ -256,8 +256,8 @@ def _mark_dead_cells_as_not_right_censored(tracks: pd.DataFrame, dead_cell_label
 
 
 def preprocess_ctc_file(
-    input_ctc_filepath: Path,
-    output_ctc_filepath: Path,
+    input_ctc: Path | pd.DataFrame,
+    output_ctc: Path,
     fix_late_daughters: bool = False,
     fix_missing_daughters: bool = False,
     default_right_censor: bool = True,
@@ -278,10 +278,10 @@ def preprocess_ctc_file(
 
     Parameters
     ----------
-    input_ctc_filepath : Path
-        Filepath of cell tracking challenge txt file to process
-    output_ctc_filepath : Path
-        Filepath to save processed file as txt
+    input_ctc : Path | pd.DataFrame
+        Either the filepath of a CTC txt file to read, or the DataFrame of a CTC file
+    output_ctc : Path
+        Filepath to save processed .txt file
     fix_late_daughters : bool, optional
         Whether to back-date any late daughters to the begin time (B) of the earlier daughter.
     fix_missing_daughters : bool, optional
@@ -295,7 +295,7 @@ def preprocess_ctc_file(
         CTC file already contains a right-censoring column (5th column) this setting will be ignored.
 
     """
-    tracks = pd.read_table(input_ctc_filepath, sep=r"\s+", header=None)
+    tracks = pd.read_table(input_ctc, sep=r"\s+", header=None) if not isinstance(input_ctc, pd.DataFrame) else input_ctc
     validate_tracks_shape_dtypes(tracks)
 
     has_right_censoring_col = "R" in tracks
@@ -333,4 +333,4 @@ def preprocess_ctc_file(
     tracks = validate_mother_daughter_frames(tracks)
     tracks = validate_right_censored_daughters(tracks)
 
-    tracks.to_csv(output_ctc_filepath, sep=" ", header=False, index=False)
+    tracks.to_csv(output_ctc, sep=" ", header=False, index=False)

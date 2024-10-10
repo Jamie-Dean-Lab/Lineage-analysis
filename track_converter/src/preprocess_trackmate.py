@@ -19,7 +19,7 @@ def preprocess_trackmate_file(spots_csv_filepath: Path, edges_csv_filepath: Path
     spots = _read_trackmate_csv(spots_csv_filepath)
     edges = _read_trackmate_csv(edges_csv_filepath)
 
-    ctc_table = convert_to_ctc(spots, edges, "ID", "FRAME", "SPOT_SOURCE_ID", "SPOT_TARGET_ID", "TRACK_ID")
+    ctc_table, spots = convert_to_ctc(spots, edges, "ID", "FRAME", "SPOT_SOURCE_ID", "SPOT_TARGET_ID", "TRACK_ID")
 
     # For this, need to know which cells (i.e. which row of the CTC table) each spot id belongs to
 
