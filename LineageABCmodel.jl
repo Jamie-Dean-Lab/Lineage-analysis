@@ -1625,12 +1625,12 @@ function CUDAgetknownmotherpropagation_preloop( lineagetree::Lineagetree, nopart
     if (knownmothersamplemode!=1) && uppars.model in ("perfect_FW", "clock_FW", "RW_FW", "2DRW_FW", "2DRW_F")
         println(" (", uppars.chaincomment, ") Warning - CUDAgetknownmotherpropagation_preloop (", uppars.MCit, "): knownmothersamplemode ", knownmothersamplemode, " not implemented for model ", uppars.model, " and CUDA-version.")
     end     # end if inapplicable knownmothersamplemode
-    if !(uppars.model in ALLOWED_MODELS)
+    if !(uppars.model in keys(ALLOWED_MODELS))
         println(" (", uppars.chaincomment, ") Warning - CUDAgetknownmotherpropagation_preloop (", uppars.MCit, "): model ", uppars.model, " not implemented for CUDA-version.")
     end     # end if inapplicable model
     device!( ceil(Int,(Threads.threadid()/Threads.nthreads())*length(devices()))-1 )  # set device to the one corresponding to this thread
     #display(CUDA.device()); CUDA.memory_status(); flush(stdout)
-    model::UInt32 = UInt32(uppars.model)
+    model::UInt32 = ALLOWED_MODELS[uppars.model]
     noglobpars::UInt32 = UInt32(uppars.noglobpars)
     nohide::UInt32 = UInt32(uppars.nohide)
     nolocpars::UInt32 = UInt32(uppars.nolocpars)
@@ -1689,6 +1689,7 @@ function CUDAgetknownmotherpropagation_preloop( lineagetree::Lineagetree, nopart
     
     return nothing
 end     # end of CUDAgetknownmotherpropagation_preloop function
+
 function CUDAgetknownmotherpropagation_loop( endframe_here::Int32,nextframe_here::Int32,timeunit::Float32, noparticles::UInt32,cell_here::Int32,j_cell::UInt32,cellorder::CuDeviceArray{UInt32,1}, mother::Int32,motherparticles::CuDeviceArray{UInt32,2}, pars_evol_here::CuDeviceArray{Float32,2},pars_evol_mthr::CuDeviceArray{Float32,2},pars_cell_here::CuDeviceArray{Float32,2},times_cell_here::CuDeviceArray{Float32,2},times_cell_mthr::CuDeviceArray{Float32,2},fate_cell_here::CuDeviceArray{UInt32,1}, particlelogweights_here::CuDeviceArray{Float32,1},particlelogweights_prev::CuDeviceArray{Float32,1}, pars_glob::CuDeviceArray{Float32,1}, cellfate::Int32, model::UInt32, noglobpars::UInt32,nohide::UInt32,nolocpars::UInt32, hiddenmatrix::CuDeviceArray{Float32,2},sigma::CuDeviceArray{Float32,2}, motherpart_here::CuDeviceArray{Int32,1},lifetime_here::CuDeviceArray{Float32,1},xbounds_here::CuDeviceArray{Float32,2}, buffer_here::CuDeviceArray{Float32,2}, knownmothersamplemode::UInt64 )::Nothing
     # loops over getunknownmotherpropagation
     # endframe_here::Int32 = lineagetree.datawd[cell_here,3]
@@ -1718,7 +1719,9 @@ function CUDAgetknownmotherpropagation_loop( endframe_here::Int32,nextframe_here
     end     # end of particles loop
     return nothing
 end     # end of CUDAgetknownmotherpropagation_loop function
-function CUDAgetknownmotherpropagation( endframe_here::Int32,nextframe_here::Int32,timeunit::Float32, j_part::UInt32,cell_here::Int32,j_cell::UInt32,cellorder::CuDeviceArray{UInt32,1}, mother::Int32,motherparticles::SubArray{UInt32,2}, evol_pars_here_part::SubArray{Float32,1},evol_pars_mthr::SubArray{Float32,2}, pars_cell_here_part::SubArray{Float32,1}, times_cell_here_part::SubArray{Float32,1},times_cell_mthr::SubArray{Float32,2}, fate_cell_here_part::SubArray{UInt32,0}, particlelogweights_here_part::SubArray{Float32,0},particlelogweights_prev::SubArray{Float32,1}, pars_glob::CuDeviceArray{Float32,1}, cellfate::Int32,  model::UInt32, noglobpars::UInt32,nohide::UInt32,nolocpars::UInt32, hiddenmatrix::CuDeviceArray{Float32,2},sigma::CuDeviceArray{Float32,2}, motherpart::SubArray{Int32,0},lifetime_here_part::SubArray{Float32,0},xbounds_here_part::SubArray{Float32,1},buffer_here_part::SubArray{Float32,1}, knownmothersamplemode::UInt64 )::Nothing
+
+# Use @eval to inline the numerical values of the models from the `ALLOWED_MODELS` dictionary
+@eval function CUDAgetknownmotherpropagation( endframe_here::Int32,nextframe_here::Int32,timeunit::Float32, j_part::UInt32,cell_here::Int32,j_cell::UInt32,cellorder::CuDeviceArray{UInt32,1}, mother::Int32,motherparticles::SubArray{UInt32,2}, evol_pars_here_part::SubArray{Float32,1},evol_pars_mthr::SubArray{Float32,2}, pars_cell_here_part::SubArray{Float32,1}, times_cell_here_part::SubArray{Float32,1},times_cell_mthr::SubArray{Float32,2}, fate_cell_here_part::SubArray{UInt32,0}, particlelogweights_here_part::SubArray{Float32,0},particlelogweights_prev::SubArray{Float32,1}, pars_glob::CuDeviceArray{Float32,1}, cellfate::Int32,  model::UInt32, noglobpars::UInt32,nohide::UInt32,nolocpars::UInt32, hiddenmatrix::CuDeviceArray{Float32,2},sigma::CuDeviceArray{Float32,2}, motherpart::SubArray{Int32,0},lifetime_here_part::SubArray{Float32,0},xbounds_here_part::SubArray{Float32,1},buffer_here_part::SubArray{Float32,1}, knownmothersamplemode::UInt64 )::Nothing
     # propagates treeparticles for one more cell, if mother is known
     # endframe_here = lineagetree.datawd[cell_here,3]
     # nextframe_here = getfirstnextframe(lineagetree, cell_here)
@@ -1772,10 +1775,10 @@ function CUDAgetknownmotherpropagation( endframe_here::Int32,nextframe_here::Int
     end     # end if cellfate known
     local probvals1::Float32, probvals2::Float32, probval_here::Float32
     if( (knownmothersamplemode==1) || (cellfate<0) )        # sampling not conditioned on fate, but gets rejected afterwards
-        if( (model==1) | (model==2) | (model==3) | (model==4) )                 # FrechetWeibull distributed event-times
+        if model in $((ALLOWED_MODELS["perfect_FW"], ALLOWED_MODELS["clock_FW"], ALLOWED_MODELS["RW_FW"], ALLOWED_MODELS["2DRW_FW"])) # FrechetWeibull distributed event-times
             probvals1 = CUDAloginvFrechetWeibull_cdf( pars_cell_here_part, xbounds_here_part[1] )
             probvals2 = CUDAloginvFrechetWeibull_cdf( pars_cell_here_part, xbounds_here_part[2] )
-        elseif( (model==11) | (model==12) | (model==13) | (model==14) )         # GammaExponential distributed event-times
+        elseif model in $((ALLOWED_MODELS["perfect_GE"], ALLOWED_MODELS["clock_GE"], ALLOWED_MODELS["RW_GE"], ALLOWED_MODELS["2DRW_GE"])) # GammaExponential distributed event-times
             probvals1 = CUDAloginvGammaExponential_cdf( pars_cell_here_part, xbounds_here_part[1] )
             probvals2 = CUDAloginvGammaExponential_cdf( pars_cell_here_part, xbounds_here_part[2] )
         else                                            # unknown model
@@ -1791,9 +1794,9 @@ function CUDAgetknownmotherpropagation( endframe_here::Int32,nextframe_here::Int
             particlelogweights_here_part[1] = -Inf32        # can happen when shape parameter is close to xounds/scale parameter (at boundary between incgamma implementations)
         else                                                # has finite weight within interval
             #@cuprintf( " Info - CUDAgetknownmotherpropagation: length(times_cell_here_part) = %5d(%5d).\n", length(times_cell_here_part),length(times_cell_here_part) )
-            if( (model==1) | (model==2) | (model==3) | (model==4) )                 # FrechetWeibull distributed event-times
+            if model in $((ALLOWED_MODELS["perfect_FW"], ALLOWED_MODELS["clock_FW"], ALLOWED_MODELS["RW_FW"], ALLOWED_MODELS["2DRW_FW"])) # FrechetWeibull distributed event-times
                 CUDAsampleFrechetWeibull( pars_cell_here_part, xbounds_here_part, lifetime_here_part,fate_cell_here_part )
-            elseif( (model==11) | (model==12) | (model==13) | (model==14) )         # GammaExponential distributed event-times
+            elseif model in $((ALLOWED_MODELS["perfect_GE"], ALLOWED_MODELS["clock_GE"], ALLOWED_MODELS["RW_GE"], ALLOWED_MODELS["2DRW_GE"])) # GammaExponential distributed event-times
                 CUDAsampleGammaExponential2( pars_cell_here_part, xbounds_here_part, lifetime_here_part,fate_cell_here_part )
             else                                            # unknown model
                 @cuprintf( " Warning - CUDAgetknownmotherpropagation: Sample mode %d not implemented for model %d.\n", knownmothersamplemode, model )
@@ -3311,7 +3314,7 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
     end     # end if model with hiddenmatrix
     # ...for standardised event-times histogram:
     if( withgraphical )
-        if mymodel in ALLOWED_MODELS # only meaningful, if a model with rescaled time
+        if mymodel in keys(ALLOWED_MODELS) # only meaningful, if a model with rescaled time
             # ....set auxiliary parameters:
             unit_here = deepcopy(timeunit)
             pars_cell_std::Array{Float64,1} = pars_glob_means[1:mynolocpars]

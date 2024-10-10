@@ -19,6 +19,7 @@ function CUDAlogexponential_distr( par1::Float32, data::Float32 )::Float32
         return value
     end     # end if pathological
 end   # end of CUDAlogexponential_distr function
+
 function CUDAloginvexponential_cdf( par1::Float32, data::Float32 )::Float32
     # log( 1-cdf of exponential )
 
@@ -28,6 +29,7 @@ function CUDAloginvexponential_cdf( par1::Float32, data::Float32 )::Float32
         return -data/par1
     end     # end if pathological
 end     # end of CUDAloginvexponential_cdf function
+
 function CUDAincompletegamma_base( a::Float32, x::Float32 )::Float32
     # lower incomplete gamma function; Julia-version of the Cephes library implementation (https://www.netlib.org/cephes/)
     # only for !(x>1 & x>a)
@@ -67,6 +69,7 @@ function CUDAincompletegamma_base( a::Float32, x::Float32 )::Float32
     end     # end of while need more terms
     return max(zero(Float32),min(one(Float32),mysum * ax/a))
 end     # end of CUDAincompletegamma_base function
+
 function CUDAincompletegamma( a::Float32, x::Float32 )::Float32
     # lower incomplete gamma function; Julia-version of the Cephes library implementation (https://www.netlib.org/cephes/)
 
@@ -79,6 +82,7 @@ function CUDAincompletegamma( a::Float32, x::Float32 )::Float32
         return CUDAincompletegamma_base( a, x )
     end     # end if better to compute inv-version
 end     # end of CUDAincompletegamma function
+
 function CUDAinvincompletegamma( a::Float32, x::Float32 )::Float32
     # 1 - lower incomplete gamma function; Julia-version of the Cephes library implementation (https://www.netlib.org/cephes/)
 
@@ -149,6 +153,7 @@ function CUDAinvincompletegamma( a::Float32, x::Float32 )::Float32
     end     # end of while need more terms
     return max(zero(Float32),min(one(Float32),ans*ax))
 end     # end of CUDAinvincompletegamma function
+
 function CUDAlogGamma_distr( par1::Float32,par2::Float32, data::Float32 )::Float32
     # log of Gamma distribution
     # first parameter is scale, second is shape
@@ -164,6 +169,7 @@ function CUDAlogGamma_distr( par1::Float32,par2::Float32, data::Float32 )::Float
         return value
     end     # end if pathological
 end     # end of CUDAlogGammadistr function
+
 function CUDAloginvGamma_cdf( par1::Float32,par2::Float32, data::Float32 )::Float32
     # log(1-cdf of Gamma)
 
@@ -174,6 +180,7 @@ function CUDAloginvGamma_cdf( par1::Float32,par2::Float32, data::Float32 )::Floa
         #return Float32( log( gamma_inc(par2, data/par1)[2] ) )    # ...[2] denotes inverse of gamma_inc()[1]
     end     # end if pathological
 end     # end of CUDAloginvGamma_cdf function
+
 function CUDAlogGammaExponential_distr( par::Union{Array{Float32,1},MArray,CuArray,CuDeviceArray,SubArray}, data::Float32 )::Float32
     # log of distribution corresponding to 1-(1-F)(1-W)
     # first parameter is scale-parameter of Gamma, second is shape-parameter of Gamma, third is probability-weight of Gamma
@@ -188,6 +195,7 @@ function CUDAlogGammaExponential_distr( par::Union{Array{Float32,1},MArray,CuArr
         return logaddexp( value_Gamma,value_Exp )
     end     # end if pathological
 end     # end of CUDAlogGammaExponential_distr function
+
 function CUDAlogGammaExponential_distr( par::Union{Array{Float32,1},MArray,CuArray,CuDeviceArray,SubArray}, data::Float32, fate::Int32 )::Float32
     # log of distribution corresponding to 1-(1-F)(1-W)
     # first parameter is scale-parameter of Gamma, second is shape-parameter of Gamma, third is probability-weight of Gamma
@@ -210,6 +218,7 @@ function CUDAlogGammaExponential_distr( par::Union{Array{Float32,1},MArray,CuArr
         return value
     end     # end if pathological
 end     # end of CUDAlogGammaExponential_distr function
+
 function CUDAloginvGammaExponential_cdf( par::Union{Array{Float32,1},MArray,CuArray,CuDeviceArray,SubArray}, data::Float32 )::Float32
     # log(1-mycdf), where mycdf = 1-(1-F)(1-W)
     # first parameter is scale-parameter of Gamma, second is shape-parameter of Gamma, third is probability-weight of Gamma
@@ -223,6 +232,7 @@ function CUDAloginvGammaExponential_cdf( par::Union{Array{Float32,1},MArray,CuAr
         return value
     end     # end if pathological
 end     # end of CUDAloginvGammaExponential_cdf function
+
 function CUDAloginvGammaExponential_cdf( par::Union{Array{Float32,1},MArray,CuArray,CuDeviceArray,SubArray}, data::Float32, fate::Int32 )::Float32
     # same as loginvGammaExponential_cdf but only accumulated over one fate (non-conditional)
 
@@ -241,12 +251,14 @@ function CUDAloginvGammaExponential_cdf( par::Union{Array{Float32,1},MArray,CuAr
     end     # end if pathological
     return value
 end     # end of loginvGammaExponential_cdf function
+
 function CUDAsampleexponential( par1::Float32, timesample::SubArray{Float32,0} )::Nothing
     # samples from exponential distribution
 
     timesample[1] = -par1*Float32(log(rand()))
     return nothing
 end     # end of CUDAsampleexponential function
+
 function CUDAsampleexponential( par1::Float32, timebounds::Union{Array{Float32,1},MArray,CuArray{Float32,1},CuDeviceArray{Float32,1},SubArray{Float32,1}}, timesample::SubArray{Float32,0} )::Nothing
     # samples from exponential distribution
 
@@ -262,6 +274,7 @@ function CUDAsampleexponential( par1::Float32, timebounds::Union{Array{Float32,1
     timesample[1] = -par1*yrandno
     return nothing
 end     # end of CUDAsampleexponential function
+
 function CUDAsampleGamma_shg1( par1::Float32,par2::Float32, timesample::SubArray{Float32,0} )::Nothing
     # samples from logGamma_distr for par2>1
     # based on source code of julia-implemented Gamma: https://github.com/JuliaStats/Distributions.jl/blob/master/src/samplers/gamma.jl
@@ -290,6 +303,7 @@ function CUDAsampleGamma_shg1( par1::Float32,par2::Float32, timesample::SubArray
     end     # end while rejected
     return nothing
 end     # end of CUDAsampleGamma_shg1 function
+
 function CUDAsampleGamma( par1::Float32,par2::Float32, timesample::SubArray{Float32,0} )::Nothing
     # samples from logGamma_distr
     # based on source code of julia-implemented Gamma: https://github.com/JuliaStats/Distributions.jl/blob/master/src/samplers/gamma.jl
@@ -306,6 +320,7 @@ function CUDAsampleGamma( par1::Float32,par2::Float32, timesample::SubArray{Floa
     end     # end of distinguishing shape-parameter cases
     return nothing
 end     # end of CUDAsampleGamma function
+
 function CUDAsampleGamma( par1::Float32,par2::Float32, timebounds::Union{Array{Float32,1},MArray,CuArray{Float32,1},CuDeviceArray{Float32,1},SubArray{Float32,1}}, timesample::SubArray{Float32,0} )::Nothing
     # samples from logGamma_distr conditioned on xbounds
     # uses inverse sampler
@@ -351,6 +366,7 @@ function CUDAsampleGamma( par1::Float32,par2::Float32, timebounds::Union{Array{F
 
     return nothing
 end     # end of CUDAsampleGamma function
+
 function CUDAsampleGamma2( par1::Float32,par2::Float32, timebounds::Union{Array{Float32,1},MArray,CuArray{Float32,1},CuDeviceArray{Float32,1},SubArray{Float32,1}}, timesample::SubArray{Float32,0} )::Nothing
     # samples from logGamma_distr conditioned on timebounds
     # tries to use different rejection samplers before falling back to sampleGamma
@@ -408,6 +424,7 @@ function CUDAsampleGamma2( par1::Float32,par2::Float32, timebounds::Union{Array{
         end     # end if enough support
     end     # end if small interval
 end     # end of CUDAsampleGamma2 function
+
 function CUDAsampleGammaExponential2( par::Union{Array{Float32,1},MArray,CuArray,CuDeviceArray,SubArray}, timesample::SubArray{Float32,0},fatesample::SubArray{UInt32,0} )::Tuple{Float32,UInt32,Float32} 
     # sampler for Gamma and exponential random variables, combined via competition
     p_loc::Float32 = par[3]^(1/par[2])
@@ -428,6 +445,7 @@ function CUDAsampleGammaExponential2( par::Union{Array{Float32,1},MArray,CuArray
 
     return timesample[1], fatesample[1], logdivprob     # cellfate is '1' for death,'2' for division
 end     # end of CUDAsampleGammaExponential2 function
+
 function CUDAsampleGammaExponential2( par::Union{Array{Float32,1},MArray,CuArray,CuDeviceArray,SubArray}, timebounds::Union{Array{Float32,1},MArray,CuArray{Float32,1},CuDeviceArray{Float32,1},SubArray{Float32,1}}, timesample::SubArray{Float32,0},fatesample::SubArray{UInt32,0} )::Tuple{Float32,UInt32,Float32}
     # sampler for Gamma and exponential random variables, combined via competition; for conditional on xbounds
 
@@ -471,6 +489,7 @@ function CUDAsampleGammaExponential2( par::Union{Array{Float32,1},MArray,CuArray
     
     return timesample[1], fatesample[1], logdivprob
 end     # end of CUDAsampleGammaExponential2 function
+
 function CUDAsampleGammaExponential( par::Union{Array{Float32,1},MArray,CuArray,CuDeviceArray,SubArray}, timebounds::Union{Array{Float32,1},MArray,CuArray{Float32,1},CuDeviceArray{Float32,1},SubArray{Float32,1}}, fate::Int32, timesample::SubArray{Float32,0} )::Bool
     # inverse sampler for random variables distributed according to GammaExponential inside timebounds and of given fate
 
@@ -517,6 +536,7 @@ function CUDAsampleGammaExponential( par::Union{Array{Float32,1},MArray,CuArray,
     
     return false                # output is errorflag
 end     # end of CUDAsampleGammaExponential function
+
 function CUDAsampleGammaExponential2( par::Union{Array{Float32,1},MArray,CuArray,CuDeviceArray,SubArray}, timebounds::Union{Array{Float32,1},MArray,CuArray{Float32,1},CuDeviceArray{Float32,1},SubArray{Float32,1}}, fate::Int32, timesample::SubArray{Float32,0} )::Bool
     # inverse sampler for random variables distributed according to GammaExponential inside timebounds and of given fate
 
@@ -587,21 +607,25 @@ function CUDAlogWeibull_distr( par::Union{Array{Float32,1},MArray,CuArray,CuDevi
         return -((data/par[1])^par[2]) + log(par[2]/par[1])
     end     # end if exponential
 end     # end of CUDAlogWeibull_distr function
+
 function CUDAloginvWeibull_cdf( par::Union{Array{Float32,1},MArray,CuArray,CuDeviceArray,SubArray}, data::Float32 )::Float32
     # log(1-cdf of Weibull)
 
     return -((data/par[1])^par[2])
 end     # end of CUDAloginvWeibull_cdf function
+
 function CUDAlogFrechet_distr( par::Union{Array{Float32,1},MArray,CuArray,CuDeviceArray,SubArray}, data::Float32 )::Float32
     # log of Frechet distribution
 
     return -((data/par[1])^(-par[2])) + (-par[2]-1)*log(data/par[1]) + log(par[2]/par[1])
 end     # end of CUDAlogFrechet_distr function
+
 function CUDAloginvFrechet_cdf( par::Union{Array{Float32,1},MArray,CuArray,CuDeviceArray,SubArray}, data::Float32 )::Float32
     # log(1-cdf of Frechet)
     
     return log1mexp( -((data/par[1])^(-par[2])) )
 end     # end of CUDAloginvFrechet_cdf function
+
 function CUDAlogFrechetWeibull_distr( par::Union{Array{Float32,1},MArray,CuArray,CuDeviceArray,SubArray}, data::Float32 )::Float32
     # log of distribution corresponding to 1-(1-F)(1-W) [same as logexponentialFrechetWeibull_distr for par[1]==Inf]
     # first two parameters are for Frechet, next two for Weibull
@@ -610,6 +634,7 @@ function CUDAlogFrechetWeibull_distr( par::Union{Array{Float32,1},MArray,CuArray
     values_Weibull::Float32 = CUDAloginvFrechet_cdf( view(par, 1:2),data ) + CUDAlogWeibull_distr( view(par, 3:4),data )
     return logaddexp( values_Frechet,values_Weibull )   # sum Frechet and Weibull together
 end     # end of CUDAlogFrechetWeibull_distr function
+
 function CUDAlogFrechetWeibull_distr( par::Union{Array{Float32,1},MArray,CuArray,CuDeviceArray,SubArray}, data::Float32, fate::Int32 )::Float32
     # log of distribution corresponding to 1-(1-F)(1-W) [same as logexponentialFrechetWeibull_distr for par[1]==Inf]
     # first two parameters are for Frechet, next two for Weibull
@@ -624,12 +649,14 @@ function CUDAlogFrechetWeibull_distr( par::Union{Array{Float32,1},MArray,CuArray
         return logaddexp( value_Frechet,value_Weibull )   # sum Frechet and Weibull together
     end
 end     # end of CUDAlogFrechetWeibull_distr function
+
 function CUDAloginvFrechetWeibull_cdf( par::Union{Array{Float32,1},MArray,CuArray,CuDeviceArray,SubArray}, data::Float32 )::Float32
     # log(1-mycdf), where mycdf = 1-(1-F)(1-W)  [same as loginvexponentialFrechetWeibull_cdf for par[1]==Inf]
     # first two parameters are for Frechet, next two for Weibull
 
     return CUDAloginvFrechet_cdf( view(par, 1:2),data ) + CUDAloginvWeibull_cdf( view(par, 3:4),data )
 end     # end of CUDAloginvFrechetWeibull_cdf function
+
 function CUDAsampleFrechetWeibull( par::Union{Array{Float32,1},MArray,CuArray,CuDeviceArray,SubArray},timebounds::SubArray{Float32,1}, timesample::SubArray{Float32,0},fatesample::SubArray{UInt32,0} )::Tuple{Float32,UInt32,Float32}
     # inverse sampler for random variables distributed according to FrechetWeibull
     #a::CuDeviceArray{Float32,1} = CuDeviceArray{Float32,1}([0.0, 200000.0])
@@ -671,6 +698,7 @@ function CUDAsampleGaussian( mymean::Float32,mystd::Float32, value::SubArray{Flo
     value .+= mymean
     return nothing
 end     # end of CUDAsampleGaussian function
+
 function CUDAsampleGaussian_base()::Float32
     # samples 1D standard Gaussian
 
@@ -716,6 +744,7 @@ function CUDAfindroot( targetfun::Function, yrandno::Union{Float32,SubArray{Floa
     CUDAnestedintervalsroot( targetfun, yrandno, samples, xbounds, Float32(1E-4) )
     return nothing
 end     # end of CUDAfindroot function
+
 function CUDAnestedintervalsroot( fun::Function, val::Union{Float32,SubArray{Float32,0}}, root::SubArray{Float32,0}, xbounds::Union{Array{Float32,1},CuDeviceArray{Float32,1},SubArray{Float32,1},SubArray{Float32,0}}, xtol::Float32=Float32(1E-4) )::Nothing
     # finds x\in[xbounds[1],xbounds[2]] for fun(x)=val[1] with tolerance tol
     
@@ -786,36 +815,37 @@ function CUDAnestedintervalsroot( fun::Function, val::Union{Float32,SubArray{Flo
     return nothing
 end     # end of CUDAnestedintervalsroot function
 
-function CUDAgethiddenmatrix( pars_glob::Union{CuArray,SubArray}, model::UInt32, noglobpars::UInt32,nohide::UInt32,nolocpars::UInt32 )::Tuple{CuArray{Float32,2},CuArray{Float32,2}}
+# Use @eval to inline the numerical values of the models from the `ALLOWED_MODELS` dictionary
+@eval function CUDAgethiddenmatrix( pars_glob::Union{CuArray,SubArray}, model::UInt32, noglobpars::UInt32,nohide::UInt32,nolocpars::UInt32 )::Tuple{CuArray{Float32,2},CuArray{Float32,2}}
     # similar to gethiddenmatrix_m4, but for GPU and all models
 
     local hiddenmatrix::CuArray{Float32,2}, sigma::CuArray{Float32,2}   # declare
-    if( model==1 )                      # simple FrechetWeibull model
+    if model == $(ALLOWED_MODELS["perfect_FW"])
         hiddenmatrix = CUDA.zeros(0,0)
         sigma = CUDA.zeros(0,0)
-    elseif( model==2 )                  # clock-modulated FrechetWeibull model
+    elseif model == $(ALLOWED_MODELS["clock_FW"])
         hiddenmatrix = CUDA.zeros(0,0)
         sigma = CUDA.zeros(0,0)
-    elseif( model==3 )                  # RW FrechetWeibull model
+    elseif model == $(ALLOWED_MODELS["RW_FW"])
         hiddenmatrix = hcat(view(pars_glob,nolocpars+1))
         sigma = hcat(view(pars_glob,nolocpars+2))
-    elseif( model==4 )                  # 2dRW FrechetWeibull model
+    elseif model == $(ALLOWED_MODELS["2DRW_FW"])
         hiddenmatrix = CUDA.zeros(Float32, 2,2); hiddenmatrix[:] = deepcopy(pars_glob[nolocpars.+collect(1:4)])
         sigma = CUDA.zeros(Float32, 2,2); sigma[[1,4]] .= abs.(pars_glob[(nolocpars+4).+collect(1:2)])
         #sigma = diagm( abs.(pars_glob[(nolocpars+4).+collect(1:2)]) )
-    elseif( model==9 )                  # 2d rw-inheritance Frechet model, divisions-only
+    elseif model == $(ALLOWED_MODELS["2DRW_F"])
         hiddenmatrix = CUDA.zeros(Float32, 2,2); hiddenmatrix[:] = deepcopy(pars_glob[nolocpars.+collect(1:4)])
         sigma = CUDA.zeros(Float32, 2,2); sigma[[1,4]] .= abs.(pars_glob[(nolocpars+4).+collect(1:2)])
-    elseif( model==11 )                 # simple GammaExponential model
+    elseif model == $(ALLOWED_MODELS["perfect_GE"])
         hiddenmatrix = CUDA.zeros(0,0)
         sigma = CUDA.zeros(0,0)
-    elseif( model==12 )                 # clock-modulated GammaExponential model
+    elseif model == $(ALLOWED_MODELS["clock_GE"])
         hiddenmatrix = CUDA.zeros(0,0)
         sigma = CUDA.zeros(0,0)
-    elseif( model==13 )                 # RW GammaExponential model
+    elseif model == $(ALLOWED_MODELS["RW_GE"])
         hiddenmatrix = hcat(view(pars_glob,nolocpars+1))
         sigma = hcat(view(pars_glob,nolocpars+2))
-    elseif( model==14 )                 # 2dRW GammaExponential model
+    elseif model == $(ALLOWED_MODELS["2DRW_GE"])
         hiddenmatrix = CUDA.zeros(Float32, 2,2); hiddenmatrix[:] = deepcopy(pars_glob[nolocpars.+collect(1:4)])
         sigma = CUDA.zeros(Float32, 2,2); sigma[[1,4]] .= abs.(pars_glob[(nolocpars+4).+collect(1:2)])
         #sigma = diagm( abs.(pars_glob[(nolocpars+4).+collect(1:2)]) )
@@ -824,18 +854,20 @@ function CUDAgethiddenmatrix( pars_glob::Union{CuArray,SubArray}, model::UInt32,
     end     # end if 2d rw-inheritance model
     return hiddenmatrix, sigma
 end     # end of CUDAgethiddenmatrix function
-function CUDAgetevolpars( pars_evol_here::SubArray{Float32,1}, pars_evol_mthr::SubArray{Float32,1}, model::UInt32, noglobpars::UInt32,nohide::UInt32,nolocpars::UInt32, hiddenmatrix::CuDeviceArray{Float32,2},sigma::CuDeviceArray{Float32,2}, buffer_here::SubArray{Float32,1} )::Nothing
+
+# Use @eval to inline the numerical values of the models from the `ALLOWED_MODELS` dictionary
+@eval function CUDAgetevolpars( pars_evol_here::SubArray{Float32,1}, pars_evol_mthr::SubArray{Float32,1}, model::UInt32, noglobpars::UInt32,nohide::UInt32,nolocpars::UInt32, hiddenmatrix::CuDeviceArray{Float32,2},sigma::CuDeviceArray{Float32,2}, buffer_here::SubArray{Float32,1} )::Nothing
     # CUDA version of statefunctions.getevolpars
 
-    if( model==1 )      # simple FrechetWeibull model
+    if model == $(ALLOWED_MODELS["perfect_FW"])
         pars_evol_here = deepcopy(pars_evol_mthr)   # empty
-    elseif( model==2 )  # clock-modulated FrechetWeibull model
+    elseif model == $(ALLOWED_MODELS["clock_FW"])
         pars_evol_here = deepcopy(pars_evol_mthr)   # empty
-    elseif( model==3 )  # RW-model
+    elseif model == $(ALLOWED_MODELS["RW_FW"])
         #par = [1.0 + pars_glob[nolocpars+1]*(pars_evol_mthr[1]-1.0), abs(pars_glob[nolocpars+2])]
         #@cuprintln(typeof(pars_evol_here) <: Union{SubArray{Float32,0},SubArray{Float32,1}})
         CUDAsampleGaussian( one(Float32) + hiddenmatrix[1]*(pars_evol_mthr[1]-one(Float32)), sigma[1], pars_evol_here )
-    elseif( model==4 )  # 2dRW FrechetWeibull model
+    elseif model == $(ALLOWED_MODELS["2DRW_FW"])
         #mymean = hiddenmatrix*(pars_evol_mthr.-1.0) .+ 1; mystd = sigma
         buffer_here .= zero(Float32)    # initialise
         for j_x in eachindex(buffer_here), j_y in eachindex(pars_evol_here) # matrix-multiplication
@@ -848,7 +880,7 @@ function CUDAgetevolpars( pars_evol_here::SubArray{Float32,1}, pars_evol_mthr::S
         for j_x in eachindex(pars_evol_here), j_y in eachindex(pars_evol_mthr) # matrix-multiplication
             pars_evol_here[j_x] += hiddenmatrix[j_x,j_y]*(pars_evol_mthr[j_y]-one(Float32))
         end     # end of matrix multiplication
-    elseif( model==9 )  # 2dRW Frechet model, divisions only
+    elseif model == $(ALLOWED_MODELS["2DRW_F"])
         #mymean = hiddenmatrix*(pars_evol_mthr.-1.0) .+ 1; mystd = sigma
         buffer_here .= zero(Float32)    # initialise
         for j_x in eachindex(buffer_here), j_y in eachindex(pars_evol_here) # matrix-multiplication
@@ -861,13 +893,13 @@ function CUDAgetevolpars( pars_evol_here::SubArray{Float32,1}, pars_evol_mthr::S
         for j_x in eachindex(pars_evol_here), j_y in eachindex(pars_evol_mthr) # matrix-multiplication
             pars_evol_here[j_x] += hiddenmatrix[j_x,j_y]*(pars_evol_mthr[j_y]-one(Float32))
         end     # end of matrix multiplication
-    elseif( model==11 ) # simple GammaExponential model
+    elseif model == $(ALLOWED_MODELS["perfect_GE"])
         pars_evol_here = deepcopy(pars_evol_mthr)   # empty
-    elseif( model==12 ) # clock-modulated GammaExponential model
+    elseif model == $(ALLOWED_MODELS["clock_GE"])
         pars_evol_here = deepcopy(pars_evol_mthr)   # empty
-    elseif( model==13 ) # RW GammaExponential model
+    elseif model == $(ALLOWED_MODELS["RW_GE"])
         CUDAsampleGaussian( one(Float32) + hiddenmatrix[1]*(pars_evol_mthr[1]-one(Float32)), sigma[1], pars_evol_here )
-    elseif( model==14 ) # 2dRW GammaExponential model
+    elseif model == $(ALLOWED_MODELS["2DRW_GE"])
         #mymean = hiddenmatrix*(pars_evol_mthr.-1.0) .+ 1; mystd = sigma
         buffer_here .= zero(Float32)    # initialise
         for j_x in eachindex(buffer_here), j_y in eachindex(pars_evol_here) # matrix-multiplication
@@ -885,36 +917,38 @@ function CUDAgetevolpars( pars_evol_here::SubArray{Float32,1}, pars_evol_mthr::S
     end  # end of distinguishing models
     return nothing
 end     # end of CUDAgetevolpars function
-function CUDAgetcellpars( pars_glob::CuDeviceArray{Float32,1}, pars_evol_here::SubArray{Float32,1},times_cell_here::SubArray{Float32,1}, pars_cell_here::SubArray{Float32,1}, model::UInt32, noglobpars::UInt32,nohide::UInt32,nolocpars::UInt32 )::Nothing
+
+# Use @eval to inline the numerical values of the models from the `ALLOWED_MODELS` dictionary
+@eval function CUDAgetcellpars( pars_glob::CuDeviceArray{Float32,1}, pars_evol_here::SubArray{Float32,1},times_cell_here::SubArray{Float32,1}, pars_cell_here::SubArray{Float32,1}, model::UInt32, noglobpars::UInt32,nohide::UInt32,nolocpars::UInt32 )::Nothing
     # CUDA version of statefunctions.getcellpars
 
-    if( model==1 )      # simple FrechetWeibull model
+    if model == $(ALLOWED_MODELS["perfect_FW"])
         #for j = 1:nolocpars
         #    pars_cell_here[j] = pars_glob[j]
         #end     # end of local parameters loop
         pars_cell_here .= pars_glob         # important to do componentwise, to only copy values (pars_cell_here = deepcopy(pars_glob) also wrong)
-    elseif( model==2 )  # clock-modulated FrechetWeibull model
+    elseif model == $(ALLOWED_MODELS["clock_FW"])
         pars_cell_here .= view(pars_glob, 1:nolocpars)
         scalarbuffer::Float32 = one(Float32) + pars_glob[nolocpars+1]*sin( Float32(2*pi)*(times_cell_here[1]/pars_glob[nolocpars+2]) + pars_glob[nolocpars+3] )   # all scale parameters
         pars_cell_here[1] *= scalarbuffer; pars_cell_here[3] *= scalarbuffer    # not possible componentwise
-    elseif( model==3 )  # RW FrechetWeibull model
+    elseif model == $(ALLOWED_MODELS["RW_FW"])
         pars_cell_here .= view(pars_glob, 1:nolocpars)
         pars_cell_here[1] *= abs(pars_evol_here[1]); pars_cell_here[3] *= abs(pars_evol_here[1])
-    elseif( model==4 )  # 2dRW FrechetWeibull model
+    elseif model == $(ALLOWED_MODELS["2DRW_FW"])
         pars_cell_here .= view(pars_glob, 1:nolocpars)
         pars_cell_here[1] *= abs(pars_evol_here[1]); pars_cell_here[3] *= abs(pars_evol_here[1])
-    elseif( model==9 )  # 2dRW Frechet model, divisions only
+    elseif model == $(ALLOWED_MODELS["2DRW_F"])
         pars_cell_here .= view(pars_glob, 1:nolocpars)
         pars_cell_here[1] *= abs(pars_evol_here[1])
-    elseif( model==11 ) # simple GammaExponential model
+    elseif model == $(ALLOWED_MODELS["perfect_GE"])
         pars_cell_here .= pars_glob         # important to do componentwise, to only copy values (pars_cell_here = deepcopy(pars_glob) also wrong)
-    elseif( model==12 )  # clock-modulated GammaExponential model
+    elseif model == $(ALLOWED_MODELS["clock_GE"])
         pars_cell_here .= view(pars_glob, 1:nolocpars)
         pars_cell_here[1] *= one(Float32) + pars_glob[nolocpars+1]*sin( Float32(2*pi)*(times_cell_here[1]/pars_glob[nolocpars+2]) + pars_glob[nolocpars+3] )
-    elseif( model==13 )  # RW GammaExponential model
+    elseif model == $(ALLOWED_MODELS["RW_GE"])
         pars_cell_here .= view(pars_glob, 1:nolocpars)
         pars_cell_here[1] *= abs(pars_evol_here[1])
-    elseif( model==14 )  # 2dRW GammaExponential model
+    elseif model == $(ALLOWED_MODELS["2DRW_GE"])
         pars_cell_here .= view(pars_glob, 1:nolocpars)
         pars_cell_here[1] *= abs(pars_evol_here[1])
     else                # unknown model

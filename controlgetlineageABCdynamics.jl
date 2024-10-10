@@ -2,6 +2,22 @@ using Printf
 using Dates
 using LogExpFunctions
 
+# This is a mapping betweene supported model names and an integer number representing that
+# model, to be used inside CUDA kernels where we couldn't use strings.  Another option could
+# be to use enums, which make life easier in CUDA kernels (no need to use hacks), but are
+# just slightly less nice for error handling (but strings aren't ideal either).
+const ALLOWED_MODELS = Dict{String,UInt32}(
+    "perfect_FW" => 1, # simple FrechetWeibull model with global parameters
+    "clock_FW" => 2, # clock-modulated FrechetWeibull model
+    "RW_FW" => 3, # FrechetWeibull model with rw-inheritance
+    "2DRW_FW" => 4, # FrechetWeibull model with 2d rw-inheritance
+    "2DRW_F" => 9, # FrechetWeibull model with 2d rw-inheritance, divisions-only
+    "perfect_GE" => 11, # simple GammaExponetial model with global parameters
+    "clock_GE" => 12, # clock-modulated GammaExponetial model
+    "RW_GE" => 13, # GammaExponetial model with rw-inheritance
+    "2DRW_GE" => 14, # GammaExponetial model with2d rw-inheritance
+)
+
 include("readlineagefile.jl")
 include("Lineagetree.jl")
 include("mydistributions.jl")
@@ -9,19 +25,9 @@ include("LineageMCmodel2.jl")
 include("LineageABCmodel.jl")
 #plotlyjs()
 
+# Helper type to define a sentinel for default values of keyword options (`nothing` being
+# the abscence of an explicit value).
 const Maybe{T} = Union{T, Nothing}
-
-const ALLOWED_MODELS = (
-    "perfect_FW", # 1 - simple FrechetWeibull model with global parameters
-    "clock_FW", # 2 - clock-modulated FrechetWeibull model
-    "RW_FW", # 3 - FrechetWeibull model with rw-inheritance
-    "2DRW_FW", # 4 - FrechetWeibull model with 2d rw-inheritance
-    "2DRW_F", # 9 - FrechetWeibull model with 2d rw-inheritance, divisions-only
-    "perfect_GE", # 11 - simple GammaExponetial model with global parameters
-    "clock_GE", # 12 - clock-modulated GammaExponetial model
-    "RW_GE", # 13 - GammaExponetial model with rw-inheritance
-    "2DRW_GE", # 14 - GammaExponetial model with2d rw-inheritance
-)
 
 function controlgetlineageABCdynamics(;
                                       trunkfilename::Maybe{String}=nothing,
@@ -61,8 +67,8 @@ function controlgetlineageABCdynamics(;
     if isnothing(model)
         error("`model` must be set explicitly")
     end
-    if !(model in ALLOWED_MODELS)
-        error("`model` is \"$(model)\", allowed models are $(join(ALLOWED_MODELS, ", ", " and "))")
+    if !(model in keys(ALLOWED_MODELS))
+        error("`model` is \"$(model)\", allowed models are $(join(keys(ALLOWED_MODELS), ", ", " and "))")
     end
     if isnothing(timeunit)
         error("`timeunit` must be set explicitly")
@@ -304,7 +310,7 @@ function simulatelineagetree2( pars_glob::Array{Float64,1}, model::String, nobra
     # ....estimate mean event-time:
     (noups::UInt64, noglobpars::UInt64,nohide::UInt64,nolocpars::UInt64) = getMCmodelnoups2( model, UInt64(1) )
     local pars_cell_here::Array{Float64,1}                  # declare
-    if model in ALLOWED_MODELS # models with first couple of parameters in pars_glob coinciding with global means of pars_cell
+    if model in keys(ALLOWED_MODELS) # models with first couple of parameters in pars_glob coinciding with global means of pars_cell
         pars_cell_here = pars_glob[1:nolocpars]
     else
         println(" Warning - simulatelineagetree2: Model ", model, " is not compatible for determining 'typical' pars_cell.")
