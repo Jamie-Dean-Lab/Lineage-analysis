@@ -1,6 +1,6 @@
 from pandas.testing import assert_frame_equal
 
-from track_converter.src.preprocess_trackmate import preprocess_trackmate_or_mamut_files
+from track_converter.src.preprocess_trackmate_or_mamut import preprocess_trackmate_or_mamut_files
 from track_converter.tests.utils import read_tracks
 
 
