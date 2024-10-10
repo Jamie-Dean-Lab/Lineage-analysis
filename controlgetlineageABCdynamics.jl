@@ -36,7 +36,6 @@ function controlgetlineageABCdynamics(;
     # to call this from an external driver script and not having to keep in-sync
     # default values of arguments in multiple places.
     trunkfilename = something(trunkfilename, "")
-    filename = something(filename, "2024-04-08_13-03-47_Simulation2_cells=3,model=2,pars=[ +4.52000e+02 +5.00000e+00 +3.00000e+03 +2.00000e+00 +5.00000e-01 +2.88000e+02 +0.")
     comment = something(comment, "for_m2extrasmalltestdata")
     auxiliaryfoldertrunkname::String="Auxfiles"
     useRAM = something(useRAM, true)
@@ -44,6 +43,9 @@ function controlgetlineageABCdynamics(;
     without = something(without, 1)
     withwriteoutputtext = something(withwriteoutputtext, true)
 
+    if isnothing(filename)
+        error("The input `filename` must be set explicitly")
+    end
     if isnothing(model)
         error("`model` must be set explicitly")
     end
