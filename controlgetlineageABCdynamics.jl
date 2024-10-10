@@ -17,7 +17,7 @@ function controlgetlineageABCdynamics(;
                                       comment::Maybe{String}=nothing,
                                       nochains::Maybe=nothing, # number of independent chains for convergence statistic.  Must be a number convertable to `UInt64`o
                                       model::Maybe{Integer}=nothing, # Must be set by the user! '1' for FrechWeib-model with global paramters, '2' for FrechWeib-model with clock, '3' for FrechWeib-model with rw-inheritance, '4' for FrechWeib-model with 2d rw-inheritance, '11' fr GammaExponential with global parameters, '12' for GammaExponential with clock, '13' for GammaExponential with rw-inheritance, '14' for GammaExponential with 2d rw-inheritance
-                                      timeunit::Maybe{Float64}=nothing, # for getting priors right; in relation to hours.  Must be set by users!
+                                      timeresolution::Maybe{Float64}=nothing, # for getting priors right; in relation to hours.  Must be set by users!
                                       MCmax::Maybe{Integer}=nothing, # last iteration
                                       subsample::Maybe{Integer}=nothing, # subsampling frequency
                                       nomothersamples::Maybe{Integer}=nothing, # number of samples for sampling empirically from unknownmotherdistribution
@@ -49,8 +49,8 @@ function controlgetlineageABCdynamics(;
     if isnothing(model)
         error("`model` must be set explicitly")
     end
-    if isnothing(timeunit)
-        error("`timeunit` must be set explicitly")
+    if isnothing(timeresolution)
+        error("`timeresolution` must be set explicitly")
     end
     # TODO: change the type of `model` to a custom datatype.
     model = UInt64(model)
@@ -135,7 +135,7 @@ function controlgetlineageABCdynamics(;
     unknownmothersamples::Unknownmotherequilibriumsamples = Unknownmotherequilibriumsamples(0.0,nomothersamples,nomotherburnin,zeros(nomothersamples,nohide),zeros(nomothersamples,nolocpars),zeros(nomothersamples,2),zeros(Int64,nomothersamples),zeros(nomothersamples))   # initialise
     state_init2::Lineagestate2 = Lineagestate2( NaN*ones(noglobpars), NaN*ones(nocells,nohide), NaN*ones(nocells,nolocpars), NaN*ones(nocells,2), [unknownmothersamples] )  # will get set randomly for each chain, if it contains NaN
     pars_stps::Array{Float64,1} = 1*ones(noups)
-    runmultiplelineageABCmodels( mylineagetree, nochains, model,timeunit,"none", comment,timestamp, UInt64(1),UInt64(0),MCmax,subsample, state_init2,pars_stps, nomothersamples,nomotherburnin, nolevels,notreeparticles,auxiliaryfoldertrunkname,useRAM,withCUDA,trickycells, without,withwriteoutputtext )
+    runmultiplelineageABCmodels( mylineagetree, nochains, model,timeresolution,"none", comment,timestamp, UInt64(1),UInt64(0),MCmax,subsample, state_init2,pars_stps, nomothersamples,nomotherburnin, nolevels,notreeparticles,auxiliaryfoldertrunkname,useRAM,withCUDA,trickycells, without,withwriteoutputtext )
 
     @printf( " Info - controlgetlineageABCdynamics: Done now %1.3f sec.\n", (DateTime(now())-t1)/Millisecond(1000) )
 end   # end of controlgetlineageABCdynamics function
