@@ -16,3 +16,8 @@ def btrack_test_data_dir():
 @pytest.fixture
 def trackmate_test_data_dir():
     return Path(__file__).parent.resolve() / "data" / "trackmate"
+
+
+@pytest.fixture
+def mastodon_test_data_dir():
+    return Path(__file__).parent.resolve() / "data" / "mastodon"
