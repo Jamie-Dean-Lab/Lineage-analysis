@@ -33,14 +33,35 @@ def _read_dead_cell_labels(spots: pd.DataFrame, links: pd.DataFrame, dead_tagset
     return dead_spots.ctc_label.unique()
 
 
-def preprocess_mastodon_file(
+def preprocess_mastodon_files(
     spots_csv_filepath: Path,
     links_csv_filepath: Path,
     output_ctc_filepath: Path,
     dead_tagset: str | None = None,
     dead_tag: str | None = None,
 ) -> None:
-    """Preprocess mastodon format files."""
+    """
+    Preprocess Mastodon format csv files.
+
+    Convert Mastodon csv files into the cell tracking challenge (CTC) format, with an additional column
+    for right-censoring. All cells that don't end in cell division will be marked as right-censored,
+    except for (optionally) those manually tagged as dead in Mastodon.
+
+    Parameters
+    ----------
+    spots_csv_filepath : Path
+        Path to spots csv file.
+    links_csv_filepath : Path
+        Path to links csv file.
+    output_ctc_filepath : Path
+        Path to save output .txt file.
+    dead_tagset : str | None, optional
+        Name of tagset for manually labelled 'dead' spots (dead_tag must also be provided)
+    dead_tag : str | None, optional
+        Name of tag (inside dead_tagset) for labelled 'dead' spots (dead_tagset must also be provided).
+        All tagged cells will be marked as not right-censored.
+
+    """
     spots = _read_mastodon_csv(spots_csv_filepath)
     links = _read_mastodon_csv(links_csv_filepath)
 

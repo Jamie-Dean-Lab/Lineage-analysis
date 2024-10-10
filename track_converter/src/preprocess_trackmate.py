@@ -22,10 +22,29 @@ def _read_dead_cell_labels(spots: pd.DataFrame, edges: pd.DataFrame, dead_label:
     return dead_spots.ctc_label.unique()
 
 
-def preprocess_trackmate_file(
+def preprocess_trackmate_or_mamut_files(
     spots_csv_filepath: Path, edges_csv_filepath: Path, output_ctc_filepath: Path, dead_label: str | None = None
 ) -> None:
-    """Preprocess trackmate format files."""
+    """
+    Preprocess TrackMate or MaMuT format csv files.
+
+    Convert Trackmate / MaMuT csv files into the cell tracking challenge (CTC) format, with an additional column
+    for right-censoring. TrackMate and MaMuT share the same output csv file formats and so can be processed in the
+    same way. All cells that don't end in cell division will be marked as right-censored, except for (optionally)
+    those manually labelled as dead in TrackMate or MaMuT.
+
+    Parameters
+    ----------
+    spots_csv_filepath : Path
+        Path to spots csv file.
+    edges_csv_filepath : Path
+        Path to edges csv file.
+    output_ctc_filepath : Path
+        Path to save output .txt file.
+    dead_label : str | None, optional
+        Name of manually labelled 'dead' spots. If provided, these will be marked as not right-censored.
+
+    """
     spots = _read_trackmate_csv(spots_csv_filepath)
     edges = _read_trackmate_csv(edges_csv_filepath)
 
