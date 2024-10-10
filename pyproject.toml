@@ -52,7 +52,8 @@ ignore = [
     "PLR0913",
     "FBT001",
     "FBT002",
-    "PD101"
+    "PD101",
+    "SIM108"
 ]
 per-file-ignores = {"track_converter/tests*" = [
     "INP001", # File is part of an implicit namespace package.

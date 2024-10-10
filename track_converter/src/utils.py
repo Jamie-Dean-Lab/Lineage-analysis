@@ -54,6 +54,35 @@ def discard_related_cells(tracks: pd.DataFrame, cell_labels: list[int]) -> pd.Da
     return tracks
 
 
+def check_dead_spots_have_no_children(
+    dead_spots: pd.DataFrame, edges: pd.DataFrame, spot_id_col: str, edge_source_id_col: str
+) -> None:
+    """
+    Throw an error if any of the dead spots have children.
+
+    Parameters
+    ----------
+    dead_spots : pd.DataFrame
+        Spot table (from trackmate / mamut / mastodon) filtered to only contain dead spots.
+    edges : pd.DataFrame
+        Edges table (form trackmate / mamut / mastodon)
+    spot_id_col : str
+        Name of column in spot table that contains the ID of each spot
+    edge_source_id_col : str
+        Name of column in edges table that contains the ID of the source spot
+
+    """
+    spots_are_invalid = dead_spots[spot_id_col].isin(edges[edge_source_id_col])
+    if (spots_are_invalid).any():
+        invalid_spots = dead_spots[spot_id_col][spots_are_invalid].to_numpy()
+        msg = (
+            f"Spots with ids {invalid_spots} that were tagged as dead have child spots. These spots should lie "
+            f"at the very end of a track."
+        )
+        logger.error(msg)
+        raise ValueError(msg)
+
+
 def convert_to_ctc(
     spots: pd.DataFrame,
     edges: pd.DataFrame,

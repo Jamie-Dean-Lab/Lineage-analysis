@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 from track_converter.src.preprocess_ctc import preprocess_ctc_file
-from track_converter.src.utils import convert_to_ctc
+from track_converter.src.utils import check_dead_spots_have_no_children, convert_to_ctc
 
 logging.basicConfig(format="%(levelname)s: %(name)s: %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,18 +29,7 @@ def _read_mastodon_csv(csv_filepath: Path) -> pd.DataFrame:
 
 def _read_dead_cell_labels(spots: pd.DataFrame, links: pd.DataFrame, dead_tagset: str, dead_tag: str) -> np.array:
     dead_spots = spots.loc[spots[f"{dead_tagset}-{dead_tag}"] == 1, :]
-
-    # Check spots have no children (they should be at the very end of a cell track)
-    spots_are_invalid = dead_spots.ID.isin(links["Link target IDs-Source spot id"])
-    if (spots_are_invalid).any():
-        invalid_spots = dead_spots.ID[spots_are_invalid].to_numpy()
-        msg = (
-            f"Spots with ids {invalid_spots} that were tagged as dead have child spots. These spots should lie "
-            f"at the very end of a track."
-        )
-        logger.error(msg)
-        raise ValueError(msg)
-
+    check_dead_spots_have_no_children(dead_spots, links, "ID", "Link target IDs-Source spot id")
     return dead_spots.ctc_label.unique()
 
 
