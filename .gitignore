@@ -1,1 +1,6 @@
 Manifest.toml
+*.egg-info
+tmp/
+.vscode/
+__pycache__/
+.coverage
