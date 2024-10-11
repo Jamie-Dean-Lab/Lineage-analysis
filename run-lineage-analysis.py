@@ -144,16 +144,24 @@ def run_lineage_analysis(script):
     return script
 
 
+# Helper function for passing the arguments to the main script: some arguments
+# are of type `String`, but default to `nothing`, we want to pass `nothing`
+# as-is, but otherwise pass the string with its quotes.
+def nothing_or_string(str):
+    if str == "nothing":
+        return str
+    return f"\"{str}\""
+
+
 @click.command()
 @click.option("--system", default="auto", help="Name of the system where to run the pipeline")
 @click.option("--walltime", default="00:20:00", help="Walltime for jobs sent to the scheduler")
 @click.option("--logdir", default="", help="Directory where to store the Parsl log files")
 @click.option("--trunkfilename", default="nothing")
-@click.option("--filename", default="nothing")
 @click.option("--comment", default="nothing")
 @click.option("--nochains", default="nothing", help="Number of independent chains for convergence statistic")
 @click.option("--model", default="nothing")
-@click.option("--timeunit", default="nothing")
+@click.option("--timeresolution", default="nothing")
 @click.option("--mcmax", default="nothing", help="Last iteration")
 @click.option("--subsample", default="nothing", help="Subsampling frequency")
 @click.option("--nomothersamples", default="nothing", help="Number of samples for sampling empirically from unknownmotherdistribution")
@@ -166,10 +174,11 @@ def run_lineage_analysis(script):
 @click.option("--trickycells", default="nothing", help="Cells that need many particles to not lose them; in order of appearance in lineagetree")
 @click.option("--without", default="nothing", help="'0' only warnings, '1' basic output, '2' detailied output, '3' debugging")
 @click.option("--withwriteoutputtext", default="nothing", help="'true' if output of textfile, 'false' otherwise")
-def main(system, walltime, logdir, trunkfilename, filename, comment, nochains, model,
-         timeunit, mcmax, subsample, nomothersamples, nomotherburnin, nolevels,
-         notreeparticles, auxiliaryfoldertrunkname, useram, withcuda,
-         trickycells, without, withwriteoutputtext):
+@click.argument("input_file")
+def main(system, walltime, logdir, trunkfilename, comment, nochains, model,
+         timeresolution, mcmax, subsample, nomothersamples, nomotherburnin,
+         nolevels, notreeparticles, auxiliaryfoldertrunkname, useram, withcuda,
+         trickycells, without, withwriteoutputtext, input_file):
 
     if system == 'auto':
         if 'myriad.ucl.ac.uk' in socket.gethostname():
@@ -195,12 +204,12 @@ def main(system, walltime, logdir, trunkfilename, filename, comment, nochains, m
     Pkg.instantiate()
 
     include("{this_dir}/controlgetlineageABCdynamics.jl"); controlgetlineageABCdynamics(;
-        trunkfilename = {trunkfilename},
-        filename = {filename},
-        comment = {comment},
+        trunkfilename = {nothing_or_string(trunkfilename)},
+        filename = {nothing_or_string(input_file)},
+        comment = {nothing_or_string(comment)},
         nochains = {nochains},
-        model = {model},
-        timeunit = {timeunit},
+        model = {nothing_or_string(model)},
+        timeresolution = {timeresolution},
         MCmax = {mcmax},
         subsample = {subsample},
         nomothersamples = {nomothersamples},
