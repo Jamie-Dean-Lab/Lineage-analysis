@@ -16,6 +16,7 @@ def _read_trackmate_csv(csv_filepath: Path) -> pd.DataFrame:
 
 
 def _read_dead_cell_labels(spots: pd.DataFrame, edges: pd.DataFrame, dead_label: str) -> np.array:
+    """Read cell labels manually tagged as dead via the trackmate/mamut user interface."""
     dead_spots = spots.loc[dead_label == spots.LABEL, :]
     check_dead_spots_have_no_children(dead_spots, edges, "ID", "SPOT_SOURCE_ID")
     return dead_spots.ctc_label.unique()
@@ -63,7 +64,7 @@ def preprocess_trackmate_or_mamut_files(
     else:
         dead_ctc_labels = []
 
-    logger.info("Extracted CTC table from trackmate files")
+    logger.info("Extracted CTC table from trackmate/mamut files")
 
     preprocess_ctc_file(
         ctc_table,

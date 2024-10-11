@@ -92,7 +92,7 @@ def preprocess_btrack_file(
 
     Parameters
     ----------
-    input_btrack_filepath : Path
+    btrack_h5_filepath : Path
         Path to btrack output .h5 file.
     output_ctc_filepath : Path
         Path to save output .txt file.

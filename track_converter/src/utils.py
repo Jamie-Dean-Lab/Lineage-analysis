@@ -21,7 +21,22 @@ def _find_ctc_root(tracks: pd.DataFrame, cell_label: int) -> int:
 
 
 def discard_all_descendants(tracks: pd.DataFrame, cell_label: int) -> pd.DataFrame:
-    """Remove all descendants of the given cell_label (assumes tracks in CTC format)."""
+    """
+    Remove all descendants of the given cell_label.
+
+    Parameters
+    ----------
+    tracks : pd.DataFrame
+        Tracks in CTC format (LBEP)
+    cell_label : int
+        Cell label (L) to remove descendants of.
+
+    Returns
+    -------
+    pd.DataFrame
+        CTC format table with the cell's descendants removed.
+
+    """
     children = tracks.loc[cell_label == tracks.P, "L"]
     for child_label in children.to_numpy():
         # Remove the child label
@@ -34,10 +49,23 @@ def discard_all_descendants(tracks: pd.DataFrame, cell_label: int) -> pd.DataFra
 
 def discard_related_cells(tracks: pd.DataFrame, cell_labels: list[int]) -> pd.DataFrame:
     """
-    Discard all tracked cells that are related to the given cell labels (assumes tracks in CTC format).
+    Discard all tracked cells that are related to the given cell labels.
 
     This includes the cell itself, as well as all descendants, ancestors and siblings i.e. any cells in the tree
     connected to them.
+
+    Parameters
+    ----------
+    tracks : pd.DataFrame
+        Tracks in CTC format (LBEP)
+    cell_labels : list[int]
+        Cell labels (L) to remove all related cells for
+
+    Returns
+    -------
+    pd.DataFrame
+        CTC format table with cells removed
+
     """
     for label in cell_labels:
         if label in tracks["L"].to_numpy():

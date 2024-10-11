@@ -9,11 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def _validate_tracks_shape_dtypes(tracks: pd.DataFrame) -> None:
-    """
-    Validate the shape (number of rows / columns) and data types / ranges of columns.
-
-    This will also add a final right-censoring flag column (defaulting to all zero) if it doesn't exist.
-    """
+    """Validate the shape (number of rows / columns) and data types / ranges of columns."""
     nrows = tracks.shape[0]
     ncols = tracks.shape[1]
 
@@ -59,6 +55,8 @@ def _validate_tracks_shape_dtypes(tracks: pd.DataFrame) -> None:
         msg = "all right-censoring flags (last column) must be 0 or 1"
         logger.error(msg)
         raise ValueError(msg)
+
+    logger.info("Checking tracks shape and data types... Passed")
 
 
 def _validate_cell_begin_end_frames(tracks: pd.DataFrame) -> pd.DataFrame:
@@ -145,6 +143,7 @@ def _correct_missing_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
             parent_end = tracks.loc[tracks["L"] == parent, "E"].to_numpy()[0]
             tracks.loc[len(tracks.index)] = [max_label, parent_end + 1, parent_end, parent, 1]
 
+    logger.info("Correcting any missing daughters... Passed")
     return tracks
 
 
@@ -193,6 +192,7 @@ def _correct_late_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
         begin_min = cells_with_parents.groupby("P")["B"].transform("min")
         tracks.loc[has_parents, "B"] = begin_min
 
+    logger.info("Correcting any late daughters... Passed")
     return tracks
 
 

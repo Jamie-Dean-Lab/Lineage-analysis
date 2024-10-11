@@ -27,6 +27,7 @@ def _read_mastodon_csv(csv_filepath: Path) -> pd.DataFrame:
 
 
 def _read_dead_cell_labels(spots: pd.DataFrame, links: pd.DataFrame, dead_tagset: str, dead_tag: str) -> np.array:
+    """Read cell labels manually tagged as dead via the mastodon user interface."""
     dead_spots = spots.loc[spots[f"{dead_tagset}-{dead_tag}"] == 1, :]
     check_dead_spots_have_no_children(dead_spots, links, "ID", "Link target IDs-Source spot id")
     return dead_spots.ctc_label.unique()
@@ -63,7 +64,7 @@ def preprocess_mastodon_files(
     dead_tagset : str | None, optional
         Name of tagset for manually labelled 'dead' spots (dead_tag must also be provided)
     dead_tag : str | None, optional
-        Name of tag (inside dead_tagset) for labelled 'dead' spots (dead_tagset must also be provided).
+        Name of tag (inside dead_tagset) for manually labelled 'dead' spots (dead_tagset must also be provided).
         All tagged cells will be marked as not right-censored.
 
     """
