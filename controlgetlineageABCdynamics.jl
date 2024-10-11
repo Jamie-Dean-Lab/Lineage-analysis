@@ -9,11 +9,64 @@ include("LineageMCmodel2.jl")
 include("LineageABCmodel.jl")
 #plotlyjs()
 
-function controlgetlineageABCdynamics()
+const Maybe{T} = Union{T, Nothing}
+
+function controlgetlineageABCdynamics(;
+                                      trunkfilename::Maybe{String}=nothing,
+                                      filename::Maybe{String}=nothing,
+                                      comment::Maybe{String}=nothing,
+                                      nochains::Maybe=nothing, # number of independent chains for convergence statistic.  Must be a number convertable to `UInt64`o
+                                      model::Maybe{Integer}=nothing, # Must be set by the user! '1' for FrechWeib-model with global paramters, '2' for FrechWeib-model with clock, '3' for FrechWeib-model with rw-inheritance, '4' for FrechWeib-model with 2d rw-inheritance, '11' fr GammaExponential with global parameters, '12' for GammaExponential with clock, '13' for GammaExponential with rw-inheritance, '14' for GammaExponential with 2d rw-inheritance
+                                      timeunit::Maybe{Float64}=nothing, # for getting priors right; in relation to hours.  Must be set by users!
+                                      MCmax::Maybe{Integer}=nothing, # last iteration
+                                      subsample::Maybe{Integer}=nothing, # subsampling frequency
+                                      nomothersamples::Maybe{Integer}=nothing, # number of samples for sampling empirically from unknownmotherdistribution
+                                      nomotherburnin::Maybe{Integer}=nothing, # burnin for sampling empirically from unknownmotherdistribution
+                                      nolevels::Maybe{Integer}=nothing, # number of levels before posterior, first one is prior
+                                      notreeparticles::Maybe{UInt64}=nothing, # number of particles to estimate effect of nuisance parameters
+                                      auxiliaryfoldertrunkname::Maybe{String}=nothing, # trunkname of folder, where auxiliary files are saved, if useRAM is 'false'
+                                      useRAM::Maybe{Bool}=nothing, # 'true' for saving variables into workspace, 'false' for saving in external textfiles
+                                      withCUDA::Maybe{Bool}=nothing, # 'true' for using GPU, 'false' for without using GPU
+                                      trickycells::Maybe{Vector{<:Integer}}=nothing, # cells that need many particles to not lose them; in order of appearance in lineagetree
+                                      without::Maybe{Int64}=nothing, # '0' only warnings, '1' basic output, '2' detailied output, '3' debugging
+                                      withwriteoutputtext::Maybe{Bool}=nothing, # 'true' if output of textfile, 'false' otherwise
+                                      )
+
+    # All keyword arguments above are initialised as `nothing` to make it easier
+    # to call this from an external driver script and not having to keep in-sync
+    # default values of arguments in multiple places.
+    trunkfilename = something(trunkfilename, "")
+    filename = something(filename, "2024-04-08_13-03-47_Simulation2_cells=3,model=2,pars=[ +4.52000e+02 +5.00000e+00 +3.00000e+03 +2.00000e+00 +5.00000e-01 +2.88000e+02 +0.")
+    comment = something(comment, "for_m2extrasmalltestdata")
+    auxiliaryfoldertrunkname::String="Auxfiles"
+    useRAM = something(useRAM, true)
+    withCUDA = something(withCUDA, CUDA.functional())
+    without = something(without, 1)
+    withwriteoutputtext = something(withwriteoutputtext, true)
+
+    if isnothing(model)
+        error("`model` must be set explicitly")
+    end
+    if isnothing(timeunit)
+        error("`timeunit` must be set explicitly")
+    end
+    # TODO: change the type of `model` to a custom datatype.
+    model = UInt64(model)
+
+    # For some input arguments we allow any `Integer` type, but we want to
+    # convert them to `UInt64` for the rest of the work.
+    nochains = UInt64(something(nochains, UInt64(3)))
+    MCmax = UInt64(something(MCmax, UInt64(50)))
+    subsample = UInt64(something(subsample, UInt64(0)))
+    nomothersamples = UInt64(something(nomothersamples, UInt64(2000)))
+    nomotherburnin = UInt64(something(nomotherburnin, UInt64(1)))
+    nolevels = UInt64(something(nolevels, UInt64(0)))
+    notreeparticles = UInt64(something(notreeparticles, UInt64(2000)))
+    trickycells = UInt64.(something(trickycells, UInt64[]))
+
     t1::DateTime = DateTime(now())                  # for timer
     @printf( " Info - controlgetlineageABCdynamics: Start now %1.3f sec\n", (DateTime(now())-t1)/Millisecond(1000) ); flush(stdout)
 
-    trunkfilename::String = "";     filename::String = "2024-04-08_13-03-47_Simulation2_cells=3,model=2,pars=[ +4.52000e+02 +5.00000e+00 +3.00000e+03 +2.00000e+00 +5.00000e-01 +2.88000e+02 +0."; comment::String = "for_m2extrasmalltestdata"
     #trunkfilename::String = "";     filename::String = ""; comment::String = "for_sim-data"    # for simulation
     if( !isempty(filename) )                        # read existing file, if filename is meaningful
         (fullfilename,lineagedata) = readlineagefile(trunkfilename,filename)
@@ -53,9 +106,6 @@ function controlgetlineageABCdynamics()
     nounknownmothercells::UInt64 = sum(mylineagetree.datawd[:,4].<=0)   # number of cells with unknown mother
     @printf( " Info - controlgetlineageABCdynamics: Number of cells in dataset: %d, number of generations: %d (%d times), cells with unknown mother: %d.\n", Int64(nocells), Int64(maxgen), sum(nogenpercell.==maxgen), nounknownmothercells ); flush(stdout)
     
-    nochains::UInt64 = UInt64(2)                    # number of independent chains for convergence statistic
-    model::UInt64 = UInt64(11)                       # '1' for FrechWeib-model with global paramters, '2' for FrechWeib-model with clock, '3' for FrechWeib-model with rw-inheritance, '4' for FrechWeib-model with 2d rw-inheritance, '11' fr GammaExponential with global parameters, '12' for GammaExponential with clock, '13' for GammaExponential with rw-inheritance, '14' for GammaExponential with 2d rw-inheritance
-    timeunit::Float64 = 4.0/60                      # for getting priors right; in relation to hours
     if( model==1 )                                  # simple FrechetWeibull model
         comment = @sprintf( "simple-model_%s", comment )
     elseif( model==2 )                              # clock-modulated FrechetWeibull model
@@ -78,18 +128,7 @@ function controlgetlineageABCdynamics()
         comment = @sprintf( "%d-model_%s", model, comment )
     end     # end of distinguishing models
     timestamp::DateTime = DateTime(now())           # timestamp for all independent chains
-    MCmax::UInt64 = UInt64(3E1)                     # last iteration
-    subsample::UInt64 = UInt64(2)                  # subsampling frequency
-    nomothersamples::UInt64 = UInt64(3e2)           # number of samples for sampling empirically from unknownmotherdistribution
-    nomotherburnin::UInt64 = UInt64(5)              # burnin for sampling empirically from unknownmotherdistribution
-    nolevels::UInt64 = UInt64(3)                   # number of levels before posterior, first one is prior
-    notreeparticles::UInt64 = UInt64(1e2)           # number of particles to estimate effect of nuisance parameters
-    auxiliaryfoldertrunkname::String = "Auxfiles"   # trunkname of folder, where auxiliary files are saved, if useRAM is 'false'
-    useRAM::Bool = true                             # 'true' for saving variables into workspace, 'false' for saving in external textfiles
-    withCUDA::Bool = true                           # 'true' for using GPU, 'false' for without using GPU
-    trickycells::Array{UInt64,1} = UInt64.([])      # cells that need many particles to not lose them; in order of appearance in lineagetree
-    without::Int64 = 1                              # '0' only warnings, '1' basic output, '2' detailied output, '3' debugging
-    withwriteoutputtext::Bool = true                # 'true' if output of textfile, 'false' otherwise
+
     (noups::UInt64, noglobpars::UInt64,nohide::UInt64,nolocpars::UInt64) = getMCmodelnoups2( model, nocells )
     unknownmothersamples::Unknownmotherequilibriumsamples = Unknownmotherequilibriumsamples(0.0,nomothersamples,nomotherburnin,zeros(nomothersamples,nohide),zeros(nomothersamples,nolocpars),zeros(nomothersamples,2),zeros(Int64,nomothersamples),zeros(nomothersamples))   # initialise
     state_init2::Lineagestate2 = Lineagestate2( NaN*ones(noglobpars), NaN*ones(nocells,nohide), NaN*ones(nocells,nolocpars), NaN*ones(nocells,2), [unknownmothersamples] )  # will get set randomly for each chain, if it contains NaN

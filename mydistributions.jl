@@ -8,7 +8,7 @@ using Roots                     # for using find_zeros
 struct Fulldistr
     typename::String
     typeno::UInt
-    pars::Union{Array{Float64,1},MArray}
+    pars::Union{Array{Float64,1},Array{Int64,1},Array{UInt64,1},MArray}
     get_logdistr::Function
     get_loginvcdf::Function
     get_sample::Function
@@ -32,11 +32,11 @@ function logexponential_distr( par::Union{Array{Float64,1},MArray}, data::Union{
     # log of exponential distribution
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (minimum(data)<0) )  # pathological
+    if( (minimum(par)<0) || (minimum(data)<0) )  # pathological
         values .= fill( -Inf,size(data,1) )
     else
         values .= -data
-        values ./= par[1] 
+        values ./= par[1]
         values .-= log(par[1])
     end     # end if pathological
     return values
@@ -44,11 +44,11 @@ end   # end of logexponential_distr function
 function logexponential_distr!( par::Union{Array{Float64,1},MArray}, data::Union{Array{Float64,1},MArray}, values::Union{Array{Float64,1},MArray} )::Nothing
     # log of exponential distribution
 
-    if( (minimum(par)<0) | (minimum(data)<0) )  # pathological
+    if( (minimum(par)<0) || (minimum(data)<0) )  # pathological
         values .= fill( -Inf,size(data,1) )
     else
         values .= -data
-        values ./= par[1] 
+        values ./= par[1]
         values .-= log(par[1])
     end     # end if pathological
     return nothing
@@ -57,7 +57,7 @@ function loginvexponential_cdf( par::Union{Array{Float64,1},MArray}, data::Union
     # log( 1-cdf of exponential )
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (minimum(data)<0) )
+    if( (minimum(par)<0) || (minimum(data)<0) )
         values .= fill( 0.0, size(data,1) )  # log(1)
     else
         values .= -data./par[1]
@@ -67,7 +67,7 @@ end     # end of loginvexponential_cdf function
 function loginvexponential_cdf!( par::Union{Array{Float64,1},MArray}, data::Union{Array{Float64,1},MArray}, values::Union{Array{Float64,1},MArray} )::Nothing
     # log( 1-cdf of exponential )
 
-    if( (minimum(par)<0) | (minimum(data)<0) )
+    if( (minimum(par)<0) || (minimum(data)<0) )
         values .= fill( 0.0, size(data,1) )  # log(1)
     else
         values .= -data
@@ -80,11 +80,11 @@ function logGamma_distr( par::Union{Array{Float64,1},MArray}, data::Union{Array{
     # first parameter is scale, second is shape
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( any(par.<0) | (minimum(data)<0) )
+    if( any(par.<0) || (minimum(data)<0) )
         values .= fill( -Inf,size(data,1) )
     else
         #values .= ((log.(data)).*(par[2]-1)) .+ (-data./par[1]) .- (log(par[1])*par[2]) .- logabsgamma(par[2])[1]
-        values .= ((log.(data)).*(par[2]-1)) 
+        values .= ((log.(data)).*(par[2]-1))
         values .+= (-data./par[1])
         values .-= (log(par[1])*par[2])
         values .-= logabsgamma(par[2])[1]
@@ -95,10 +95,10 @@ function logGamma_distr!( par::Union{Array{Float64,1},MArray}, data::Union{Array
     # log of Gamma distribution
     # first parameter is scale, second is shape
 
-    if( any(par.<0) | (minimum(data)<0) )
+    if( any(par.<0) || (minimum(data)<0) )
         values .= fill( -Inf,size(data,1) )
     else
-        values .= ((log.(data)).*(par[2]-1)) 
+        values .= ((log.(data)).*(par[2]-1))
         values .+= (-data./par[1])
         values .-= (log(par[1])*par[2])
         values .-= logabsgamma(par[2])[1]
@@ -109,7 +109,7 @@ function loginvGamma_cdf( par::Union{Array{Float64,1},MArray}, data::Union{Array
     # log(1-cdf of Gamma)
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<=0) | (minimum(data)<0) )
+    if( (minimum(par)<=0) || (minimum(data)<0) )
         values .= fill( 0.0,size(data,1) )   # log(1)
     else
         for j_ind in eachindex(values)
@@ -121,7 +121,7 @@ end     # end of loginvGamma_cdf function
 function loginvGamma_cdf!( par::Union{Array{Float64,1},MArray}, data::Union{Array{Float64,1},MArray}, values::Union{Array{Float64,1},MArray} )::Nothing
     # log(1-cdf of Gamma)
 
-    if( (minimum(par)<=0) | (minimum(data)<0) )
+    if( (minimum(par)<=0) || (minimum(data)<0) )
         values .= fill( 0.0,size(data,1) )   # log(1)
     else
         for j_ind in eachindex(values)
@@ -135,7 +135,7 @@ function logGammaExponential_distr( par::Union{Array{Float64,1},MArray}, data::U
     # first parameter is scale-parameter of Gamma, second is shape-parameter of Gamma, third is probability-weight of Gamma
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (par[3]>1.0) | (minimum(data)<0) )  # ie pathological
+    if( (minimum(par)<0) || (par[3]>1.0) || (minimum(data)<0) )  # ie pathological
         values .= fill( -Inf,size(data,1) )
     else                                        # ie non-pathological
         p_loc::Float64 = par[3]^(1/par[2])
@@ -149,7 +149,7 @@ function logGammaExponential_distr!( par::Union{Array{Float64,1},MArray}, data::
     # log of distribution corresponding to 1-(1-F)(1-W)
     # first parameter is scale-parameter of Gamma, second is shape-parameter of Gamma, third is probability-weight of Gamma
 
-    if( (minimum(par)<0) | (par[3]>1.0) | (minimum(data)<0) )  # ie pathological
+    if( (minimum(par)<0) || (par[3]>1.0) || (minimum(data)<0) )  # ie pathological
         values .= fill( -Inf,size(data,1) )
     else                                        # ie non-pathological
         p_loc::Float64 = par[3]^(1/par[2])
@@ -169,7 +169,7 @@ function logGammaExponential_distr( par::Union{Array{Float64,1},MArray}, data::U
         return logGammaExponential_distr( par, data )
     end     # end if unknown fate
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (par[3]>1.0) | (minimum(data)<0) )  # ie pathological
+    if( (minimum(par)<0) || (par[3]>1.0) || (minimum(data)<0) )  # ie pathological
         values .= fill( -Inf,size(data,1) )
     else                                        # ie non-pathological
         if( fate==1 )                           # death
@@ -194,7 +194,7 @@ function logGammaExponential_distr!( par::Union{Array{Float64,1},MArray}, data::
         return nothing
     end     # end if unknown fate
     
-    if( (minimum(par)<0) | (par[3]>1.0) | (minimum(data)<0) )  # ie pathological
+    if( (minimum(par)<0) || (par[3]>1.0) || (minimum(data)<0) )  # ie pathological
         values .= fill( -Inf,size(data,1) )
     else                                        # ie non-pathological
         if( fate==1 )                           # death
@@ -216,7 +216,7 @@ function loginvGammaExponential_cdf( par::Union{Array{Float64,1},MArray}, data::
     # first parameter is scale-parameter of Gamma, second is shape-parameter of Gamma, third is probability-weight of Gamma
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (par[3]>1.0) | (minimum(data)<0) )      # ie pathological
+    if( (minimum(par)<0) || (par[3]>1.0) || (minimum(data)<0) )      # ie pathological
         values .= fill( 0.0,size(data,1) )          # log(1)
     else                                            # ie non-pathological
         p_loc::Float64 = par[3]^(1/par[2])
@@ -229,7 +229,7 @@ function loginvGammaExponential_cdf!( par::Union{Array{Float64,1},MArray}, data:
     # log(1-mycdf), where mycdf = 1-(1-F)(1-W)
     # first parameter is scale-parameter of Gamma, second is shape-parameter of Gamma, third is probability-weight of Gamma
 
-    if( (minimum(par)<0) | (par[3]>1.0) | (minimum(data)<0) )      # ie pathological
+    if( (minimum(par)<0) || (par[3]>1.0) || (minimum(data)<0) )      # ie pathological
         values .= fill( 0.0,size(data,1) )          # log(1)
     else                                            # ie non-pathological
         p_loc::Float64 = par[3]^(1/par[2])
@@ -247,7 +247,7 @@ function loginvGammaExponential_cdf( par::Union{Array{Float64,1},MArray}, data::
     end     # end if unknown fate
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (par[3]>1.0) | (minimum(data)<0) )      # ie pathological
+    if( (minimum(par)<0) || (par[3]>1.0) || (minimum(data)<0) )      # ie pathological
         values .= fill( 0.0,size(data,1) )          # log(1)
     else                                            # ie non-pathological
         # get division-only accumulated distribution:
@@ -269,7 +269,7 @@ function loginvGammaExponential_cdf!( par::Union{Array{Float64,1},MArray}, data:
         return nothing
     end     # end if unknown fate
 
-    if( (minimum(par)<0) | (par[3]>1.0) | (minimum(data)<0) )      # ie pathological
+    if( (minimum(par)<0) || (par[3]>1.0) || (minimum(data)<0) )      # ie pathological
         values .= fill( 0.0,size(data,1) )          # log(1)
     else                                            # ie non-pathological
         if( fate==1 )                               # death; subtract divisions-cdf from full cdf
@@ -295,7 +295,7 @@ function logwindowGammaExponential_distr( par::Union{Array{Float64,1},MArray}, d
     # GammaExponential(par[1:3])*rectangle(par[4:5])
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (par[3]>1.0) | (minimum(data)<0) | (par[5]<par[4]) )  # ie pathological
+    if( (minimum(par)<0) || (par[3]>1.0) || (minimum(data)<0) || (par[5]<par[4]) )  # ie pathological
         values .= fill( -Inf,size(data,1) )
     else                                        # ie non-pathological
         values .= fill( -Inf,size(data,1) )     # initialise outside of support; change, if inside after all
@@ -317,7 +317,7 @@ function logwindowGammaExponential_distr( par::Union{Array{Float64,1},MArray}, d
     # GammaExponential(par[1:3])*rectangle(par[4:5])
 
     # consider trivial cases:
-    if( (par[4]==0.0) & (par[5]==Inf) )                             # full support
+    if( (par[4]==0.0) && (par[5]==Inf) )                            # full support
         local lognorm::Float64                                      # declare
         if( fate==1 )                                               # death
             lognorm = getlogdeathprob_GammaExp( par[1:3] )          # log of death probability
@@ -334,7 +334,7 @@ function logwindowGammaExponential_distr( par::Union{Array{Float64,1},MArray}, d
     end     # end if full support or unknown fate
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (par[3]>1.0) | (minimum(data)<0) | (par[5]<par[4]) )  # ie pathological
+    if( (minimum(par)<0) || (par[3]>1.0) || (minimum(data)<0) || (par[5]<par[4]) )  # ie pathological
         values .= fill( -Inf,size(data,1) )
     else                                        # ie non-pathological
         values .= fill( -Inf,size(data,1) )     # initialise outside of support; change, if inside after all
@@ -359,7 +359,7 @@ function loginvwindowGammaExponential_cdf( par::Union{Array{Float64,1},MArray}, 
     # same as loginvGammaExponential_cdf but only accumulated over one fate (non-conditional)
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (par[3]>1.0) | (minimum(data)<0) )      # ie pathological
+    if( (minimum(par)<0) || (par[3]>1.0) || (minimum(data)<0) )      # ie pathological
         values .= fill( 0.0,size(data,1) )          # log(1)
     else                                            # ie non-pathological
         values[data.>par[5]] .= -Inf;    values[data.<par[4]] .= 0.0
@@ -377,7 +377,7 @@ end     # end of loginvwindowGammaExponential_cdf function
 function loginvwindowGammaExponential_cdf!( par::Union{Array{Float64,1},MArray}, data::Union{Array{Float64,1},MArray}, values::Union{Array{Float64,1},MArray} )::Nothing
     # same as loginvGammaExponential_cdf but only accumulated over one fate (non-conditional)
 
-    if( (minimum(par)<0) | (par[3]>1.0) | (minimum(data)<0) )      # ie pathological
+    if( (minimum(par)<0) || (par[3]>1.0) || (minimum(data)<0) )      # ie pathological
         values .= fill( 0.0,size(data,1) )          # log(1)
     else                                            # ie non-pathological
         values[data.>par[5]] .= -Inf;    values[data.<par[4]] .= 0.0
@@ -396,7 +396,7 @@ function logWeibull_distr( par::Union{Array{Float64,1},MArray}, data::Union{Arra
     # log of Weibull distribution
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (minimum(data)<0) )
+    if( (minimum(par)<0) || (minimum(data)<0) )
         values .= fill( -Inf,size(data,1) )
     else
         if( par[2]!=1 ) # not exponential
@@ -414,7 +414,7 @@ end     # end of logWeibull_distr function
 function logWeibull_distr!( par::Union{Array{Float64,1},MArray}, data::Union{Array{Float64,1},MArray}, values::Union{Array{Float64,1},MArray} )::Nothing
     # log of Weibull distribution
 
-    if( (minimum(par)<0) | (minimum(data)<0) )
+    if( (minimum(par)<0) || (minimum(data)<0) )
         values .= fill( -Inf,size(data,1) )
     else
         if( par[2]!=1 ) # not exponential
@@ -433,7 +433,7 @@ function loginvWeibull_cdf( par::Union{Array{Float64,1},MArray}, data::Union{Arr
     # log(1-cdf of Weibull)
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (minimum(data)<0) )
+    if( (minimum(par)<0) || (minimum(data)<0) )
         values .= fill( 0.0,size(data,1) )   # log(1)
     else
         #values .= -((data./par[1]).^par[2])
@@ -445,7 +445,7 @@ end     # end of loginvWeibull_cdf function
 function loginvWeibull_cdf!( par::Union{Array{Float64,1},MArray}, data::Union{Array{Float64,1},MArray}, values::Union{Array{Float64,1},MArray} )::Nothing
     # log(1-cdf of Weibull)
 
-    if( (minimum(par)<0) | (minimum(data)<0) )
+    if( (minimum(par)<0) || (minimum(data)<0) )
         values .= fill( 0.0,size(data,1) )   # log(1)
     else
         #values .= -((data./par[1]).^par[2])
@@ -458,7 +458,7 @@ function logFrechet_distr( par::Union{Array{Float64,1},MArray}, data::Union{Arra
     # log of Frechet distribution
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (minimum(data)<0) )
+    if( (minimum(par)<0) || (minimum(data)<0) )
         values .= fill( -Inf,size(data,1) )
     else
         #values .= -((data./par[1]).^(-par[2])) + (-par[2]-1)*log.(data./par[1]) .+ log(par[2]/par[1])
@@ -472,7 +472,7 @@ end     # end of logFrechet_distr function
 function logFrechet_distr!( par::Union{Array{Float64,1},MArray}, data::Union{Array{Float64,1},MArray}, values::Union{Array{Float64,1},MArray} )::Nothing
     # log of Frechet distribution
 
-    if( (minimum(par)<0) | (minimum(data)<0) )
+    if( (minimum(par)<0) || (minimum(data)<0) )
         values .= fill( -Inf,size(data,1) )
     else
         #values .= -((data./par[1]).^(-par[2])) + (-par[2]-1)*log.(data./par[1]) .+ log(par[2]/par[1])
@@ -487,7 +487,7 @@ function logFrechet_distr( par::Union{Array{Float64,1},MArray}, data::Union{Arra
     # log of Frechet distribution at data and fate (unconditioned)
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (minimum(data)<0) | (fate==1) )  # pathological parameters/values or death
+    if( (minimum(par)<0) || (minimum(data)<0) || (fate==1) )  # pathological parameters/values or death
         values .= fill( -Inf,size(data,1) )
     else
         #values .= -((data./par[1]).^(-par[2])) + (-par[2]-1)*log.(data./par[1]) .+ log(par[2]/par[1])
@@ -501,7 +501,7 @@ end     # end of logFrechet_distr function
 function logFrechet_distr!( par::Union{Array{Float64,1},MArray}, data::Union{Array{Float64,1},MArray}, fate::Int64, values::Union{Array{Float64,1},MArray} )::Nothing
     # log of Frechet distribution at data and fate (unconditioned)
 
-    if( (minimum(par)<0) | (minimum(data)<0) | (fate==1) )  # pathological parameters/values or death
+    if( (minimum(par)<0) || (minimum(data)<0) || (fate==1) )  # pathological parameters/values or death
         values .= fill( -Inf,size(data,1) )
     else
         v#values .= -((data./par[1]).^(-par[2])) + (-par[2]-1)*log.(data./par[1]) .+ log(par[2]/par[1])
@@ -516,7 +516,7 @@ function loginvFrechet_cdf( par::Union{Array{Float64,1},MArray}, data::Union{Arr
     # log(1-cdf of Frechet)
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (minimum(data)<0) )
+    if( (minimum(par)<0) || (minimum(data)<0) )
         values .= fill( 0.0,size(data,1) )   # log(1)
     else
         for j_data = axes(data,1)
@@ -528,7 +528,7 @@ end     # end of loginvFrechet_cdf function
 function loginvFrechet_cdf!( par::Union{Array{Float64,1},MArray}, data::Union{Array{Float64,1},MArray}, values::Union{Array{Float64,1},MArray} )::Nothing
     # log(1-cdf of Frechet)
 
-    if( (minimum(par)<0) | (minimum(data)<0) )
+    if( (minimum(par)<0) || (minimum(data)<0) )
         values .= fill( 0.0,size(data,1) )   # log(1)
     else
         for j_data = axes(data,1)
@@ -542,11 +542,11 @@ function logwindowFrechet_distr( par::Union{Array{Float64,1},MArray}, data::Unio
     # Frechet(par[1:2])*rectangle(par[3:4])
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (minimum(data)<0) | (par[4]<par[3]) )  # ie pathological
+    if( (minimum(par)<0) || (minimum(data)<0) || (par[4]<par[3]) )  # ie pathological
         values .= fill( -Inf,size(data,1) )
     else                                        # ie non-pathological
         values .= fill( -Inf, length(data) )     # initialise outside of support; change, if inside after all
-        select_here = ( (data.>=par[3]) .& (data.<=par[4]) )   # data inside of support
+        select_here = ( (data.>=par[3]) .&& (data.<=par[4]) )   # data inside of support
         if( any(select_here) )
             values[select_here] .= logFrechet_distr( par[1:2],data[select_here] )
             values[select_here] .-= logsubexp( loginvFrechet_cdf(par[1:2],[par[3]])[1], loginvFrechet_cdf(par[1:2],[par[4]])[1] )   # normalise within its support
@@ -559,11 +559,11 @@ function logwindowFrechet_distr( par::Union{Array{Float64,1},MArray}, data::Unio
     # Frechet(par[1:2])*rectangle(par[3:4])
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (minimum(data)<0) | (par[4]<par[3]) | (fate==1) )  # ie pathological or death
-        values .= fill( -Inf,size(data,1) )
+    if( (minimum(par)<0) || (minimum(data)<0) || (par[4]<par[3]) || (fate==1) )  # ie pathological or death
+        values .= fill( -Inf, size(data,1) )
     else                                        # ie non-pathological
-        values .= fill( -Inf, length(data) )     # initialise outside of support; change, if inside after all
-        select_here = ( (data.>=par[3]) .& (data.<=par[4]) )   # data inside of support
+        values .= fill( -Inf, length(data) )    # initialise outside of support; change, if inside after all
+        select_here = ( (data.>=par[3]) .&& (data.<=par[4]) )   # data inside of support
         if( any(select_here) )
             values[select_here] .= logFrechet_distr( par[1:2],data[select_here] )
             values[select_here] .-= logsubexp( loginvFrechet_cdf(par[1:2],[par[3]])[1], loginvFrechet_cdf(par[1:2],[par[4]])[1] )   # normalise within its support
@@ -576,7 +576,7 @@ function logFrechetWeibull_distr( par::Union{Array{Float64,1},MArray}, data::Uni
     # first two parameters are for Frechet, next two for Weibull
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (minimum(data)<0) )  # ie pathological
+    if( (minimum(par)<0) || (minimum(data)<0) )  # ie pathological
         values .= fill( -Inf,size(data,1) )
     else                                        # ie non-pathological
         values_Frechet::Union{Array{Float64,1},MArray} = loginvWeibull_cdf( par[3:4],data ) .+ logFrechet_distr( par[1:2],data )
@@ -589,7 +589,7 @@ function logFrechetWeibull_distr!( par::Union{Array{Float64,1},MArray}, data::Un
     # log of distribution corresponding to 1-(1-F)(1-W) [same as logexponentialFrechetWeibull_distr for par[1]==Inf]
     # first two parameters are for Frechet, next two for Weibull
 
-    if( (minimum(par)<0) | (minimum(data)<0) )  # ie pathological
+    if( (minimum(par)<0) || (minimum(data)<0) )  # ie pathological
         values .= fill( -Inf,size(data,1) )
     else                                        # ie non-pathological
         loginvWeibull_cdf!( par[3:4],data, values_Frechet ); logFrechet_distr!( par[1:2],data, values ); values_Frechet .+= values
@@ -609,7 +609,7 @@ function logFrechetWeibull_distr( par::Union{Array{Float64,1},MArray}, data::Uni
         return logFrechetWeibull_distr( par, data )
     end     # end if unknown fate
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (minimum(data)<0) )  # ie pathological
+    if( (minimum(par)<0) || (minimum(data)<0) )  # ie pathological
         values .= fill( -Inf,size(data,1) )
     else                                        # ie non-pathological
         if( fate==1 )                           # death
@@ -630,7 +630,7 @@ function logFrechetWeibull_distr!( par::Union{Array{Float64,1},MArray}, data::Un
         logFrechetWeibull_distr!( par, data, values,values_Frechet,values_Weibull )
         return nothing
     end     # end if unknown fate
-    if( (minimum(par)<0) | (minimum(data)<0) )  # ie pathological
+    if( (minimum(par)<0) || (minimum(data)<0) )  # ie pathological
         values .= fill( -Inf,size(data,1) )
     else                                        # ie non-pathological
         if( fate==1 )                           # death
@@ -647,7 +647,7 @@ function loginvFrechetWeibull_cdf( par::Union{Array{Float64,1},MArray}, data::Un
     # log(1-mycdf), where mycdf = 1-(1-F)(1-W)  [same as loginvexponentialFrechetWeibull_cdf for par[1]==Inf]
     # first two parameters are for Frechet, next two for Weibull
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (minimum(data)<0) )      # ie pathological
+    if( (minimum(par)<0) || (minimum(data)<0) )      # ie pathological
         values .= fill( 0.0,size(data,1) )          # log(1)
     else                                            # ie non-pathological
         values .= loginvFrechet_cdf( par[1:2],data ) .+ loginvWeibull_cdf( par[3:4],data )
@@ -658,7 +658,7 @@ function loginvFrechetWeibull_cdf!( par::Union{Array{Float64,1},MArray} , data::
     # log(1-mycdf), where mycdf = 1-(1-F)(1-W)  [same as loginvexponentialFrechetWeibull_cdf for par[1]==Inf]
     # first two parameters are for Frechet, next two for Weibull
     
-    if( (minimum(par)<0) | (minimum(data)<0) )      # ie pathological
+    if( (minimum(par)<0) || (minimum(data)<0) )      # ie pathological
         values .= fill( 0.0,size(data,1) )          # log(1)
     else                                            # ie non-pathological
         loginvFrechet_cdf!( par[1:2],data, values )
@@ -672,11 +672,11 @@ function logwindowFrechetWeibull_distr( par::Union{Array{Float64,1},MArray}, dat
     # FrechetWeibull(par[1:4])*rectangle(par[5:6])
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (minimum(data)<0) | (par[6]<par[5]) )  # ie pathological
+    if( (minimum(par)<0) || (minimum(data)<0) || (par[6]<par[5]) )  # ie pathological
         values .= fill( -Inf,size(data,1) )
     else                                        # ie non-pathological
         values .= fill( -Inf, length(data) )    # initialise outside of support; change, if inside after all
-        select_here = ( (data.>=par[5]) .& (data.<=par[6]) )   # data inside of support
+        select_here = ( (data.>=par[5]) .&& (data.<=par[6]) )   # data inside of support
         if( any(select_here) )
             values_Frechet = loginvWeibull_cdf( par[3:4],data[select_here] ) .+ logFrechet_distr( par[1:2],data[select_here] )
             values_Weibull = loginvFrechet_cdf( par[1:2],data[select_here] ) .+ logWeibull_distr( par[3:4],data[select_here] )
@@ -690,7 +690,7 @@ function logwindowFrechetWeibull_distr( par::Union{Array{Float64,1},MArray}, dat
     # logFrechetWeibull_distr within boundaries
     # FrechetWeibull(par[1:4])*rectangle(par[5:6])
 
-    if( (par[5]==0.0) & (par[6]==Inf) )                             # full support
+    if( (par[5]==0.0) && (par[6]==Inf) )                            # full support
         local lognorm::Float64
         if( fate==1 )                                               # death
             lognorm = getlogdeathprob_FrechetWeibull_numapprox( par[1:4] )              # log of death probability
@@ -706,11 +706,11 @@ function logwindowFrechetWeibull_distr( par::Union{Array{Float64,1},MArray}, dat
         return logwindowFrechetWeibull_distr( par, data )
     end     # end if full support or unknown fate
     values::Union{Array{Float64,1},MArray} = similar(data)          # initialise
-    if( (minimum(par)<0) | (minimum(data)<0) | (par[6]<par[5]) )    # ie pathological
+    if( (minimum(par)<0) || (minimum(data)<0) || (par[6]<par[5]) )    # ie pathological
         values .= fill( -Inf,size(data,1) )
     else                                                            # ie non-pathological
         values .= fill( -Inf, length(data) )                        # initialise outside of support; change, if inside after all
-        select_here = ( (data.>=par[5]) .& (data.<=par[6]) )        # data inside of support
+        select_here = ( (data.>=par[5]) .&& (data.<=par[6]) )       # data inside of support
         if( any(select_here) )                                      # otherwise all remain -Inf
             ybounds = loginvFrechetWeibull_cdf( par[1:4], par[5:6] ); nopos = max(2,Int64(ceil(1E4*exp(logsubexp(ybounds[1],ybounds[2]))))) # number of positions within interval
             lambda_range = log.(range( 0.0, 1.0, nopos ))           # weighting for convex combination
@@ -728,7 +728,7 @@ function logwindowFrechetWeibull_distr( par::Union{Array{Float64,1},MArray}, dat
                 @printf( " ]. Sort now.\n" )
                 sort!(ypos)
             end     # end if not ordered
-            if( (ypos[end]>ybounds[1]) | (ypos[1]<ybounds[2]) )     # note reverse order of ybounds
+            if( (ypos[end]>ybounds[1]) || (ypos[1]<ybounds[2]) )     # note reverse order of ybounds
                 @printf( " Warning - logwindowFrechetWeibull_distr: Ended up outside original bounds ypos = [%+1.5e..%+1.5e] vs ybounds = [%+1.5e,%+1.5e] (diff=[%+1.5e,%+1.5e]).\n", ypos[1],ypos[end], ybounds[2],ybounds[1], ypos[1]-ybounds[2], ypos[end]-ybounds[1] );  flush(stdout)
                 ypos = ypos[ybounds[2]<=ypos<=ybounds[1]]           # only keep those inside
                 if( isempty(ypos) )
@@ -764,11 +764,11 @@ function loginvwindowFrechetWeibull_cdf( par::Union{Array{Float64,1},MArray}, da
     # FrechetWeibull(par[1:4])*rectangle(par[5:6])
     
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (minimum(data)<0) | (par[6]<par[5]) )  # ie pathological
+    if( (minimum(par)<0) || (minimum(data)<0) || (par[6]<par[5]) )  # ie pathological
         values .= fill( 0.0,size(data,1) )      # log(1)
     else                                        # ie non-pathological
         values[data.>par[6]] .= -Inf#;    values[data.<par[5]] .= 0.0
-        select_here = ( (data.>=par[5]) .& (data.<=par[6]) )   # data inside of support
+        select_here = ( (data.>=par[5]) .&& (data.<=par[6]) )   # data inside of support
         if( any(select_here) )                  # otherwise all remain zero
             values[select_here] .= logsubexp.( loginvFrechetWeibull_cdf(par[1:4],[par[5]])[1], loginvFrechetWeibull_cdf(par[1:4],data[select_here]) )
             values[select_here] .-= logsubexp( loginvFrechetWeibull_cdf(par[1:4],[par[5]])[1], loginvFrechetWeibull_cdf(par[1:4],[par[6]])[1] ) # normalise within its support
@@ -781,11 +781,11 @@ function loginvwindowFrechetWeibull_cdf!( par::Union{Array{Float64,1},MArray}, d
     # log(1-cdf(windowFrechetWeibull))
     # FrechetWeibull(par[1:4])*rectangle(par[5:6])
     
-    if( (minimum(par)<0) | (minimum(data)<0) | (par[6]<par[5]) )  # ie pathological
+    if( (minimum(par)<0) || (minimum(data)<0) || (par[6]<par[5]) )  # ie pathological
         values .= fill( 0.0,size(data,1) )      # log(1)
     else                                        # ie non-pathological
         values[data.>par[6]] .= -Inf;   values[data.<par[5]] .= 0.0
-        select_here = ( (data.>=par[5]) .& (data.<=par[6]) )   # data inside of support
+        select_here = ( (data.>=par[5]) .&& (data.<=par[6]) )   # data inside of support
         if( any(select_here) )                  # otherwise all remain zero
             values[select_here] .= logsubexp.( loginvFrechetWeibull_cdf(par[1:4],[par[5]])[1], loginvFrechetWeibull_cdf(par[1:4],data[select_here]) )
             values[select_here] .-= logsubexp( loginvFrechetWeibull_cdf(par[1:4],[par[5]])[1], loginvFrechetWeibull_cdf(par[1:4],[par[6]])[1] ) # normalise within its support
@@ -799,7 +799,7 @@ function logexponentialFrechetWeibull_distr( par::Union{Array{Float64,1},MArray}
     # first parameter is for exponential, next two for Frechet, next two for Weibull
     
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (minimum(data)<0) )
+    if( (minimum(par)<0) || (minimum(data)<0) )
         values = fill( -Inf,size(data,1) )
     else
         if( !(par[1]==Inf) )    # non-trivial exponential
@@ -825,7 +825,7 @@ function logexponentialFrechetWeibull_distr( par::Union{Array{Float64,1},MArray}
     if( fate==-1 )      # unknown fate
         return logexponentialFrechetWeibull_distr( par, data )
     end     # end if unknown fate
-    if( (minimum(par)<0) | (minimum(data)<0) )
+    if( (minimum(par)<0) || (minimum(data)<0) )
         values .= fill( -Inf,size(data,1) )
     else
         if( fate==1 )       # death
@@ -856,7 +856,7 @@ function loginvexponentialFrechetWeibull_cdf( par::Union{Array{Float64,1},MArray
     # first parameter is for exponential, next two for Frechet, next two for Weibull
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (minimum(par)<0) | (minimum(data)<0) )
+    if( (minimum(par)<0) || (minimum(data)<0) )
         values .= fill( 0.0,size(data,1) )   # log(1)
     else
         if( !(par[1]==Inf) )    # ie non-trivial exponential
@@ -871,7 +871,7 @@ function loginvexponentialFrechetWeibull_cdf!( par::Union{Array{Float64,1},MArra
     # log(1-mycdf), where mycdf = 1-(1-exponential)(1-F)(1-W)
     # first parameter is for exponential, next two for Frechet, next two for Weibull
 
-    if( (minimum(par)<0) | (minimum(data)<0) )
+    if( (minimum(par)<0) || (minimum(data)<0) )
         values .= fill( 0.0,size(data,1) )   # log(1)
     else
         if( !(par[1]==Inf) )    # ie non-trivial exponential
@@ -915,7 +915,7 @@ function logmvGaussian_distr( par::Union{Array{Float64,2},MArray}, data::Union{A
     # columns of data are positions, second index is sample
     # output is vector
 
-    values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
+    values::Union{Array{Float64,1},MArray} = zeros(typeof(data[1]),size(data,2))    # initialise
     if( size(par,1)!=size(data,1) )
         @printf( " Warning - logmvGaussian_distr: Missmatched dimensions %dx%d vs %dx%d.\n", size(par,1),size(par,2), size(data,1),size(data,2) )
         display(par); display(data); return values
@@ -938,7 +938,7 @@ function logcutoffGaussian_distr( par::Union{Array{Float64,1},MArray}, data::Uni
     # Gaussian*(x>=0)
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (par[2]<0) | (minimum(data)<0) )
+    if( (par[2]<0) || (minimum(data)<0) )
         values .= fill( -Inf,size(data,1) )
     else
         myvar = par[2]^2        # variance here
@@ -970,7 +970,7 @@ function logwindowGaussian_distr( par::Union{Array{Float64,1},MArray}, data::Uni
         myvar = par[2]^2        # variance here
         values .= (-1/2)*( ((data.-par[1]).^2)./myvar ) .- log(2*pi*myvar)/2 .- logsubexp( loginvGaussian_cdf(par[1:2],[par[3]])[1], loginvGaussian_cdf(par[1:2],[par[4]])[1] )
         #values = (-1/2)*( ((data.-par[1]).^2)./myvar ) .- log(2*pi*myvar)/2 # no cutoff
-        values[(data.<par[3]).|(data.>par[4])] .= -Inf
+        values[(data.<par[3]).||(data.>par[4])] .= -Inf
     end     # end if pahtological
     return values
 end     # end of logwindowGaussian_distr function
@@ -978,7 +978,7 @@ function loginvwindowGaussian_cdf( par::Union{Array{Float64,1},MArray}, data::Un
     # log(1-cdf(windowGaussian))
 
     values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
-    if( (par[2]<0) | (par[4]<par[3]) )
+    if( (par[2]<0) || (par[4]<par[3]) )
         values .= fill( 0.0,size(data,1) )  # log(1)
     else
         values .= logsubexp.(loginvGaussian_cdf( par[1:2], [par[4]] )[1], loginvGaussian_cdf( par, data )) .- logsubexp(loginvGaussian_cdf( par[1:2], [par[3]] )[1], loginvGaussian_cdf( par[1:2], [par[4]] )[1])
@@ -993,11 +993,11 @@ function logrectangle_distr( par::Union{Array{Float64,1},MArray}, data::Union{Ar
     if( par[2]<par[1] )
         values .= fill( -Inf,size(data,1) )
     else
-        if( (minimum(par)==Inf) | (maximum(par)==-Inf) )    # rectangle at infinity
+        if( (minimum(par)==Inf) || (maximum(par)==-Inf) )    # rectangle at infinity
             values .= Float64.(data.==par[1])               # same as either parameters
         else    # non-trivial rectangle
             values .= fill( -log(par[2]-par[1]) , (length(data)) )
-            values[(data.>par[2]).|(data.<par[1])] .= -Inf
+            values[(data.>par[2]).||(data.<par[1])] .= -Inf
         end     # end if infinity
     end     # end if pathological
 
@@ -1010,7 +1010,7 @@ function loginvrectangle_cdf( par::Union{Array{Float64,1},MArray}, data::Union{A
     if( par[2]<par[1] )
         values .= fill( 0.0,size(data,1) )   # log(1)
     else
-        if( (minimum(par)==Inf) | (maximum(par)==-Inf) )# rectangle at infinity
+        if( (minimum(par)==Inf) || (maximum(par)==-Inf) )# rectangle at infinity
             values .= fill(NaN,size(data))   # not well-defined
         else    # non-trivial rectangle
             values .= log.( (min(par[2],max(par[1],data)).-par[2])./(par[1]-par[2]) )
@@ -1018,6 +1018,30 @@ function loginvrectangle_cdf( par::Union{Array{Float64,1},MArray}, data::Union{A
     end     # end if pathological
     return values
 end     # end of loginvrectangle_cdf function
+function logbeta_distr( par::Union{Array{Float64,1},Array{Int64,1},Array{UInt64,1},MArray}, data::Union{Array{Float64,1},MArray} )::Union{Array{Float64,1},MArray}
+    # log of beta-distribution ( p^(par[1]-1)*(1-p)^(par[2]-1) )
+
+    values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
+    if( (par[1]<=0) || (par[2]<=0) )
+        values .= fill( -Inf,size(data,1) )
+    else
+        values .= xlogy.(par[1]-1, data) .+ xlogy.(par[2]-1, 1.0.-data) .+ (loggamma(par[1]+par[2])-loggamma(par[1])-loggamma(par[2]))
+    end     # end if pathological
+    return values
+end     # end of logbeta_distr function
+function loginvbeta_cdf( par::Union{Array{Float64,1},Array{Int64,1},Array{UInt64,1},MArray}, data::Union{Array{Float64,1},MArray} )::Union{Array{Float64,1},MArray}
+    # log(1-mycdf) for mycdf as cdf of beta distribution
+
+    values::Union{Array{Float64,1},MArray} = similar(data)  # initialise
+    if( (par[1]<=0) || (par[2]<=0) )
+        values .= fill( 0.0,size(data,1) )   # log(1)
+    else
+        for j_data in eachindex(data)
+            values[j_data] = log(beta_inc(par[1],par[2], data[j_data])[2])      # .[2] is 1-incbetafunction; see SpecialFunctions
+        end     # end of data loop
+    end     # end if pathological
+    return values
+end     # end of loginvbeta_cdf function
 
 function samplefromdiscretemeasure_full( logweights::Union{Array{Float64,1},MArray} )::Tuple{UInt64,Float64}
     # input are logs of weights;  does not assume correct normalisation
@@ -1125,7 +1149,7 @@ function sampleGamma( par::Union{Array{Float64,1},MArray}, xbounds::Union{Array{
     ybounds::Union{Array{Float64,1},MArray} = loginvGamma_cdf(par,xbounds)
     yrandno::Float64 = log(rand())
     yrandno = logaddexp( yrandno + logsubexp(ybounds[1],ybounds[2]), ybounds[2] )
-    if( isinf(yrandno) | isnan(yrandno) )
+    if( !isfinite(yrandno) )
         if( logsubexp(ybounds[1],ybounds[2])==-Inf )                    # interval -Inf
             return xbounds[1] + rand()*(xbounds[2]-xbounds[1])          # uniform, as no information in loginvGamma_cdf anyways
         else
@@ -1150,7 +1174,7 @@ function sampleGamma2( par::Union{Array{Float64,1},MArray}, xbounds::Union{Array
         @printf( " Warning - sampleGamma2: Bad parameters [ %s].\n", join([@sprintf("%+1.5e ",j) for j in par]) )
         return -1.0                         # impossible
     end     # end if pathological parameters
-    if( (xbounds[1]==0.0) & (xbounds[2]==Inf) )
+    if( (xbounds[1]==0.0) && (xbounds[2]==Inf) )
         return sampleGamma( par )
     end     # end if actually unbounded
     # get basic statistics first:
@@ -1175,7 +1199,7 @@ function sampleGamma2( par::Union{Array{Float64,1},MArray}, xbounds::Union{Array
         end     # end of finding local mode
         mymax = logGamma_distr(par,[mymax])[1]  # now highest density inside the interval
         xrandno = xbounds[1] + rand()*(xbounds[2]-xbounds[1]); logyval::Float64 = logGamma_distr(par,[xrandno])[1]; trycounter += 1
-        while( (log(rand())>(logyval-mymax)) & (trycounter<maxtries) )
+        while( (log(rand())>(logyval-mymax)) && (trycounter<maxtries) )
             xrandno = xbounds[1] + rand()*(xbounds[2]-xbounds[1]); logyval = logGamma_distr(par,[xrandno])[1]; trycounter += 1
         end     # end of rejection loop
         if( trycounter>=maxtries )
@@ -1187,7 +1211,7 @@ function sampleGamma2( par::Union{Array{Float64,1},MArray}, xbounds::Union{Array
         if( exp(logsubexp(ybounds[1],ybounds[2]))>0.001 )   # large enough interval to do rejection sampler on full support
             #@printf( " Info - sampleGamma2: Large interval (boundswidth = %1.3f vs %1.3f, boundsweight = %1.3f).\n", xbounds[2]-xbounds[1],mystd,exp(logsubexp(ybounds[1],ybounds[2])) )
             xrandno = rand( Gamma(par[2],par[1]) ); trycounter += 1
-            while( !(xbounds[1]<=xrandno<=xbounds[2]) & (trycounter<maxtries) )
+            while( !(xbounds[1]<=xrandno<=xbounds[2]) && (trycounter<maxtries) )
                 xrandno = rand( Gamma(par[2],par[1]) ); trycounter += 1
             end     # end of rejection loop
             if( trycounter>=maxtries )
@@ -1205,7 +1229,7 @@ end     # end of sampleGamma function
 function sampleGammaExponential( par::Union{Array{Float64,1},MArray} )::Tuple{Float64,Int64,Float64}
     # inverse sampler for random variables distributed according to GammaExponential
 
-    if( any(par.<0) | (par[3]>1) )
+    if( any(x->(x<0), par) || (par[3]>1) )
         @printf( " Warning - sampleGammaExponential: Bad parameters [ %s].\n", join([@sprintf("%+1.5e ",j) for j in par]) )
         return -1.0,-1,-Inf                     # impossible
     end     # end if pathological parameters
@@ -1217,10 +1241,10 @@ function sampleGammaExponential( par::Union{Array{Float64,1},MArray} )::Tuple{Fl
     logdivprob::Float64 = logp_div - logaddexp(logp_dth,logp_div)
     return xrandno[1], (log(rand())<logdivprob)+1, logdivprob              # cellfate is '1' for death,'2' for division
 end     # end of sampleGammaExponential function
-function sampleGammaExponential2( par::Union{Array{Float64,1},MArray} )::Tuple{Float64,Int64,Float64} 
+function sampleGammaExponential2( par::Union{Array{Float64,1},MArray} )::Tuple{Float64,Int64,Float64}
     # sampler for Gamma and exponential random variables, combined via competition
 
-    if( any(par.<0) | (par[3]>1) )
+    if( any(x->(x<0), par) || (par[3]>1) )
         @printf( " Warning - sampleGammaExponential2: Bad parameters [ %s].\n", join([@sprintf("%+1.5e ",j) for j in par]) )
         return -1.0,-1,-Inf                     # impossible
     end     # end if pathological parameters
@@ -1247,17 +1271,17 @@ end     # end of sampleGammaExponential2 function
 function sampleGammaExponential( par::Union{Array{Float64,1},MArray}, xbounds::Union{Array{Float64,1},MArray} )::Tuple{Float64,Int64,Float64}
     # inverse sampler for random variables distributed according to GammaExponential inside xbounds
 
-    if( any(par.<0) | (par[3]>1) )
+    if( any(x->(x<0), par) || (par[3]>1) )
         @printf( " Warning - sampleGammaExponential: Bad parameters [ %s], xbounds [ %s].\n", join([@sprintf("%+1.5e ",j) for j in par]), join([@sprintf("%+1.5e ",j) for j in xbounds]) ); flush(stdout)
         return -1.0,-1,-Inf                                             # impossible
     end     # end if pathological parameters
-    if( (xbounds[1]==0.0) & ((xbounds[2]==+Inf)) )                      # not really bounded
+    if( (xbounds[1]==0.0) && ((xbounds[2]==+Inf)) )                     # not really bounded
         return sampleGammaExponential2( par )
     end     # end if actually unbounded
     ybounds::Union{Array{Float64,1},MArray} = loginvGammaExponential_cdf( par, xbounds )
     yrandno::Float64 = log(rand())
     yrandno = logaddexp( yrandno + logsubexp(ybounds[1],ybounds[2]), ybounds[2] )
-    if( isinf(yrandno) | isnan(yrandno) )
+    if( !isfinite(yrandno) )
         @printf( " Warning - sampleGammaExponential: yrandno = %+1.5e, ybounds = [%+1.5e,%+1.5e], xbounds = [%+1.5e, %+1.5e], par = [ %s].\n", yrandno, ybounds[1],ybounds[2], xbounds[1],xbounds[2], join([@sprintf("%+1.5e ",j) for j in par]) ); flush(stdout)
     end     # end if pathological
     xbounds_here::Union{Array{Float64,1},MArray} = deepcopy(xbounds)
@@ -1276,11 +1300,11 @@ end     # end of sampleGammaExponential
 function sampleGammaExponential2( par::Union{Array{Float64,1},MArray}, xbounds::Union{Array{Float64,1},MArray} )::Tuple{Float64,Int64,Float64}
     # sampler for Gamma and exponential random variables, combined via competition; for conditional on xbounds
 
-    if( any(par.<0) | (par[3]>1) )
+    if( any(x->(x<0), par) || (par[3]>1) )
         @printf( " Warning - sampleGammaExponential2: Bad parameters [ %s], xbounds [ %s].\n", join([@sprintf("%+1.5e ",j) for j in par]), join([@sprintf("%+1.5e ",j) for j in xbounds]) ); flush(stdout)
         return -1.0,-1,-Inf                     # impossible
     end     # end if pathological parameters
-    if( (xbounds[1]==0.0) & ((xbounds[2]==+Inf)) )  # not really bounded
+    if( (xbounds[1]==0.0) && ((xbounds[2]==+Inf)) )     # not really bounded
         return sampleGammaExponential2( par )
     end     # end if actually unbounded
     # get probability to sample before/during/after interval for both competing processes:
@@ -1325,14 +1349,14 @@ end     # end of sampleGammaExponential2 function
 function sampleGammaExponential( par::Union{Array{Float64,1},MArray}, xbounds::Union{Array{Float64,1},MArray}, fate::Int64 )::Tuple{Float64,Bool}
     # inverse sampler for random variables distributed according to GammaExponential inside xbounds and of given fate
 
-    if( any(par.<0) | (par[3]>1) )
+    if( any(x->(x<0), par) || (par[3]>1) )
         @printf( " Warning - sampleGammaExponential: Bad parameters [ %s], xbounds = [ %s], fate = %d.\n", join([@sprintf("%+1.5e ",j) for j in par]),join([@sprintf("%+1.5e ",j) for j in xbounds]),fate ); flush(stdout)
         return -1.0, true                   # impossible
     end     # end if pathological parameters
     ybounds::Union{Array{Float64,1},MArray} = loginvGammaExponential_cdf( par, xbounds, fate )
     yrandno::Float64 = log(rand())
     yrandno = logaddexp( yrandno + logsubexp(ybounds[1],ybounds[2]), ybounds[2] )
-    if( isinf(yrandno) | isnan(yrandno) )
+    if( !isfinite(yrandno) )
         @printf( " Warning - sampleGammaExponential: yrandno = %+1.5e, ybounds = [%+1.5e,%+1.5e], xbounds = [%+1.5e, %+1.5e], par = [ %s].\n", yrandno, ybounds[1],ybounds[2], xbounds[1],xbounds[2], join([@sprintf("%+1.5e ",j) for j in par]) ); flush(stdout)
     end     # end if pathological
     xbounds_here::Union{Array{Float64,1},MArray} = deepcopy(xbounds)
@@ -1349,7 +1373,7 @@ end     # end of sampleGammaExponential function
 function sampleGammaExponential2( par::Union{Array{Float64,1},MArray}, xbounds::Union{Array{Float64,1},MArray}, fate::Int64 )::Tuple{Float64,Bool}
     # inverse sampler for random variables distributed according to GammaExponential inside xbounds and of given fate
 
-    if( any(par.<0) | (par[3]>1) )
+    if( any(x->(x<0), par) || (par[3]>1) )
         @printf( " Warning - sampleGammaExponential2: Bad parameters [ %s], xbounds = [ %s], fate = %d.\n", join([@sprintf("%+1.5e ",j) for j in par]),join([@sprintf("%+1.5e ",j) for j in xbounds]),fate ); flush(stdout)
         return -1.0, true                   # impossible
     end     # end if pathological parameters
@@ -1378,7 +1402,7 @@ function sampleGammaExponential2( par::Union{Array{Float64,1},MArray}, xbounds::
                         keeptrying = false  # death happens first after all
                     end     # end of which event happens first inside interval
                 end     # end of deciding if death or division happens first
-                keeptrying = keeptrying & (trycounter<trymax)
+                keeptrying = keeptrying && (trycounter<trymax)
             end     # end of keeptrying rejection sampler
             if( trycounter>=trymax )
                 @printf( " Info - sampleGammaExponential2: Tried %d, but got rejected throughout for fate %d, par = [ %s], xbounds = [ %s].\n", trycounter, fate, join([@sprintf("%+1.5e ",j) for j in par]),join([@sprintf("%+1.5e ",j) for j in xbounds]) ); flush(stdout) 
@@ -1389,7 +1413,7 @@ function sampleGammaExponential2( par::Union{Array{Float64,1},MArray}, xbounds::
             end     # end if too many tries
         else
             (xrandno, errorflag) = sampleGammaExponential( par, xbounds, fate )
-        end     # end if want to try 
+        end     # end if want to try
     elseif( fate==2 )                       # division
         xrandno = sampleGamma2( par[1:2],xbounds )
         errorflag = false
@@ -1424,7 +1448,7 @@ function sampleFrechet( par::Union{Array{Float64,1},MArray}, xbounds::Union{Arra
     ybounds = loginvFrechet_cdf( par, xbounds )
     yrandno = log(rand())#;  yrandno_orig = deepcopy(yrandno)
     yrandno = logsumexp( [ yrandno + logsubexp(ybounds[1],ybounds[2]), ybounds[2] ] )
-    if( isinf(yrandno) | isnan(yrandno) )
+    if( !isfinite(yrandno) )
         @printf( " Warning - sampleFrechet: yrandno = %+1.5e, ybounds = [%+1.5e,%+1.5e], xbounds = [%+1.5e, %+1.5e], par = [ %s].\n", yrandno, ybounds[1],ybounds[2], xbounds[1],xbounds[2], join([@sprintf("%+1.5e ",j) for j in par]) ); flush(stdout)
     end     # end if pathological
     xbounds_here = deepcopy(xbounds)
@@ -1499,13 +1523,13 @@ function sampleFrechetWeibull( par::Union{Array{Float64,1},MArray}, xbounds::Uni
         return -1.0,-1,-Inf                     # impossible
     end     # end if pathological parameters
     ybounds::Union{Array{Float64,1},MArray} = loginvFrechetWeibull_cdf( par, xbounds )
-    if( false & (any(isinf.(ybounds)) | any(isnan.(ybounds))) )
-        @printf( " Info - sampleFrechetWeibull: ybounds = [%+1.5e,%+1.5e], xbounds = [%+1.5e, %+1.5e], par = [ %s].\n", ybounds[1],ybounds[2], xbounds[1],xbounds[2], join([@sprintf("%+1.5e ",j) for j in par]) ); flush(stdout)
-    end     # end if pathological
+    #if( any(!isfinite, ybounds) )
+    #    @printf( " Info - sampleFrechetWeibull: ybounds = [%+1.5e,%+1.5e], xbounds = [%+1.5e, %+1.5e], par = [ %s].\n", ybounds[1],ybounds[2], xbounds[1],xbounds[2], join([@sprintf("%+1.5e ",j) for j in par]) ); flush(stdout)
+    #end     # end if pathological
     yrandno::Float64 = log(rand())#;  yrandno_orig = deepcopy(yrandno)
     yrandno = logaddexp( yrandno + logsubexp(ybounds[1],ybounds[2]), ybounds[2] )
     #yrandno = logsumexp( [ yrandno+ybounds[1], log1mexp(yrandno)+ybounds[2] ] )            # should be same, but numerically less stable for ybounds small
-    if( isinf(yrandno) | isnan(yrandno) )
+    if( !isfinite(yrandno) )
         @printf( " Warning - sampleFrechetWeibull: yrandno = %+1.5e, ybounds = [%+1.5e,%+1.5e], xbounds = [%+1.5e, %+1.5e], par = [ %s].\n", yrandno, ybounds[1],ybounds[2], xbounds[1],xbounds[2], join([@sprintf("%+1.5e ",j) for j in par]) ); flush(stdout)
     end     # end if pathological
     #@printf( " Info - sampleFrechetWeibull: ybounds = [%+1.15e,%+1.15e], yrandno = %+1.15e (%+1.15e)([%+1.5e,%+1.5e])\n", ybounds[1],ybounds[2], yrandno,yrandno_orig, ybounds[1]-yrandno,ybounds[2]-yrandno )
@@ -1534,7 +1558,7 @@ function sampleFrechetWeibull!( par::Union{Array{Float64,1},MArray}, xbounds::Un
     end     # end if pathological parameters
     yrandno::Float64 = log(rand())
     yrandno = logaddexp( yrandno + logsubexp(ybounds[1],ybounds[2]), ybounds[2] )
-    if( isinf(yrandno) | isnan(yrandno) )
+    if( !isfinite(yrandno) )
         @printf( " Warning - sampleFrechetWeibull!: yrandno = %+1.5e, ybounds = [%+1.5e,%+1.5e], xbounds = [%+1.5e, %+1.5e], par = [ %s].\n", yrandno, ybounds[1],ybounds[2], xbounds[1],xbounds[2], join([@sprintf("%+1.5e ",j) for j in par]) ); flush(stdout)
     end     # end if pathological
     xbounds_here::Union{Array{Float64,1},MArray} = deepcopy(xbounds)
@@ -1559,25 +1583,25 @@ function sampleFrechetWeibull( par::Union{Array{Float64,1},MArray}, xbounds::Uni
     local samplevalue::Float64              # declare
     if( fate==-1 )                          # anything
         samplevalue = sampleFrechetWeibull( par, xbounds )[1]
-    elseif( (fate==1) | (fate==2) )         # death/division
+    elseif( (fate==1) || (fate==2) )         # death/division
         fate_here::Int64 = 0; trycounter::Int64 = 0 # initialise
         ybounds::MArray{Tuple{2},Float64} = MArray{Tuple{2},Float64}(loginvFrechetWeibull_cdf( par, xbounds ))
-        if( false & (any(isinf.(ybounds)) | any(isnan.(ybounds))) )
-            @printf( " Info - sampleFrechetWeibull: ybounds = [%+1.5e,%+1.5e], xbounds = [%+1.5e, %+1.5e], par = [ %s].\n", ybounds[1],ybounds[2], xbounds[1],xbounds[2], join([@sprintf("%+1.5e ",j) for j in par]) ); flush(stdout)
-        end     # end if pathological
+        #if( any(!isfinite, ybounds) )
+        #    @printf( " Info - sampleFrechetWeibull: ybounds = [%+1.5e,%+1.5e], xbounds = [%+1.5e, %+1.5e], par = [ %s].\n", ybounds[1],ybounds[2], xbounds[1],xbounds[2], join([@sprintf("%+1.5e ",j) for j in par]) ); flush(stdout)
+        #end     # end if pathological
         xrandno::MArray{Tuple{1},Float64} = MArray{Tuple{1},Float64}([0.0])         # initialise; single-component vector
         logp_dth::MArray{Tuple{1},Float64} = MArray{Tuple{1},Float64}([0.0])        # initialise; single-component vector
         logp_div::MArray{Tuple{1},Float64} = MArray{Tuple{1},Float64}([0.0])        # initialise; single-component vector
         buffervalues::MArray{Tuple{1},Float64} = MArray{Tuple{1},Float64}([0.0])    # memory allocation for buffer
         buffervalues2::MArray{Tuple{1},Float64} = MArray{Tuple{1},Float64}([0.0])   # memory allocation for buffer
-        while( (fate_here!=fate) & (trycounter<1E6) )
+        while( (fate_here!=fate) && (trycounter<1E6) )
             trycounter += 1                 # one more try
             (samplevalue,fate_here) = sampleFrechetWeibull!( par, xbounds, ybounds,xrandno,logp_dth,logp_div,buffervalues,buffervalues2 )[[1,2]]
         end     # end of rejection sampler
         if( fate_here!=fate )
             @printf( " Warning - sampleFrechetWeibull: Got wrong cellfate %d instead of %d within %d tries (xbounds = [%+1.5e..%+1.5e]).\n", fate_here,fate, trycounter, xbounds[1],xbounds[2] )
             (mean_div,std_div, mean_dth,std_dth, prob_dth) = estimateFrechetWeibullstats( par )
-            @printf( " Warning - sampleFrechetWeibull: div = %1.5e +- %1.5e, dth = %1.5e +- %1.5e, prob_dth = %1.5e (pars = [ %s]).\n", mean_div,std_div, mean_dth,std_dth, prob_dth, join([@sprintf("%+1.5e ",j) for j in par]) ); flush(stdout)
+            @printf( " Warning - sampleFrechetWeibull: div = %1.5e +- %1.5e, dth = %1.5e +- %1.5e, prob_dth = %1.5e (par = [ %s]).\n", mean_div,std_div, mean_dth,std_dth, prob_dth, join([@sprintf("%+1.5e ",j) for j in par]) ); flush(stdout)
             (samplevalue,fate_here, logdivprob ) = sampleFrechetWeibull( par, xbounds )
             if( fate_here!=fate )           # would be very lucky
                 #@printf( " Warning - sampleFrechetWeibull: logdivprob = %+1.5e.\n", logdivprob )
@@ -1649,12 +1673,12 @@ function samplewindowGaussian( par::Union{Array{Float64,1},MArray} )::Float64
     # rejection sampler for logwindowGaussian_distr
 
     local value::Float64; keepontrying::Bool = true; trycounter::Int64 = 0  # declare/initialise
-    while( keepontrying & (trycounter<200) )
+    while( keepontrying && (trycounter<200) )
         trycounter += 1                             # one more try
         value = par[1] + par[2]*randn()
-        if( (value>=par[3]) & (value<=par[4]) )
+        if( (value>=par[3]) && (value<=par[4]) )
             keepontrying = false
-        elseif( (par[3]>-Inf) & (par[4]<+Inf) )     # if finite interval
+        elseif( (par[3]>-Inf) && (par[4]<+Inf) )    # if finite interval
             value = par[3] + (par[4]-par[3])*rand()
             logmaxGaussdistr::Float64 = maximum(logwindowGaussian_distr( par, [par[1],par[3],par[4]] ))
             logvalueGaussdistr::Float64 = logGaussian_distr( par[1:2], [value] )[1]
@@ -1679,7 +1703,7 @@ end     # end of samplewindowGaussian function=ga
 function samplerectangle( par::Union{Array{Float64,1},MArray} )::Float64
     # samples from logrectangle_distr
     
-    if( (minimum(par)==Inf) | (maximum(par)==-Inf) )    # rectangle at infinity
+    if( (minimum(par)==Inf) || (maximum(par)==-Inf) )    # rectangle at infinity
         value = deepcopy(par[1])
     else    # ie not infinity
         value = par[1] + (par[2]-par[1])*rand()
@@ -1724,7 +1748,7 @@ function nestedintervalsroot( fun::Function, val::Float64, xbounds::Union{Array{
     if( sf1==sf2 )
         originalbounds1::Float64 = deepcopy(xbounds1); originalbounds2::Float64 = deepcopy(xbounds2)
         xbounds1 = 0.0;     sf1 = sign(fun(xbounds1) - val)
-        while( (sf1==sf2) & (trycounter<trymax) )
+        while( (sf1==sf2) && (trycounter<trymax) )
             trycounter += 1                         # one more try
             xbounds1 = deepcopy(xbounds2);  sf1 = deepcopy(sf2) # xbounds2 is higher lower bound
             xbounds2 = 2*max(1.0,xbounds2); sf2 = sign(fun(xbounds2) - val)
@@ -1747,7 +1771,7 @@ function nestedintervalsroot( fun::Function, val::Float64, xbounds::Union{Array{
     # nested interval loop:
     trycounter = 0                                  # reset
     local newxbound::Float64, newsf::Int64          # declare
-    while( ((xbounds2-xbounds1)>xtol) & (trycounter<trymax) )
+    while( ((xbounds2-xbounds1)>xtol) && (trycounter<trymax) )
         trycounter += 1
         newxbound = (xbounds2+xbounds1)/2;  newsf = sign(fun(newxbound) - val)
         if( newsf==sf1 )
@@ -1761,7 +1785,7 @@ function nestedintervalsroot( fun::Function, val::Float64, xbounds::Union{Array{
             @printf( " Info - nestedintervalsroot: Sleep now.\n" ); sleep(10)
         end     # end decide which bound to replace
     end     # end of nesting intervals
-    if( ((xbounds2-xbounds1)>xtol) )  
+    if( ((xbounds2-xbounds1)>xtol) )
         if( xtol<xbounds1*1e-15 )    # second condition to avoid numerical problems for large xbounds_here
             #@printf( " Warning - nestedintervalsroot: xtol too small for xbounds: xtol=%+1.5e, xbounds_here = [ %+1.5e, %+1.5e ] (new xtol is %+1.5e).\n", xtol, xbounds1,xbounds2,xbounds2-xbounds1 )
         else
@@ -1787,7 +1811,7 @@ function nestedintervalsroot( fun::Function, val::Float64, xbounds::Union{Array{
         return xbounds_here[1]
     elseif( f2==0.0 )
         return xbounds_here[2]
-    elseif( isnan(f1) | isnan(f2) )
+    elseif( isnan(f1) || isnan(f2) )
         @printf( " Warning - nestedintervalsroot: Got nans for f-val: %1.5e,%1.5e (%+1.5e,%+1.5e, %+1.5e)(xbounds=%+1.5e..%+1.5e)(name=%s).\n", f1,f2, fun(xbounds_here[1]),fun(xbounds_here[2]), val, xbounds_here[1],xbounds_here[2], name ); flush(stdout)
         @printf( " Info - nestedintervalsroot: Sleep now.\n" ); sleep(10)
         error( " Error - nestedintervalsroot: Got nans for f-val." )
@@ -1797,7 +1821,7 @@ function nestedintervalsroot( fun::Function, val::Float64, xbounds::Union{Array{
     if( sf1==sf2 )
         originalbounds::MArray{Tuple{2},Float64} = MArray{Tuple{2},Float64}(xbounds_here)
         xbounds_here[1] = 0.0;      sf1 = sign(fun(xbounds_here[1]) - val)
-        while( (sf1==sf2) & (trycounter<trymax) & (xbounds_here[1]<xbounds_here[2]) )
+        while( (sf1==sf2) && (trycounter<trymax) && (xbounds_here[1]<xbounds_here[2]) )
             trycounter += 1                     # one more try
             xbounds_here[1] = xbounds_here[2];            sf1 = deepcopy(sf2)       # xbounds_here[2] is higher lower bound
             xbounds_here[2] = 2*max(1.0,xbounds_here[2]); sf2 = sign(fun(xbounds_here[2]) - val)
@@ -1820,7 +1844,7 @@ function nestedintervalsroot( fun::Function, val::Float64, xbounds::Union{Array{
     # nested interval loop:
     trycounter = 0                              # reset
     newxbound::Float64 = 0.0; newsf::Int64 = 0  # initialise
-    while( ((xbounds_here[2]-xbounds_here[1])>xtol) & (trycounter<trymax) )
+    while( ((xbounds_here[2]-xbounds_here[1])>xtol) && (trycounter<trymax) )
         trycounter += 1                         # one more try
         newxbound = (xbounds_here[2]+xbounds_here[1])/2;  newsf = sign(fun(newxbound) - val)
         if( newsf==sf1 )
@@ -1834,7 +1858,7 @@ function nestedintervalsroot( fun::Function, val::Float64, xbounds::Union{Array{
             @printf( " Info - nestedintervalsroot: Sleep now.\n" ); sleep(10)
         end     # end decide which bound to replace
     end     # end of nesting intervals
-    if( ((xbounds_here[2]-xbounds_here[1])>xtol) )  
+    if( ((xbounds_here[2]-xbounds_here[1])>xtol) )
         if( xtol<xbounds_here[1]*1e-15 )    # second condition to avoid numerical problems for large xbounds_here
             #@printf( " Warning - nestedintervalsroot: xtol too small for xbounds: xtol=%+1.5e, xbounds_here = [ %+1.5e, %+1.5e ] (new xtol is %+1.5e) (name=%s).\n", xtol, xbounds_here[1],xbounds_here[2],xbounds_here[2]-xbounds_here[1], name )
         else
@@ -1859,7 +1883,7 @@ function getlogdeathprob_numapprox( par::Union{Array{Float64,1},MArray} )::Float
     maxbin::Float64 = findroot( x->loginvexponentialFrechetWeibull_cdf(par,[x])[1], log(tol), [0.0, 200000.0] )
     minbin::Float64 = 0.0;   dbin::Float64 = (maxbin-minbin)/res; mybins::Array{Float64,1} = collect((minbin+(dbin/2)):dbin:(maxbin+dbin))
     value::Float64 = logsumexp(logexponentialFrechetWeibull_distr(par,mybins,1)) + log(dbin)
-    if( isnan(value) | isinf(value) )
+    if( !isfinite(value) )
         @printf( " Warning - getlogdeathprob_numapprox: Got pathological value %+1.5e for res = %1.1f, tol = %1.5e, bins = %1.5e:%1.5e:%1.5e (%+1.5e)\n", value, res,tol, mybins[1],dbin,mybins[end], logsumexp(logexponentialFrechetWeibull_distr(par,mybins,1)) )
         @printf( "  for par: [ %+1.5e, %+1.5e,%+1.5e, %+1.5e,%+1.5e ]\n", par[1], par[2],par[3], par[4],par[5] );
         @printf( "  first element (=%+1.5e): %+1.5e, %+1.5e, %+1.5e\n", mybins[1], logWeibull_distr(par[4:5],[mybins[1]])[1], loginvexponential_cdf([par[1]],[mybins[1]])[1], loginvFrechet_cdf(par[2:3],[mybins[1]])[1] )
@@ -1887,13 +1911,8 @@ function getlogdeathprob_FrechetWeibull_numapprox( par::Union{Array{Float64,1},M
     end     # end while removing points that are so nearby, they are swapped for numerical reasons
     lognorm_range::Array{Float64,1} = loginvFrechet_cdf( par[1:2],xpos ) .+ logWeibull_distr( par[3:4],xpos )
     lognorm::Float64 = logsumexp( (logaddexp.(lognorm_range[2:end],lognorm_range[1:(end-1)]).-log(2)).+log.(diffxpos) )
-
-    if( false )     # debugging
-        (mean_div,std_div, mean_dth,std_dth, prob_dth) = estimateFrechetWeibullstats(par, UInt64(1000000))
-        @printf( " Info - getlogdeathprob_FrechetWeibull_numapprox: logdeathprob = %+1.5e, empirical = %+1.5e (%1.5e vs %1.5e).\n", lognorm, log(prob_dth), exp(lognorm),prob_dth )
-        @printf( " Info - getlogdeathprob_FrechetWeibull_numapprox: div = %1.5e+-%1.5e, dth = %1.5e+-%1.5e.\n", mean_div,std_div, mean_dth,std_dth )
-    end     # for debugging
-    if( isnan(lognorm) | isinf(lognorm) )
+    
+    if( !isfinite(lognorm) )
         @printf( " Warning - getlogdeathprob_FrechetWeibull_numapprox: Got pathological lognorm %+1.5e for nopos = %1.1f, ybounds[2] = %1.5e, xpos = %1.5e:%1.5e:%1.5e (%+1.5e)\n", lognorm, nopos,ybounds[2], xpos[1],xpos[min(2,length(xpos))],xpos[end], logsumexp(logFrechetWeibull_distr(par,xpos,1)) )
         @printf( "  for par: [ %+1.5e,%+1.5e, %+1.5e,%+1.5e ]\n", par[1],par[2], par[3],par[4] );
         @printf( "  first element (=%+1.5e): %+1.5e, %+1.5e\n", xpos[1], logWeibull_distr(par[3:4],[xpos[1]])[1], loginvFrechet_cdf(par[1:2],[xpos[1]])[1] )
@@ -1968,27 +1987,31 @@ function getEulerLotkabeta( pars_cell_here::Union{Array{Float64,1},MArray}, dthd
     
     return beta_here, timerange     # initialise from standard normal
 end     # end of getEulerLotkabeta function
-function getFulldistributionfromparameters( distrtype::String, pars::Array{Float64,1} )::Fulldistr
+function getFulldistributionfromparameters( distrtype::String, par::Union{Array{Float64,1},Array{Int64,1},Array{UInt64,1},MArray} )::Fulldistr
     # constructs distribution for given type and parameters
 
     if( distrtype=="rectangle" )        # type 1
-        mymean = mean( pars )
-        mystd = (pars[2]-pars[1])/sqrt(12)
-        mydistr = Fulldistr( "rectangle",UInt(1),pars, x->logrectangle_distr(pars,x), x->loginvrectangle_cdf(pars,x), ()->samplerectangle(pars), ()->mymean, ()->mystd )
+        mymean = mean( par )
+        mystd = (par[2]-par[1])/sqrt(12)
+        mydistr = Fulldistr( "rectangle",UInt(1),par, x->logrectangle_distr(par,x), x->loginvrectangle_cdf(par,x), ()->samplerectangle(par), ()->mymean, ()->mystd )
     elseif( distrtype=="Gauss" )        # type 2
-        mymean = pars[1]
-        mystd = pars[2]
-        mydistr = Fulldistr( "Gauss",UInt(2),pars, x->logGaussian_distr(pars,x), x->loginvGaussian_cdf(pars,x), ()->sampleGaussian(pars), ()->mymean, ()->mystd )
+        mymean = par[1]
+        mystd = par[2]
+        mydistr = Fulldistr( "Gauss",UInt(2),par, x->logGaussian_distr(par,x), x->loginvGaussian_cdf(par,x), ()->sampleGaussian(par), ()->mymean, ()->mystd )
     elseif( distrtype=="cutoffGauss" )  # type 3
-        mymean = pars[1] + (pars[2]^2)*exp( logcutoffGaussian_distr(pars,[0.0])[1] )
-        mystd = pars[2]*sqrt( 1 + (-pars[1])*exp( logcutoffGaussian_distr(pars,[0.0])[1] ) - (pars[2]^2)*exp( 2*logcutoffGaussian_distr(pars,[0.0])[1] ) )
-        mydistr = Fulldistr( "cutoffGauss",UInt(3),pars, x->logcutoffGaussian_distr(pars,x), x->loginvcutoffGaussian_cdf(pars,x), ()->samplecutoffGaussian(pars), ()->mymean, ()->mystd )
-    elseif( distrtype=="shiftedcutoffGauss" )   # type 4; shifted by pars[3], pars[1] is relative to pars[3] (ie pars[1]==0 is directly at the cut-off)
-        mymean = pars[3] + pars[1] + (pars[2]^2)*exp( logcutoffGaussian_distr(pars[1:2],[0.0])[1] )
-        mystd = pars[2]*sqrt( 1 + (-pars[1])*exp( logcutoffGaussian_distr(pars[1:2],[0.0])[1] ) - (pars[2]^2)*exp( 2*logcutoffGaussian_distr(pars[1:2],[0.0])[1] ) )
-        mydistr = Fulldistr( "shiftedcutoffGauss",UInt(4),pars, x->logcutoffGaussian_distr(pars[1:2],x.-pars[3]), x->loginvcutoffGaussian_cdf(pars[1:2],x.-pars[3]), ()->samplecutoffGaussian(pars[1:2]).+pars[3], ()->mymean, ()->mystd )
+        mymean = par[1] + (par[2]^2)*exp( logcutoffGaussian_distr(par,[0.0])[1] )
+        mystd = par[2]*sqrt( 1 + (-par[1])*exp( logcutoffGaussian_distr(par,[0.0])[1] ) - (par[2]^2)*exp( 2*logcutoffGaussian_distr(par,[0.0])[1] ) )
+        mydistr = Fulldistr( "cutoffGauss",UInt(3),par, x->logcutoffGaussian_distr(par,x), x->loginvcutoffGaussian_cdf(par,x), ()->samplecutoffGaussian(par), ()->mymean, ()->mystd )
+    elseif( distrtype=="shiftedcutoffGauss" )   # type 4; shifted by par[3], par[1] is relative to par[3] (ie par[1]==0 is directly at the cut-off)
+        mymean = par[3] + par[1] + (par[2]^2)*exp( logcutoffGaussian_distr(par[1:2],[0.0])[1] )
+        mystd = par[2]*sqrt( 1 + (-par[1])*exp( logcutoffGaussian_distr(par[1:2],[0.0])[1] ) - (par[2]^2)*exp( 2*logcutoffGaussian_distr(par[1:2],[0.0])[1] ) )
+        mydistr = Fulldistr( "shiftedcutoffGauss",UInt(4),par, x->logcutoffGaussian_distr(par[1:2],x.-par[3]), x->loginvcutoffGaussian_cdf(par[1:2],x.-par[3]), ()->samplecutoffGaussian(par[1:2]).+par[3], ()->mymean, ()->mystd )
+    elseif( distrtype=="beta" )         # type 5
+        mymean = par[1]/(par[1]+par[2])
+        mystd = sqrt( par[1]*par[2]/( ((par[1]+par[2])^2)*(par[1]+par[2]+1) ) )
+        mydistr = Fulldistr( "beta",UInt(5),par, x->logbeta_distr(par,x), x->loginvbeta_cdf(par,x), ()->samplebeta(par), ()->mymean, ()->mystd )
     else                                # unknown
-        @printf( " Warning - getFulldistributionfromparameters: Unknown distribution type %s (pars = [ %s ]).\n", distrtype, join([@sprintf("%+12.5e ",j) for j in pars]) )
+        @printf( " Warning - getFulldistributionfromparameters: Unknown distribution type %s (par = [ %s ]).\n", distrtype, join([@sprintf("%+12.5e ",j) for j in par]) )
     end     # end of distinguishing distribution types
 
     return mydistr
@@ -2012,6 +2035,8 @@ function getDthDivdistributionfromparameters( distrtype::String )::DthDivdistr
         mydistr = DthDivdistr( distrtype,UInt(3), (pars,x)->logFrechet_distr(pars,x),(pars,x)->loginvFrechet_cdf(pars,x), (pars)->[sampleFrechet(pars),Int64(2),0.0], (pars,x,z)->logFrechet_distr(pars,x,z),(pars,y)->[sampleFrechet(pars,y),Int64(2),0.0],(pars,y,z)->[sampleFrechet(pars,y),false], (pars,x,y,z)->logwindowFrechet_distr(vcat(pars,y),x,z), (pars)->(-Inf) )
     elseif( distrtype=="GammaExponential" )     # type 4
         mydistr = DthDivdistr( distrtype,UInt(4), (pars,x)->logGammaExponential_distr(pars,x),(pars,x)->loginvGammaExponential_cdf(pars,x), (pars)->sampleGammaExponential2(pars), (pars,x,z)->logGammaExponential_distr(pars,x,z),(pars,y)->sampleGammaExponential2(pars,y),(pars,y,z)->sampleGammaExponential2(pars,y,z), (pars,x,y,z)->logwindowGammaExponential_distr(vcat(pars,y),x,z), (pars)->getlogdeathprob_GammaExp(pars) )
+    elseif( distrtype=="GammaExponential_CUDA" )# type 4
+        mydistr = DthDivdistr( distrtype,UInt(4), (pars,x)->[Float64(CUDAlogGammaExponential_distr(Float32.(pars),Float32(j))) for j in x],(pars,x)->[Float64(CUDAloginvGammaExponential_cdf(Float32.(pars),Float32(j))) for j in x], (pars)->(timesample::MArray{Tuple{1},Float32}=MArray{Tuple{1},Float32}([0.0]); fatesample::MArray{Tuple{1},UInt32}=MArray{Tuple{1},UInt32}([0]); logdivprob::Float64=CUDAsampleGammaExponential2(Float32.(pars),view(timesample,1),view(fatesample,1))[3]; (Float64.(timesample[1]),Int64.(fatesample[1]),logdivprob)), (pars,x,z)->[CUDAlogGammaExponential_distr(Float32.(pars),Float32(j),Int32(z)) for j in x],(pars,y)->(timesample::MArray{Tuple{1},Float32}=MArray{Tuple{1},Float32}([0.0]); fatesample::MArray{Tuple{1},UInt32}=MArray{Tuple{1},UInt32}([0]); logdivprob::Float64=CUDAsampleGammaExponential2(Float32.(pars),Float32.(y),view(timesample,1),view(fatesample,1))[3]; (Float64(timesample[1]),Int64(fatesample[1]),logdivprob)),(pars,y,z)->(timesample::MArray{Tuple{1},Float32}=MArray{Tuple{1},Float32}([0.0]); errorflag::Bool=CUDAsampleGammaExponential2(Float32.(pars),Float32.(y),Int32(z),view(timesample,1)); (Float64(timesample[1]),errorflag) ), (pars,x,y,z)->logwindowGammaExponential_distr(vcat(pars,y),x,z), (pars)->getlogdeathprob_GammaExp(pars) )
     else                                        # unknown
         @printf( " Warning - getDthDivdistributionfromparameters: Unknown distribution type %s (pars = [ %s ]).\n", distrtype, join([@sprintf("%+12.5e ",j) for j in pars]) )
     end     # end of distinguishing distribution types

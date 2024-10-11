@@ -1,16 +1,10 @@
-using Printf
-using Dates
-using Random
-using Statistics
-using StatsBase         # for iqr, and to fit Histogram
-using Distributions
-using LinearAlgebra
-using SpecialFunctions
 using LogExpFunctions
 using Plots
 using DelimitedFiles
 using Optim
 using StaticArrays
+using SparseArrays      # for sparse arrays when expressing discretised equilibration approximation
+using Arpack            # for solving for eigenvector of largest eigenvalue of discretised equilibration approximation
 
 include("Lineagetree.jl")
 include("mydistributions.jl")
@@ -143,7 +137,6 @@ function runmultipleLineageMCmodels( lineagetree::Lineagetree, nochains::UInt, m
         @printf( " Info - runmultipleLineageMCmodels: Done with postprocessing read file now %1.3f sec\n", (DateTime(now())-uppars_chains[1].timestamp)/Millisecond(1000) )
         return
     end     # end if withread
-    lkhiohin
 
     return state_chains_hist,target_chains_hist, uppars_chains
 end     # end of runmultipleLineageMCmodels function
@@ -330,7 +323,7 @@ function runlineageMCmodel( lineagetree::Lineagetree, state::Lineagestate2,targe
         # output:
         # ...control-window:
         regularcontrolwindowoutput( lineagetree, state_curr,target_curr, targetfunctions, uppars )
-        if( (uppars.without>=1) & ((uppars.MCit==uppars.burnin) | (uppars.MCit==uppars.MCmax)) )    # output stepsizes and rejection rates
+        if( (uppars.without>=1) && ((uppars.MCit==uppars.burnin) || (uppars.MCit==uppars.MCmax)) )      # output stepsizes and rejection rates
             outputrejrates( uppars )
         end     # end if without and end of burnin or full run
         # ...text-file:
@@ -413,7 +406,7 @@ function initialiseLineageMCmodel2( lineagetree::Lineagetree, model::UInt,timeun
             priors_glob[4] = getFulldistributionfromparameters( "shiftedcutoffGauss", pars_here )
         end     # end let par_here
         # ...inheritance-rw parameters:
-        let pars_here = [0.0,0.25]
+        let pars_here = [0.0,0.7]
             priors_glob[5] = getFulldistributionfromparameters( "Gauss", pars_here )
         end     # end let par_here
         let pars_here = [0.0,0.5]
@@ -435,16 +428,16 @@ function initialiseLineageMCmodel2( lineagetree::Lineagetree, model::UInt,timeun
             priors_glob[4] = getFulldistributionfromparameters( "shiftedcutoffGauss", pars_here )
         end     # end let par_here
         # ...2d inheritance-rw parameters:
-        let pars_here = [0.0,0.5]
+        let pars_here = [0.0,0.7]
             priors_glob[5] = getFulldistributionfromparameters( "Gauss", pars_here )
         end     # end let par_here
-        let pars_here = [0.0,0.5]
+        let pars_here = [0.0,0.7]
             priors_glob[6] = getFulldistributionfromparameters( "Gauss", pars_here )
         end     # end let par_here
-        let pars_here = [0.0,0.5]
+        let pars_here = [0.0,0.7]
             priors_glob[7] = getFulldistributionfromparameters( "Gauss", pars_here )
         end     # end let par_here
-        let pars_here = [0.0,0.5]
+        let pars_here = [0.0,0.7]
             priors_glob[8] = getFulldistributionfromparameters( "Gauss", pars_here )
         end     # end let par_here
         let pars_here = [0.0,0.5]
@@ -462,16 +455,16 @@ function initialiseLineageMCmodel2( lineagetree::Lineagetree, model::UInt,timeun
             priors_glob[2] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
         end     # end let par_here
         # ...2d inheritance-rw parameters:
-        let pars_here = [0.0,0.5]
+        let pars_here = [0.0,0.7]
             priors_glob[3] = getFulldistributionfromparameters( "Gauss", pars_here )
         end     # end let par_here
-        let pars_here = [0.0,0.5]
+        let pars_here = [0.0,0.7]
             priors_glob[4] = getFulldistributionfromparameters( "Gauss", pars_here )
         end     # end let par_here
-        let pars_here = [0.0,0.5]
+        let pars_here = [0.0,0.7]
             priors_glob[5] = getFulldistributionfromparameters( "Gauss", pars_here )
         end     # end let par_here
-        let pars_here = [0.0,0.5]
+        let pars_here = [0.0,0.7]
             priors_glob[6] = getFulldistributionfromparameters( "Gauss", pars_here )
         end     # end let par_here
         let pars_here = [0.0,0.5]
@@ -482,96 +475,100 @@ function initialiseLineageMCmodel2( lineagetree::Lineagetree, model::UInt,timeun
         end     # end let par_here
     elseif( model==11 )                                     # simple GammaExponential model
         # ...scale:
-        let pars_here = [0.0,100.0]./timeunit
+        let pars_here = [0.0,50.0]./timeunit
             priors_glob[1] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
         end     # end let par_here
         # ...shape:
-        let pars_here = [0.0,10.0, 1.0]                     # shifted to avoid [0,1]
+        let pars_here = [0.0,50.0, 1.0]                     # shifted to avoid [0,1]
             priors_glob[2] = getFulldistributionfromparameters( "shiftedcutoffGauss", pars_here )
         end     # end let par_here
         # ...div-prob:
-        let pars_here = [0.0,1.0]
-            priors_glob[3] = getFulldistributionfromparameters( "rectangle", pars_here )
+        let pars_here = [4.0,1.0].+1
+            #priors_glob[3] = getFulldistributionfromparameters( "rectangle", pars_here )   # pars_here = [0.0,1.0]
+            priors_glob[3] = getFulldistributionfromparameters( "beta", pars_here )
         end     # end let par_here
     elseif( model==12 )                                     # clock-modulated GammaExponential model
         # ...scale:
-        let pars_here = [0.0,100.0]./timeunit
+        let pars_here = [0.0,50.0]./timeunit
             priors_glob[1] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
         end     # end let par_here
         # ...shape:
-        let pars_here = [0.0,10.0, 1.0]                     # shifted to avoid [0,1]
+        let pars_here = [0.0,50.0, 1.0]                     # shifted to avoid [0,1]
             priors_glob[2] = getFulldistributionfromparameters( "shiftedcutoffGauss", pars_here )
         end     # end let par_here
         # ...div-prob:
-        let pars_here = [0.0,1.0]
-            priors_glob[3] = getFulldistributionfromparameters( "rectangle", pars_here )
+        let pars_here = [4.0,1.0].+1
+            #priors_glob[3] = getFulldistributionfromparameters( "rectangle", pars_here )   # pars_here = [0.0,1.0]
+            priors_glob[3] = getFulldistributionfromparameters( "beta", pars_here )
         end     # end let par_here
         # ...clock:
         let pars_here = [0.0,1.0]                           # relative to scale parameters
-            priors_glob[5] = getFulldistributionfromparameters( "rectangle", pars_here )
+            priors_glob[4] = getFulldistributionfromparameters( "rectangle", pars_here )
         end     # end of let par_here
         let pars_here = [24.0,5.0]./timeunit
-            priors_glob[6] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
+            priors_glob[5] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
         end     # end of let par_here
         let pars_here = [0.0,2*pi]
-            priors_glob[7] = getFulldistributionfromparameters( "rectangle", pars_here )
+            priors_glob[6] = getFulldistributionfromparameters( "rectangle", pars_here )
         end     # end of let par_here
     elseif( model==13 )                                     # rw-inheritance GammaExponential model
         # ...scale:
-        let pars_here = [0.0,100.0]./timeunit
+        let pars_here = [0.0,50.0]./timeunit
             priors_glob[1] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
         end     # end let par_here
         # ...shape:
-        let pars_here = [0.0,10.0, 1.0]                     # shifted to avoid [0,1]
+        let pars_here = [0.0,50.0, 1.0]                     # shifted to avoid [0,1]
             priors_glob[2] = getFulldistributionfromparameters( "shiftedcutoffGauss", pars_here )
         end     # end let par_here
         # ...div-prob:
-        let pars_here = [0.0,1.0]
-            priors_glob[3] = getFulldistributionfromparameters( "rectangle", pars_here )
+        let pars_here = [4.0,1.0].+1
+            #priors_glob[3] = getFulldistributionfromparameters( "rectangle", pars_here )   # pars_here = [0.0,1.0]
+            priors_glob[3] = getFulldistributionfromparameters( "beta", pars_here )
         end     # end let par_here
         # ...inheritance-rw parameters:
-        let pars_here = [0.0,0.25]
-            priors_glob[5] = getFulldistributionfromparameters( "Gauss", pars_here )
+        let pars_here = [0.0,0.7]
+            priors_glob[4] = getFulldistributionfromparameters( "Gauss", pars_here )
         end     # end let par_here
         let pars_here = [0.0,0.5]
-            priors_glob[6] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
+            priors_glob[5] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
         end     # end let par_here
     elseif( model==14 )                                     # 2D rw-inheritance GammaExponential model
         # ...scale:
-        let pars_here = [0.0,100.0]./timeunit
+        let pars_here = [0.0,50.0]./timeunit
             priors_glob[1] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
         end     # end let par_here
         # ...shape:
-        let pars_here = [0.0,10.0, 1.0]                     # shifted to avoid [0,1]
+        let pars_here = [0.0,50.0, 1.0]                     # shifted to avoid [0,1]
             priors_glob[2] = getFulldistributionfromparameters( "shiftedcutoffGauss", pars_here )
         end     # end let par_here
         # ...div-prob:
-        let pars_here = [0.0,1.0]
-            priors_glob[3] = getFulldistributionfromparameters( "rectangle", pars_here )
+        let pars_here = [4.0,1.0].+1
+            #priors_glob[3] = getFulldistributionfromparameters( "rectangle", pars_here )   # pars_here = [0.0,1.0]
+            priors_glob[3] = getFulldistributionfromparameters( "beta", pars_here )
         end     # end let par_here
         # ...2d inheritance-rw parameters:
-        let pars_here = [0.0,0.5]
+        let pars_here = [0.0,0.7]
+            priors_glob[4] = getFulldistributionfromparameters( "Gauss", pars_here )
+        end     # end let par_here
+        let pars_here = [0.0,0.7]
             priors_glob[5] = getFulldistributionfromparameters( "Gauss", pars_here )
         end     # end let par_here
-        let pars_here = [0.0,0.5]
+        let pars_here = [0.0,0.7]
             priors_glob[6] = getFulldistributionfromparameters( "Gauss", pars_here )
         end     # end let par_here
-        let pars_here = [0.0,0.5]
+        let pars_here = [0.0,0.7]
             priors_glob[7] = getFulldistributionfromparameters( "Gauss", pars_here )
         end     # end let par_here
         let pars_here = [0.0,0.5]
-            priors_glob[8] = getFulldistributionfromparameters( "Gauss", pars_here )
+            priors_glob[8] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
         end     # end let par_here
         let pars_here = [0.0,0.5]
             priors_glob[9] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
         end     # end let par_here
-        let pars_here = [0.0,0.5]
-            priors_glob[10] = getFulldistributionfromparameters( "cutoffGauss", pars_here )
-        end     # end let par_here
     else                                                    # unknown model
         @printf( " Warning - initialiseLineageMCmodel2: Unknown model %d.\n", model )
     end     # end of distinguishing models
-    if( (model==1) | (model==11) )                          # models without need of unknownmothersamples
+    if( (model==1) || (model==11) )                         # models without need of unknownmothersamples
         if( without>=2 )
             @printf( " Info - initialiseLineageMCmodel2: Automatically set nomotherburnin %d-->%d, nomothersamples %d-->%d, as model %d has no mother samples.\n", nomotherburnin,0, nomothersamples,0, model )
         end     # end if without
@@ -629,7 +626,7 @@ function initialiseLineageMCmodel2( lineagetree::Lineagetree, model::UInt,timeun
     state_prop = Lineagestate2( ones(uppars.noglobpars), ones(uppars.nocells,uppars.nohide),ones(uppars.nocells,nolocpars), ones(uppars.nocells,2), unknownmothersamples_prop )
     target_prop = Target2( 0.0,0.0,0.0, zeros(uppars.nocells),zeros(uppars.nocells),zeros(uppars.nocells), temp )
     mylogtarget = -Inf; mytrycounter = 0                    # initialise
-    while( ((mylogtarget==-Inf)|isnan(mylogtarget)) & (mytrycounter<1e2) )      # keep trying until initial state is not pathological
+    while( !isfinite(mylogtarget) && (mytrycounter<1e2) )   # keep trying until initial state is not pathological
         mytrycounter += 1                                   # one more try to get non-pathological initial state
         # ...get state:
         if( !isnan(state_init.pars_glob[1]) )               # ie actual initial state given
@@ -664,7 +661,7 @@ function initialiseLineageMCmodel2( lineagetree::Lineagetree, model::UInt,timeun
             uppars.without = mywithout
         end     # end if isnan
     end     # end if initial state is pathological
-    if( (mylogtarget==-Inf) | isnan(mylogtarget) )          # did not find non-pathological initial state
+    if( !isfinite(mylogtarget) )                            # did not find non-pathological initial state
         @printf( " (%s) Warning - initialiseLineageMCmodel2 (%d): Could not find non-pathological initial state within %d trys: mylogtarget = %+1.5e\n", uppars.chaincomment,uppars.MCit, mytrycounter, mylogtarget )
         mywithout = uppars.without; uppars.without = 3
         outputsettings( lineagetree,uppars )
@@ -689,7 +686,7 @@ function getlineagetarget( lineagetree::Lineagetree, state_prop::Lineagestate2,t
     # updates target
 
     # set auxiliary parameters:
-    if( mockupdate | (length(celllistids)==0) ) # mockupdate
+    if( mockupdate || (length(celllistids)==0) )# mockupdate
         return target_prop
     elseif( celllistids==[-1] )                 # full range
         cellrange = collect(Int64,1:uppars.nocells)
@@ -771,7 +768,7 @@ function getlineagetarget( lineagetree::Lineagetree, state_prop::Lineagestate2,t
     target_prop.logtarget_temp = (sum( target_prop.loglklhcomps )/target_prop.temp) + target_prop.logprior  # rescaled likelihood
 
     # sanity check:
-    if( isnan(target_prop.logtarget) | (target_prop.logtarget==+Inf) | (isinf(target_prop.logtarget) & (uppars.without>=4)) )
+    if( isnan(target_prop.logtarget) || (target_prop.logtarget==+Inf) || (isinf(target_prop.logtarget) && (uppars.without>=4)) )
         @printf( " (%s) Warning - getlineagetarget (%d): Pathological proposed target value %+1.5e,%+1.5e = %+1.5e %+1.5e %+1.5e, celllistids=[ %s]\n", uppars.chaincomment,uppars.MCit, target_prop.logtarget,target_prop.logprior, sum(target_prop.logevolcost),sum(target_prop.loglklhcomps),sum(target_prop.logpriorcomps), join([@sprintf("%+12d ",j) for j in celllistids]) )
         outputstate( state_prop,target_prop, uppars )
         @printf( " (%s) nocells = %d, nohide = %d, nolocpars = %d, noglobpars = %d\n", uppars.chaincomment, uppars.nocells, uppars.nohide, uppars.nolocpars, uppars.noglobpars )
@@ -779,7 +776,7 @@ function getlineagetarget( lineagetree::Lineagetree, state_prop::Lineagestate2,t
         display( size( target_prop.logpriorcomps ) )
         display( size( target_prop.loglklhcomps ) )
         @printf( " (%s)  bad ones:\n", uppars.chaincomment )
-        badones = convert( Array{Int64,1}, (1:uppars.nocells)[isnan.(target_prop.logevolcost) .| (target_prop.logevolcost.==+Inf) .| (target_prop.logevolcost.==-Inf)] )
+        badones = convert( Array{Int64,1}, (1:uppars.nocells)[.!isfinite.(target_prop.logevolcost)] )
         @printf( " (%s)   evol:  [ %s]\n", uppars.chaincomment, join([@sprintf("%12d ",j) for j in badones]) )
         @printf( " (%s)   evol:  [ %s]\n", uppars.chaincomment, join([@sprintf("%12d ",j) for j in target_prop.logevolcost[badones]]) )
         @printf( " (%s)   mthr:  [ %s]\n", uppars.chaincomment, join([@sprintf("%12d ",j) for j in lineagetree.datawd[badones,4]]) )
@@ -797,10 +794,10 @@ function getlineagetarget( lineagetree::Lineagetree, state_prop::Lineagestate2,t
         @printf( " (%s)   cevol: [ %s]\n", uppars.chaincomment, join([@sprintf("%+1.5e ",myfun_evol(j)) for j in badones]) )
         @printf( " (%s)   clklh: [ %s]\n", uppars.chaincomment, join([@sprintf("%+1.5e ",myfun_lklh(j)) for j in badones]) )
         
-        badones = convert( Array{Int64,1}, (1:uppars.nocells)[isnan.(target_prop.logpriorcomps) .| (target_prop.logpriorcomps.==+Inf) .| (target_prop.logpriorcomps.==-Inf)] )
+        badones = convert( Array{Int64,1}, (1:uppars.nocells)[.!isfinite.(target_prop.logpriorcomps)] )
         @printf( " (%s)   prior: [ %s]\n", uppars.chaincomment, join([@sprintf("%12d ",j) for j in badones]) )
         @printf( " (%s)   prior: [ %s]\n", uppars.chaincomment, join([@sprintf("%12d ",j) for j in target_prop.logpriorcomps[badones]]) )
-        badones = convert( Array{Int64,1}, (1:uppars.nocells)[isnan.(target_prop.loglklhcomps) .| (target_prop.loglklhcomps.==+Inf) .| (target_prop.loglklhcomps.==-Inf)] )
+        badones = convert( Array{Int64,1}, (1:uppars.nocells)[.!isfinite.(target_prop.loglklhcomps)] )
         @printf( " (%s)   lklh:  [ %s]\n", uppars.chaincomment, join([@sprintf("%12d ",j) for j in badones]) )
         @printf( " (%s)   lklh:  [ %s]\n", uppars.chaincomment, join([@sprintf("%12d ",j) for j in target_prop.loglklhcomps[badones]]) )
         @printf( " (%s) Warning - getlineagetarget (%d): Sleep now.\n", uppars.chaincomment,uppars.MCit ); sleep(10)
@@ -826,7 +823,7 @@ function acceptrejectstep( state_curr::Lineagestate2,target_curr::Target2, state
         end     # end if without
     end     # end if withpropscounter
     if( log(rand())<=( loghastingsterm + target_prop.logtarget_temp-target_curr.logtarget_temp ) )    # accept
-        if( (uppars.without>=2) & ((j_up==7)|(j_up==8)) )
+        if( (uppars.without>=2) && ((j_up==7)||(j_up==8)) )
             @printf( " (%s) Info - acceptrejectstep (%d): Accept j_up=%d, %+1.5e = %+1.5e --> %+1.5e, lghstngs=%+1.5e\n", uppars.chaincomment,uppars.MCit, j_up, target_prop.logtarget_temp-target_curr.logtarget_temp,target_curr.logtarget_temp,target_prop.logtarget_temp, loghastingsterm )
             #@printf( " (%s) Curr:\n", uppars.chaincomment ); outputstate( state_curr,target_curr, uppars );  outputtarget(  target_curr, uppars )
             #@printf( " (%s) Prop:\n", uppars.chaincomment ); outputstate( state_prop,target_prop, uppars );  outputtarget(  target_prop, uppars )
@@ -835,7 +832,7 @@ function acceptrejectstep( state_curr::Lineagestate2,target_curr::Target2, state
         state_curr = deepcopy( state_prop )
         target_curr = deepcopy( target_prop )
     else                                                                    # reject
-        if( (uppars.without>=2) & ((j_up==7)|(j_up==8)) )
+        if( (uppars.without>=2) && ((j_up==7)||(j_up==8)) )
             @printf( " (%s) Info - acceptrejectstep (%d): Reject j_up=%d, %+1.5e = %+1.5e --> %+1.5e, lghstngs=%+1.5e\n", uppars.chaincomment,uppars.MCit, j_up, target_prop.logtarget_temp-target_curr.logtarget_temp,target_curr.logtarget_temp,target_prop.logtarget_temp, loghastingsterm )
             @printf( " (%s)  ...(%+1.5e, %+1.5e, %+1.5e) = (%+1.5e, %+1.5e, %+1.5e) --> (%+1.5e, %+1.5e, %+1.5e)\n", uppars.chaincomment, sum(target_prop.logevolcost)-sum(target_curr.logevolcost),sum(target_prop.loglklhcomps)-sum(target_curr.loglklhcomps),sum(target_prop.logpriorcomps)-sum(target_curr.logpriorcomps), sum(target_curr.logevolcost),sum(target_curr.loglklhcomps),sum(target_curr.logpriorcomps), sum(target_prop.logevolcost),sum(target_prop.loglklhcomps),sum(target_prop.logpriorcomps) )
             @printf( " (%s) Curr:\n", uppars.chaincomment ); outputstate( state_curr,target_curr, uppars );  #outputtarget(  target_curr, uppars )
@@ -911,11 +908,11 @@ function getallpars_fromprior( lineagetree::Lineagetree, state_curr::Lineagestat
             statefunctions.getevolpars( pars_glob,pars_evol[mother,:], view(pars_evol, j_cell,:), uppars )
             loghastingsterm += targetfunctions.getevolpars( state_curr.pars_glob,state_curr.pars_evol[mother,:],state_curr.pars_evol[j_cell,:], uppars ) - targetfunctions.getevolpars( pars_glob,pars_evol[mother,:],pars_evol[j_cell,:], uppars )
             # cell-wise parameters, depending on approximate times:
-            if( (uppars.model==1) | (uppars.model==3) | (uppars.model==4) ) # simple or (2d) rw-inheritance model; ie pars_cell not time-dependent
+            if( uppars.model in (1,3,4, 9, 11,13,14) )  # simple or (2d) rw-inheritance model; ie pars_cell not time-dependent
                 statefunctions.getcellpars( pars_glob,pars_evol[j_cell,:],zeros(2), view(pars_cell, j_cell,:), uppars )  # times are buffer only
                 pars_cell_prop_buffer .= deepcopy( pars_cell[j_cell,:] )
                 pars_cell_curr_buffer .= deepcopy( state_curr.pars_cell[j_cell,:] )
-            elseif( uppars.model==2 )       # clock-modulated model; ie pars_cell deterministic, but time-dependent
+            elseif( (uppars.model==2) || (uppars.model==12) )   # clock-modulated model; ie pars_cell deterministic, but time-dependent
                 statefunctions.getcellpars( pars_glob,pars_evol[j_cell,:],[times_cell[mother,2],+Inf], view(pars_cell_prop_buffer, :), uppars ) # only birth-time matters
                 pars_cell_curr_buffer .= deepcopy( state_curr.pars_cell[j_cell,:] ) # different from pars_cell, as times are different
             else                            # unknown model
@@ -942,9 +939,9 @@ function getallpars_fromprior( lineagetree::Lineagetree, state_curr::Lineagestat
                 loghastingsterm = -Inf
             end     # end if able to sample times
             # cell-wise parameters, depending on coreect times:
-            if( (uppars.model==1) | (uppars.model==3) | (uppars.model==4) ) # simple or rw-inheritance model; ie pars_cell not time-dependent
+            if( uppars.model in (1,3,4, 9, 11,13,14) ) # simple or rw-inheritance model; ie pars_cell not time-dependent
                 # just keep pars_cell, as allocated before setting the times
-            elseif( uppars.model==2 )       # clock-modulated model; ie pars_cell deterministic, but time-dependent
+            elseif( (uppars.model==2) || (uppars.model==12) )   # clock-modulated model; ie pars_cell deterministic, but time-dependent
                 statefunctions.getcellpars( pars_glob,pars_evol[j_cell,:],times_cell[j_cell,:], view(pars_cell, j_cell,:), uppars )
                 loghastingsterm += targetfunctions.getcellpars( state_curr.pars_glob,state_curr.pars_evol[j_cell,:],state_curr.times_cell[j_cell,:], state_curr.pars_cell[j_cell,:], uppars )
                 loghastingsterm -= targetfunctions.getcellpars( pars_glob,pars_evol[j_cell,:],times_cell[j_cell,:], pars_cell[j_cell,:], uppars )
@@ -976,12 +973,12 @@ function getallpars_fromprior( lineagetree::Lineagetree, state_curr::Lineagestat
                 #@printf( " (%s) Info - getallpars_fromprior (%d): loghastingsterm before curr of cell %d: %+1.5e.\n", uppars.chaincomment,uppars.MCit, j_cell, loghastingsterm )
                 loghastingsterm += sum(targetfunctions.getunknownmotherpars( state_curr.pars_glob, state_curr.pars_evol[j_cell,:],state_curr.pars_cell[j_cell,:],state_curr.times_cell[j_cell,:],cellfate, cellfate,lineagexbounds_curr, Float64.(lineagetree.datawd[j_cell,[2,3]]), state_curr.unknownmothersamples[uppars.celltostarttimesmap[j_cell]], uppars ))
                 #@printf( " (%s) Info - getallpars_fromprior (%d): loghastingsterm after  curr of cell %d: %+1.5e.\n", uppars.chaincomment,uppars.MCit, j_cell, loghastingsterm )
-                if( false & (isnan(loghastingsterm) | isinf(loghastingsterm)) )
-                    @printf( " (%s) Info - getallpars_fromprior (%d): %f hastingsterm, pars_glob=[ %s],pars_evol=[ %s],pars_cell=[ %s],times=[ %s],fate=%d\n", uppars.chaincomment,uppars.MCit, loghastingsterm, join([@sprintf("%+1.5e ",j) for j in state_curr.pars_glob]),join([@sprintf("%+1.5e ",j) for j in state_curr.pars_evol[j_cell,:]]),join([@sprintf("%+1.5e ",j) for j in state_curr.pars_cell[j_cell,:]]),join([@sprintf("%+1.5e ",j) for j in state_curr.times_cell[j_cell,:]]),cellfate )
-                    @printf( " (%s) Info - getallpars_fromprior (%d): times_cell_here = [ %s], timeoffset = %1.5e.\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in unknownmothersamples_list[uppars.celltostarttimesmap[j_cell]].time_cell_eq[j_sample,:]]), lineagetree.datawd[j_cell,2] )
+                #if( !isfinite(loghastingsterm) )
+                #    @printf( " (%s) Info - getallpars_fromprior (%d): %f hastingsterm, pars_glob=[ %s],pars_evol=[ %s],pars_cell=[ %s],times=[ %s],fate=%d\n", uppars.chaincomment,uppars.MCit, loghastingsterm, join([@sprintf("%+1.5e ",j) for j in state_curr.pars_glob]),join([@sprintf("%+1.5e ",j) for j in state_curr.pars_evol[j_cell,:]]),join([@sprintf("%+1.5e ",j) for j in state_curr.pars_cell[j_cell,:]]),join([@sprintf("%+1.5e ",j) for j in state_curr.times_cell[j_cell,:]]),cellfate )
+                #    @printf( " (%s) Info - getallpars_fromprior (%d): times_cell_here = [ %s], timeoffset = %1.5e.\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in unknownmothersamples_list[uppars.celltostarttimesmap[j_cell]].time_cell_eq[j_sample,:]]), lineagetree.datawd[j_cell,2] )
                     #(mean_div,std_div, mean_dth,std_dth, prob_dth) = estimateFrechetWeibullstats( state_curr.pars_cell[j_cell,:] )
                     #@printf( " (%s) Info - getallpars_fromprior (%d): curr: dt=%1.5e, %1.5e+-%1.5e, %1.5e+-%1.5e, %1.5e, xbounds=[%1.5e, %1.5e], fate_smpl=%d\n", uppars.chaincomment,uppars.MCit, state_curr.times_cell[j_cell,2]-state_curr.times_cell[j_cell,1], mean_div,std_div, mean_dth,std_dth, prob_dth, lineagexbounds_curr[1],lineagexbounds_curr[2], cellfate )
-                end     # end if pathological loghastingsterm
+                #end     # end if pathological loghastingsterm
                 loghastingsterm -= sum(targetfunctions.getunknownmotherpars( pars_glob, pars_evol[j_cell,:],pars_cell[j_cell,:],times_cell[j_cell,:],cellfate, cellfate,lineagexbounds_prop, Float64.(lineagetree.datawd[j_cell,[2,3]]), unknownmothersamples_list[uppars.celltostarttimesmap[j_cell]], uppars ))
                 #@printf( " (%s) Info - getallpars_fromprior (%d): loghastingsterm after  prop of cell %d: %+1.5e.\n", uppars.chaincomment,uppars.MCit, j_cell, loghastingsterm )
             end     # end if rejectthisforsure
@@ -1072,11 +1069,11 @@ function getglobparsjt_FWscaleshape_rw( state_curr::Lineagestate2,target_curr::T
     # for divisions: cellfate==2, for deaths: cellfate==1
     #@printf( " (%s) Info - getglobparsjt_FWscaleshape_rw (%d): j_fate = %d, j_up = %d\n", uppars.chaincomment,uppars.MCit, j_fate, j_up )
 
-    if( (uppars.model==1) | (uppars.model==2) | (uppars.model==3) | (uppars.model==4) ) # models with Frechet-Weibull distribution
+    if( uppars.model in (1,2,3,4) )                                             # models with Frechet-Weibull distribution
         upperthreshold = Float64(1e5)                                           # upper threshold for scale factor - just for numerical purposes
         loghastingsterm = 0.0                                                   # initialise
         if( j_fate==1 )                                                         # death parameters
-            if( (state_curr.pars_glob[3]==0.0) | (state_curr.pars_glob[3]>upperthreshold) | (!all(state_curr.pars_cell[:,3].>0)) )  # don't interact with zero
+            if( (state_curr.pars_glob[3]==0.0) || (state_curr.pars_glob[3]>upperthreshold) || (!all(state_curr.pars_cell[:,3].>0)) )  # don't interact with zero
                 loghastingsterm = 0.0; mockupdate = true; celllistids = Array{Int64,1}([])
                 return state_prop, celllistids, loghastingsterm, mockupdate
             end     # end if exactly zero
@@ -1089,7 +1086,7 @@ function getglobparsjt_FWscaleshape_rw( state_curr::Lineagestate2,target_curr::T
             state_prop.pars_glob[4] += change;                                  #state_prop.pars_cell[:,4] .+= change
             logfac_prop = (1/state_prop.pars_glob[4])*log(log(2))
             state_prop.pars_glob[3] *= exp(logfac_curr - logfac_prop);          #state_prop.pars_cell[:,3] .*= exp(logfac_curr - logfac_prop)
-            if( (state_prop.pars_glob[3]==0.0) | (state_prop.pars_glob[3]>upperthreshold) | (!all(state_prop.pars_cell[:,3].>0)) )  # don't interact with zero
+            if( (state_prop.pars_glob[3]==0.0) || (state_prop.pars_glob[3]>upperthreshold) || (!all(state_prop.pars_cell[:,3].>0)) )  # don't interact with zero
                 state_prop = deepcopy(state_curr); loghastingsterm = 0.0; mockupdate = true; celllistids = Array{Int64,1}([])   # undo changes to state_prop, assuming state_prop==state_curr initialy
                 return state_prop, celllistids, loghastingsterm, mockupdate
             end     # end if exactly zero
@@ -1102,14 +1099,14 @@ function getglobparsjt_FWscaleshape_rw( state_curr::Lineagestate2,target_curr::T
             for j_starttime = 1:length(uppars.unknownmotherstarttimes)
                 unknownmothersamples = Unknownmotherequilibriumsamples(uppars.unknownmotherstarttimes[j_starttime], uppars.nomothersamples,uppars.nomotherburnin,zeros(uppars.nomothersamples,uppars.nohide),zeros(uppars.nomothersamples,uppars.nolocpars),zeros(uppars.nomothersamples,2),zeros(Int64,uppars.nomothersamples),zeros(uppars.nomothersamples))   # initialise
                 (state_prop.unknownmothersamples[j_starttime], convflag) = deepcopy(statefunctions.updateunknownmotherpars( state_prop.pars_glob, unknownmothersamples, uppars ))
-                if( convflag<0 )                                                    # not converged
+                if( convflag<0 )                                                # not converged
                     loghastingsterm = -Inf
                 end     # end if not converged
             end     # end of start times loop
             # get loghastingsterm:
-            if( (uppars.model==1) | (uppars.model==2) )                         # global models
+            if( (uppars.model==1) || (uppars.model==2) )                        # global models
                 loghastingsterm += (logfac_curr - logfac_prop)                  # how scale-parameter gets multiplied
-            elseif( (uppars.model==3) | (uppars.model==4) )                     # (2d) rw-inheritance models
+            elseif( (uppars.model==3) || (uppars.model==4) )                    # (2d) rw-inheritance models
                 loghastingsterm += (logfac_curr - logfac_prop)#*(1+uppars.nocells)# how global and cell-wise scale-parameter gets multiplied
             else                                                                # unknown model
                 @printf( " (%s) Warning - getglobparsjt_FWscaleshape_rw (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
@@ -1120,7 +1117,7 @@ function getglobparsjt_FWscaleshape_rw( state_curr::Lineagestate2,target_curr::T
                 loghastingsterm += loghastingsterm_here                         # should be zero
             end     # end of updating all neighbouring cells
         elseif( j_fate==2 )                                                     # division parameters
-            if( (state_curr.pars_glob[1]==0.0) | (state_curr.pars_glob[1]>upperthreshold) | (!all(state_curr.pars_cell[:,1].>0)) )    # don't interact with zero
+            if( (state_curr.pars_glob[1]==0.0) || (state_curr.pars_glob[1]>upperthreshold) || (!all(state_curr.pars_cell[:,1].>0)) )    # don't interact with zero
                 loghastingsterm = 0.0; mockupdate = true; celllistids = Array{Int64,1}([])
                 return state_prop, celllistids, loghastingsterm, mockupdate
             end     # end if exactly zero
@@ -1133,7 +1130,7 @@ function getglobparsjt_FWscaleshape_rw( state_curr::Lineagestate2,target_curr::T
             state_prop.pars_glob[2] += change;                                  #state_prop.pars_cell[:,2] .+= change
             logfac_prop = -(1/state_prop.pars_glob[2])*log(log(2))
             state_prop.pars_glob[1] *= exp(logfac_curr - logfac_prop);          #state_prop.pars_cell[:,1] .*= exp(logfac_curr - logfac_prop)
-            if( (state_prop.pars_glob[1]==0.0) | (state_prop.pars_glob[1]>upperthreshold) | (!all(state_prop.pars_cell[:,1].>0)) )  # don't interact with zero
+            if( (state_prop.pars_glob[1]==0.0) || (state_prop.pars_glob[1]>upperthreshold) || (!all(state_prop.pars_cell[:,1].>0)) )    # don't interact with zero
                 state_prop = deepcopy(state_curr); loghastingsterm = 0.0; mockupdate = true; celllistids = Array{Int64,1}([])   # undo changes to state_prop, assuming state_prop==state_curr initialy
                 return state_prop, celllistids, loghastingsterm, mockupdate
             end     # end if exactly zero
@@ -1146,14 +1143,14 @@ function getglobparsjt_FWscaleshape_rw( state_curr::Lineagestate2,target_curr::T
             for j_starttime = 1:length(uppars.unknownmotherstarttimes)
                 unknownmothersamples = Unknownmotherequilibriumsamples(uppars.unknownmotherstarttimes[j_starttime], uppars.nomothersamples,uppars.nomotherburnin,zeros(uppars.nomothersamples,uppars.nohide),zeros(uppars.nomothersamples,uppars.nolocpars),zeros(uppars.nomothersamples,2),zeros(Int64,uppars.nomothersamples),zeros(uppars.nomothersamples))   # initialise
                 (state_prop.unknownmothersamples[j_starttime], convflag) = deepcopy(statefunctions.updateunknownmotherpars( state_prop.pars_glob, unknownmothersamples, uppars ))
-                if( convflag<0 )                                                    # not converged
+                if( convflag<0 )                                                # not converged
                     loghastingsterm = -Inf
                 end     # end if not converged
             end     # end of start times loop
             # get loghastingsterm:
-            if( (uppars.model==1) | (uppars.model==2) )                         # global models
+            if( (uppars.model==1) || (uppars.model==2) )                        # global models
                 loghastingsterm += (logfac_curr - logfac_prop)                  # how scale-parameter gets multiplied
-            elseif( (uppars.model==3) | (uppars.model==4))                      # 2d rw-inheritance models
+            elseif( (uppars.model==3) || (uppars.model==4))                     # 2d rw-inheritance models
                 loghastingsterm += (logfac_curr - logfac_prop)#*(1+uppars.nocells)# how global and cell-wise scale-parameter gets multiplied
             else                                                                # unknown model
                 @printf( " (%s) Warning - getglobparsjt_FWscaleshape_rw (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
@@ -1172,7 +1169,7 @@ function getglobparsjt_FWscaleshape_rw( state_curr::Lineagestate2,target_curr::T
         mockupdate = true
         celllistids = Array{Int64,1}([])
     end     # end of distinguishing models
-    if( false | !all(.!isnan.(state_prop.pars_glob)) | !all(.!(state_prop.pars_glob.==-Inf)) )
+    if( !all(isfinite, state_prop.pars_glob) )
         @printf( " (%s) Warning - getglobparsjt_FWscaleshape_rw (%d): Pathological proposal for j_fate %d (logtarget %+1.5e,logprior %+1.5e).\n", uppars.chaincomment,uppars.MCit, j_fate, target_prop.logtarget,target_prop.logprior )
         @printf( " (%s)  pars_stp[%d] = %+1.5e, change = %+1.5e\n", uppars.chaincomment,j_up, uppars.pars_stps[j_up], change )
         @printf( " (%s)  pars_glob_prop = [ %s]\n", uppars.chaincomment, join([@sprintf("%+1.5e ",j) for j in state_prop.pars_glob[:]]) )
@@ -1192,7 +1189,7 @@ function getglobpars_rw_m3( lineagetree::Lineagetree,state_curr::Lineagestate2,t
     # assumes state_prop has same values as state_curr or is continuation of independent updates
     #@printf( " (%s) Info - getglobpars_rw_m3 (%d): Start new globparjt update, globpar=%d,j_up=%d.\n", uppars.chaincomment,uppars.MCit, j_globpar,j_up )
 
-    if( (uppars.model==3) | (uppars.model==4) )         # (2d) rw-inheritance model
+    if( (uppars.model==3) || (uppars.model==4) )        # (2d) rw-inheritance model
         # set auxiliary parameters:
         mockupdate = false                              # no mockupdate unless otherwise stated
         cellorder = collect(1:uppars.nocells)[ sortperm(lineagetree.datawd[:,2]) ]  # cells in order of birth time
@@ -1284,7 +1281,7 @@ function getglobpars_gamma_potsigma_m3( state_curr::Lineagestate2, state_prop::L
     # get auxiliary parameters:
     if( uppars.model==3 )                               # rw-inheritance model
         j_globpar = uppars.nolocpars + 2                # sigma index
-        if( (uppars.priors_glob[j_globpar].typeno==1) | (uppars.priors_glob[j_globpar].typeno==3) ) # rectangle or cutoffGauss
+        if( (uppars.priors_glob[j_globpar].typeno==1) || (uppars.priors_glob[j_globpar].typeno==3) )# rectangle or cutoffGauss
             alpha_prior = 1.0 - (3/2);  invtheta_prior = 0.0
         else                                            # unsupported prior
             @printf( " (%s) Warning - getglobpars_gamma_potsigma_m3 (%d): Unknown prior type %d.\n", uppars.chaincomment,uppars.MCit, uppars.priors_glob[j_globpar].typeno )
@@ -1311,7 +1308,7 @@ function getglobpars_gamma_potsigma_m3( state_curr::Lineagestate2, state_prop::L
         end     # end of updating all neighbouring cells
     elseif( uppars.model==4 )                           # 2d rw-inheritance model
         j_globpar = uppars.nolocpars + 4 + j_hide       # sigma index
-        if( (uppars.priors_glob[j_globpar].typeno==1) | (uppars.priors_glob[j_globpar].typeno==3) ) # rectangle or cutoffGauss
+        if( (uppars.priors_glob[j_globpar].typeno==1) || (uppars.priors_glob[j_globpar].typeno==3) )# rectangle or cutoffGauss
             alpha_prior = 1.0 - (3/2);  invtheta_prior = 0.0
         else                                            # unsupported prior
             @printf( " (%s) Warning - getglobpars_gamma_potsigma_m3 (%d): Unknown prior type %d.\n", uppars.chaincomment,uppars.MCit, uppars.priors_glob[j_globpar].typeno )
@@ -1332,9 +1329,9 @@ function getglobpars_gamma_potsigma_m3( state_curr::Lineagestate2, state_prop::L
         loghastingsterm += logGamma_distr( [theta,(3/2)+alpha], [1/state_curr.pars_glob[j_globpar]^2] )[1] - logGamma_distr( [theta,(3/2)+alpha], [1/state_prop.pars_glob[j_globpar]^2] )[1] # need (3/2) for density on flat measure dsigma
         mockupdate = false
         celllistids = collect(Int64, 1:uppars.nocells)  # all cells affected, as changed global parameter
-        for j_cell = UInt64.(celllistids)           # should not change, but re-compute to avoid numerical errors
+        for j_cell = UInt64.(celllistids)               # should not change, but re-compute to avoid numerical errors
             (state_prop, loghastingsterm_here) = getcellpars_fromprior( state_curr, state_prop, j_cell,j_up, statefunctions,targetfunctions, uppars )[[1,3]]   # j_up not actually used here
-            loghastingsterm += loghastingsterm_here # should be zero
+            loghastingsterm += loghastingsterm_here     # should be zero
         end     # end of updating all neighbouring cells
     else                                                # unknown model
         #@printf( " (%s) Warning - getproposal_potsigma_gamma (%d): Update not suitable for model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
@@ -1343,26 +1340,26 @@ function getglobpars_gamma_potsigma_m3( state_curr::Lineagestate2, state_prop::L
         celllistids = Array{Int64,1}([])
     end     # end of distinguishing models
     
-    if( false & ((uppars.MCit==10) | (uppars.MCit==100) | (uppars.MCit==1000) | (uppars.MCit==10000)) )             # graphical output
-        mymean = alpha*theta; mystd = sqrt( alpha*(theta^2) )
-        mymin = max(0.0,mymean-4*mystd); mymax = mymean+4*mystd; myd = (mymax-mymin)/1000; myrange = collect(mymin:myd:mymax)
-        myvalues = exp.( logGamma_distr([theta,alpha],myrange) )
-        p1 = plot( myrange, myvalues, lw=2 )
-        plot!( [1/state_curr.pars_glob[j_par,2]^2,1/state_curr.pars_glob[j_par,2]^2],[min(0.0,minimum(myvalues)),maximum(myvalues)], lw=2, label="curr" )
-        plot!( [1/state_prop.pars_glob[j_par,2]^2,1/state_prop.pars_glob[j_par,2]^2],[min(0.0,minimum(myvalues)),maximum(myvalues)], lw=2, label="prop" )
-        display(p1)
-        nosamples = 100000; mypotsigmas = zeros(nosamples)
-        for j_sample = 1:nosamples
-            mypotsigmas[j_sample] = 1/sqrt( sampleGamma([theta,alpha]) )
-        end     # end of samples loop
-        mysamples = mypotsigmas.^(-2)
-        res = Int(ceil(2*(nosamples^(1/3)))); mymin = minimum(mysamples); mymax = maximum(mysamples); mydbin = (mymax-mymin)/res; mybins = collect(mymin:mydbin:mymax)
-        #@printf( " mymean = %1.5e, mystd = %1.5e; empirical mean = %1.5e, empirical std = %1.5e\n", mymean,mystd, mean(mysamples), std(mysamples) )
-        p2 = histogram( mysamples, bins=mybins, fill=(0,RGBA(0.6,0.6,0.6, 0.6)), lw=0, label="",title=@sprintf("ch %s, it %d, potproposal",uppars.chaincomment,uppars.MCit) )
-        plot!( myrange, myvalues*(mydbin*nosamples), lw=2, label="" )
-        display(p2)
-        @printf( " (%s) Warning - getglobpars_gamma_potsigma_m3 (%d): Sleep now.\n", uppars.chaincomment,uppars.MCit ); sleep(10)
-    end     # end if graphical output
+    #if( uppars.MCit in (10,100,1000,10000) )           # graphical output
+    #    mymean = alpha*theta; mystd = sqrt( alpha*(theta^2) )
+    #    mymin = max(0.0,mymean-4*mystd); mymax = mymean+4*mystd; myd = (mymax-mymin)/1000; myrange = collect(mymin:myd:mymax)
+    #    myvalues = exp.( logGamma_distr([theta,alpha],myrange) )
+    #    p1 = plot( myrange, myvalues, lw=2 )
+    #    plot!( [1/state_curr.pars_glob[j_par,2]^2,1/state_curr.pars_glob[j_par,2]^2],[min(0.0,minimum(myvalues)),maximum(myvalues)], lw=2, label="curr" )
+    #    plot!( [1/state_prop.pars_glob[j_par,2]^2,1/state_prop.pars_glob[j_par,2]^2],[min(0.0,minimum(myvalues)),maximum(myvalues)], lw=2, label="prop" )
+    #    display(p1)
+    #    nosamples = 100000; mypotsigmas = zeros(nosamples)
+    #    for j_sample = 1:nosamples
+    #        mypotsigmas[j_sample] = 1/sqrt( sampleGamma([theta,alpha]) )
+    #    end     # end of samples loop
+    #    mysamples = mypotsigmas.^(-2)
+    #    res = Int(ceil(2*(nosamples^(1/3)))); mymin = minimum(mysamples); mymax = maximum(mysamples); mydbin = (mymax-mymin)/res; mybins = collect(mymin:mydbin:mymax)
+    #    #@printf( " mymean = %1.5e, mystd = %1.5e; empirical mean = %1.5e, empirical std = %1.5e\n", mymean,mystd, mean(mysamples), std(mysamples) )
+    #    p2 = histogram( mysamples, bins=mybins, fill=(0,RGBA(0.6,0.6,0.6, 0.6)), lw=0, label="",title=@sprintf("ch %s, it %d, potproposal",uppars.chaincomment,uppars.MCit) )
+    #    plot!( myrange, myvalues*(mydbin*nosamples), lw=2, label="" )
+    #    display(p2)
+    #    @printf( " (%s) Warning - getglobpars_gamma_potsigma_m3 (%d): Sleep now.\n", uppars.chaincomment,uppars.MCit ); sleep(10)
+    #end     # end if graphical output
     return state_prop, celllistids, loghastingsterm, mockupdate
 end     # end of getglobpars_gamma_potsigma_m3 function
 function getevolpars_fromprior( lineagetree::Lineagetree,state_curr::Lineagestate2, state_prop::Lineagestate2, j_cell::UInt64,j_up::UInt64, statefunctions::Statefunctions,targetfunctions::Targetfunctions, uppars::Uppars2 )
@@ -1440,7 +1437,7 @@ function getevolparsjt_nearbycells_rw( lineagetree::Lineagetree,state_curr::Line
     # assumes state_prop has same values as state_curr or is continuation of independent updates
 
     # get auxiliary parameters:
-    if( (uppars.model==1) | (uppars.model==2) )             # simple model, clock-modulated model
+    if( (uppars.model==1) || (uppars.model==2) )            # simple model, clock-modulated model
         myf = exp(-1);                                      # just look at one neighbour in each direction
     elseif( uppars.model==3 )                               # rw-inheritance model
         myf = getlargestabseigenvaluepart( hcat(state_prop.pars_glob[uppars.nolocpars+1]), uppars )[1]
@@ -1555,7 +1552,7 @@ function gettimes_looseend_Gaussind( lineagetree::Lineagetree,state_curr::Lineag
             mockupdate = true
             celllistids = Int64[]
         else                                        # mother unknown
-            if( (uppars.model==1) | (uppars.model==2) | (uppars.model==3) | (uppars.model==4) )     # Frechet-Weibull models
+            if( uppars.model in (1,2,3,4) )         # Frechet-Weibull models
                 (mymean,mystd) = getmeanstdforFrechetWeibull( state_prop.pars_cell[j_cell,:], getlifedata(lineagetree,Int64(j_cell))[2],target_curr.temp,upperthreshold, uppars )
             else                                    # not implemented model
                 @printf( " (%s) Warning - gettimes_looseend_Gaussind (%d): Update not suitable for model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
@@ -1578,7 +1575,7 @@ function gettimes_looseend_Gaussind( lineagetree::Lineagetree,state_curr::Lineag
             mockupdate = true
             celllistids = Int64[]
         else                                        # fate unknown
-            if( (uppars.model==1) | (uppars.model==2) | (uppars.model==3) )     # Frechet-Weibull models
+            if( uppars.model in (1,2,3) )           # Frechet-Weibull models
                 (mymean,mystd) = getmeanstdforFrechetWeibull( state_prop.pars_cell[j_cell,:], cellfate,target_curr.temp,upperthreshold, uppars )
             else                                    # not implemented model
                 @printf( " (%s) Warning - gettimes_looseend_Gaussind (%d): Update not suitable for model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
@@ -1604,7 +1601,7 @@ function gettimes_looseend_Gaussind( lineagetree::Lineagetree,state_curr::Lineag
         loghastingsterm += loghastingsterm_here
         if( jj_cell==j_cell )                       # loghastings-contribution, for proposing current times_cell from proposed pars_cell
             # get mean,std for new proposal, to compute probability for reverse proposal:
-            if( (uppars.model==1) | (uppars.model==2) | (uppars.model==3) )     # Frechet-Weibull models
+            if( uppars.model in (1,2,3,4) )         # Frechet-Weibull models
                 (mymean,mystd) = getmeanstdforFrechetWeibull( state_prop.pars_cell[jj_cell,:], getlifedata(lineagetree,Int64(jj_cell))[2],target_curr.temp,upperthreshold, uppars )
             else                                    # not implemented model
                 @printf( " (%s) Warning - gettimes_looseend_Gaussind (%d): Update not suitable for model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
@@ -1627,11 +1624,11 @@ function gettimes_rw( lineagetree::Lineagetree,state_curr::Lineagestate2,target_
     # assumes state_prop has same values as state_curr or is continuation of independent updates, in which pars_cell has not been updated yet
     
     loghastingsterm = 0.0                                               # symmetrical proposal
-    if( (j_time==1) & (getmother( lineagetree, Int64(j_cell) )[2]>0) )  # update birth time and mother exists
+    if( (j_time==1) && (getmother( lineagetree, Int64(j_cell) )[2]>0) ) # update birth time and mother exists
         mockupdate = true                                               # keep as is, as already updated by mother
         celllistids = Int64[]
-    elseif( (j_time==2) & (getlifedata( lineagetree, Int64(j_cell) )[2]==2) )               # update end-time and dividing
-        change = uppars.pars_stps[j_up]*sqrt(target_curr.temp)*( 2*rand()-1 )   # change
+    elseif( (j_time==2) && (getlifedata( lineagetree, Int64(j_cell) )[2]==2) )              # update end-time and dividing
+        change = uppars.pars_stps[j_up]*sqrt(target_curr.temp)*( 2*rand()-1 )               # change
         state_prop.times_cell[j_cell,j_time] = state_curr.times_cell[j_cell,j_time] + change# proposal for state_prop
         bothdaughters = collect( getdaughters(lineagetree,Int64(j_cell))[[2,4]] )           # collect needed for transforming into vector
         state_prop.times_cell[bothdaughters,1] .= state_prop.times_cell[j_cell,j_time]      # adapt new time for birth of daughters
@@ -1793,7 +1790,7 @@ function outputstate( state::Lineagestate2,target::Target2, uppars::Uppars2 )
     end     # end if actual tempering
     @printf( " (%s)  global:\n", uppars.chaincomment )
     @printf( " (%s)   [ %s]\n", uppars.chaincomment, join([@sprintf("%+12.5e ",j) for j in state.pars_glob]) )
-    if( (uppars.model==1) | (uppars.model==2) | (uppars.model==3) | (uppars.model==4) ) # Frechet-Weibull models
+    if( uppars.model in (1,2,3,4) )     # Frechet-Weibull models
         (mean_div,std_div, mean_dth,std_dth, prob_dth) = estimateFrechetWeibullstats( state.pars_glob[1:uppars.nolocpars] )
         @printf( " (%s)   lifestats: div = %1.5e +- %1.5e,   dth = %1.5e +- %1.5e,   prob_dth = %1.5e\n", uppars.chaincomment, mean_div,std_div, mean_dth,std_dth, prob_dth )
     end     # end of distinguishing models
@@ -1996,7 +1993,7 @@ end     # end of comparetargets function
 function regularcontrolwindowoutput( lineagetree::Lineagetree, state::Lineagestate2,target::Target2, targetfunctions::Targetfunctions, uppars::Uppars2 )
     # outputs state to the control-window at a regular frequency
 
-    if( (uppars.without>=1) & ((uppars.MCit%(uppars.MCmax/10)==0) | (uppars.MCit==uppars.MCmax)) )
+    if( (uppars.without>=1) && ((uppars.MCit%(uppars.MCmax/10)==0) || (uppars.MCit==uppars.MCmax)) )
         outputstate( state,target, uppars )
         outputrejrates( uppars )
         if( uppars.without>=3 )
@@ -2027,7 +2024,7 @@ function graphicaloutputstate( lineagetree::Lineagetree, state::Lineagestate2, t
             elseif( cellfate==2 )   # divisions
                 nodivisions += 1;   fulldivisions[nodivisions] = lifespan
                 bothdaughters = getdaughters(lineagetree,Int64(j_cell))[[2,4]]
-                if( (getlifedata(lineagetree,bothdaughters[1])[2]>0) & (getlifedata(lineagetree,bothdaughters[2])[2]>0) )
+                if( (getlifedata(lineagetree,bothdaughters[1])[2]>0) && (getlifedata(lineagetree,bothdaughters[2])[2]>0) )
                     nofullmotherdaughters += 1      # one more entry
                     fullmotherdaughters[1,nofullmotherdaughters] = lifespan
                     fullmotherdaughters[2:3,nofullmotherdaughters] = collect(getlifedata(lineagetree,bothdaughters[1]))
@@ -2095,7 +2092,7 @@ function graphicaloutputstate( lineagetree::Lineagetree, state::Lineagestate2, t
                 for jj_cell = 1:uppars.nocells
                     if( j_cell!=jj_cell )
                         (isrelated,nogen1,nogen2) = getclosestcommonancestor( lineagetree, Int64(j_cell),Int64(jj_cell) )[[1,3,4]]; minnogen = min(nogen1,nogen2); maxnogen = max(nogen1,nogen2)
-                        if( (isrelated>0) & (maxnogen<=nogenmax) )                    # only plot if closely related
+                        if( (isrelated>0) && (maxnogen<=nogenmax) )     # only plot if closely related
                             #plot!( [j_cell], [jj_cell], seriestype=:scatter, color=RGBA(minnogen/nogenmax,1.0-(minnogen/nogenmax),0,1.0-((maxnogen+minnogen-1)/(2*nogenmax))), label="", aspect_ratio=1  )
                             plot!( [state.pars_cell[j_cell,j_locpar]], [state.pars_cell[jj_cell,j_locpar]], seriestype=:scatter, color=RGBA(minnogen/nogenmax,1.0-(minnogen/nogenmax),0,1.0-((maxnogen+minnogen-1)/(2*nogenmax))), label="" )
                         end     # end if closely enough related
@@ -2192,7 +2189,7 @@ function analysemultipleLineageMCmodels( lineagetree::Lineagetree, state_chains_
             display(p2)
         end     # end if withgraphical
     end     # end of parameters loop
-    if( (mymodel==4) | (mymodel==14) )          # 2d rw-inheritance model
+    if( (mymodel==4) || (mymodel==14) )         # 2d rw-inheritance model
         eigenvalues_hist = zeros(3,nochains,myMCmax-myMCstart+1)    # for each cell last row is '1' for real positive eigenvalues, '2' for real non-positive eigenvalues, '3' for complex eigenvalues; first row is first eigenvalue for real eigenvalues, or real part for complex eigenvalues; second row is second eigenvalue for real eigenvalues, or abs imaginary part for complex eigenvalues
         for j_chain = 1:nochains
             for j_it = 1:(myMCmax-myMCstart+1)
@@ -2358,14 +2355,14 @@ function adjuststepsizes( uppars::Uppars2 )
             end     # end of setting ssign
             if( ssign*sign(uppars.adjfctrs[j_up])<0 )   # overshot
                 newadjfctr = sqrt( myadjfctr )
-                if( !((newadjfctr==0) | (isinf(newadjfctr)) | (isnan(newadjfctr))) )
+                if( (newadjfctr!=0) && isfinite(newadjfctr) )
                     myadjfctr = deepcopy(newadjfctr)
                 end     # end of avoiding pathological cases
             end     # end of setting new adjfctr
             uppars.adjfctrs[j_up] = ssign*myadjfctr
             # adjust stepsize:
             newpars_stps = uppars.pars_stps[j_up]*(myadjfctr^(-deviation))
-            if( !((newpars_stps==0) | (isinf(newpars_stps)) | (isnan(newpars_stps))) )
+            if( (newpars_stps!=0) && isfinite(newpars_stps) )
                 uppars.pars_stps[j_up] = newpars_stps   # adopt new stepsize; otherwise keep as is
             end     # end of avoiding pathological cases
             # update rejection parameters:
@@ -2526,7 +2523,7 @@ function readlineagestatefromtext2( fullfilename::String )
         newline = readline(myfile)          # empty line
 
         (noups, noglobpars_2,nohide_2,nolocpars_2) = getMCmodelnoups2( model, nocells )
-        if( (noglobpars_2!=noglobpars) | (nohide_2!=nohide) | (nolocpars_2!=nolocpars) )
+        if( (noglobpars_2!=noglobpars) || (nohide_2!=nohide) || (nolocpars_2!=nolocpars) )
             @printf( " (%s) Warning - readlineagestatefromtext2 (%d): Wrong parameter numbers for model %d, version %d: %d vs %d, %d vs %d, %d vs %d.\n", chaincomment,MCmax, model,version, noglobpars,noglobpars_2, nohide,nohide_2, nolocpars,nolocpars_2 )
         end     # end if read something wrong
         pars_stps = ones(noups); pars_stps[2] = 2E-4
@@ -2534,7 +2531,7 @@ function readlineagestatefromtext2( fullfilename::String )
         withwriteoutputtext = false         # no text output
         (fullfilename,lineagedata) = readlineagefile("",lineagename[1:(end-4)]); lineagetree = initialiseLineagetree(fullfilename,lineagedata, unknownfates)
         state_init2 = Lineagestate2( NaN*ones(noglobpars), NaN*ones(nocells,nohide), NaN*ones(nocells,nolocpars), NaN*ones(nocells,2), NaN*ones(nohide+nolocpars+2+1,nomothersamples) )  # will get set randomly for each chain, if it contains NaN
-        (~,~, statefunctions,targetfunctions, uppars) = initialiseLineageMCmodel2( lineagetree, model,timeunit,tempering, comment,chaincomment,timestamp, MCstart,burnin,MCmax,subsample, state_init2,pars_stps, nomothersamples,nomotherburnin, without,withwriteoutputtext )
+        (_,_, statefunctions,targetfunctions, uppars) = initialiseLineageMCmodel2( lineagetree, model,timeunit,tempering, comment,chaincomment,timestamp, MCstart,burnin,MCmax,subsample, state_init2,pars_stps, nomothersamples,nomotherburnin, without,withwriteoutputtext )
 
         state_hist = Array{Lineagestate2,1}(undef,MCmax);  target_hist = Array{Target2,1}(undef,MCmax)  # initialise
         logevolcost = zeros(nocells);   loglklhcomps = zeros(nocells);  logpriorcomps = zeros(nocells)  # initialise
@@ -2565,19 +2562,19 @@ function readlineagestatefromtext2( fullfilename::String )
             mylist = parse.(Float64,split(newline)); state_hist[j_sample] = getstatefromlist( mylist )
             newline = readline(myfile)      # logtarget values
             mylist = parse.(Float64,split(newline)); logtarget = deepcopy(mylist[1]); logtarget_temp = deepcopy(mylist[2]); logprior = deepcopy(mylist[3]);   logevolcost[1] = deepcopy(mylist[4]); loglklhcomps[1] = deepcopy(mylist[5]);   logpriorcomps[1] = deepcopy(mylist[6]); temp = deepcopy(mylist[7])
-            if( false & ((j_sample==1) | (j_sample==MCmax) | (j_sample==(MCmax-1))) )
-                @printf( " (%s) Info - readlineagestatefromtext2 (%d): j_sample = %d, mylist = [ %s], target = [ %+1.5e, %+1.5e, %+1.5e,  %+1.5e, %+1.5e, %+1.5e ]\n", chaincomment,MCmax, j_sample, join(@sprintf("%+1.5e ",j) for j in mylist), logtarget,logtarget_temp,logprior, logevolcost[1],loglklhcomps[1],logpriorcomps[1] )
-                if( j_sample>1 )
-                    @printf( " (%s) Info - readlineagestatefromtext2 (%d): j_sample = %d, target = [ %+1.5e, %+1.5e, %+1.5e,  %+1.5e, %+1.5e, %+1.5e ]\n", chaincomment,MCmax, 1, target_hist[1].logtarget,target_hist[1].logtarget_temp,target_hist[1].logprior, target_hist[1].logevolcost[1],target_hist[1].loglklhcomps[1],target_hist[1].logpriorcomps[1] )
-                end
-            end
+            #if( (j_sample==1) || (j_sample==MCmax) || (j_sample==(MCmax-1)) )
+            #    @printf( " (%s) Info - readlineagestatefromtext2 (%d): j_sample = %d, mylist = [ %s], target = [ %+1.5e, %+1.5e, %+1.5e,  %+1.5e, %+1.5e, %+1.5e ]\n", chaincomment,MCmax, j_sample, join(@sprintf("%+1.5e ",j) for j in mylist), logtarget,logtarget_temp,logprior, logevolcost[1],loglklhcomps[1],logpriorcomps[1] )
+            #    if( j_sample>1 )
+            #        @printf( " (%s) Info - readlineagestatefromtext2 (%d): j_sample = %d, target = [ %+1.5e, %+1.5e, %+1.5e,  %+1.5e, %+1.5e, %+1.5e ]\n", chaincomment,MCmax, 1, target_hist[1].logtarget,target_hist[1].logtarget_temp,target_hist[1].logprior, target_hist[1].logevolcost[1],target_hist[1].loglklhcomps[1],target_hist[1].logpriorcomps[1] )
+            #    end
+            #end
             target_hist[j_sample] = deepcopy( Target2( logtarget,logtarget_temp,logprior, logevolcost,loglklhcomps,logpriorcomps, temp ) )
-            if( false & ((j_sample==1) | (j_sample==MCmax) | (j_sample==(MCmax-1))) )
-                if( j_sample>1 )
-                    @printf( " (%s) Info - readlineagestatefromtext2 (%d): j_sample = %d, target = [ %+1.5e, %+1.5e, %+1.5e,  %+1.5e, %+1.5e, %+1.5e ]\n", chaincomment,MCmax, 1, target_hist[1].logtarget,target_hist[1].logtarget_temp,target_hist[1].logprior, target_hist[1].logevolcost[1],target_hist[1].loglklhcomps[1],target_hist[1].logpriorcomps[1] )
-                end
-                @printf( " (%s) Info - readlineagestatefromtext2 (%d): j_sample = %d, target = [ %+1.5e, %+1.5e, %+1.5e,  %+1.5e, %+1.5e, %+1.5e ]\n", chaincomment,MCmax, j_sample, target_hist[j_sample].logtarget,target_hist[j_sample].logtarget_temp,target_hist[j_sample].logprior, target_hist[j_sample].logevolcost[1],target_hist[j_sample].loglklhcomps[1],target_hist[j_sample].logpriorcomps[1] )
-            end
+            #if( (j_sample==1) || (j_sample==MCmax) || (j_sample==(MCmax-1))))
+            #    if( j_sample>1 )
+            #        @printf( " (%s) Info - readlineagestatefromtext2 (%d): j_sample = %d, target = [ %+1.5e, %+1.5e, %+1.5e,  %+1.5e, %+1.5e, %+1.5e ]\n", chaincomment,MCmax, 1, target_hist[1].logtarget,target_hist[1].logtarget_temp,target_hist[1].logprior, target_hist[1].logevolcost[1],target_hist[1].loglklhcomps[1],target_hist[1].logpriorcomps[1] )
+            #    end
+            #    @printf( " (%s) Info - readlineagestatefromtext2 (%d): j_sample = %d, target = [ %+1.5e, %+1.5e, %+1.5e,  %+1.5e, %+1.5e, %+1.5e ]\n", chaincomment,MCmax, j_sample, target_hist[j_sample].logtarget,target_hist[j_sample].logtarget_temp,target_hist[j_sample].logprior, target_hist[j_sample].logevolcost[1],target_hist[j_sample].loglklhcomps[1],target_hist[j_sample].logpriorcomps[1] )
+            #end
         end     # end of reading recorded states
     end     # end of file
     flush(stdout)
@@ -2710,6 +2707,7 @@ function getstateandtargetfunctions( model::UInt64 )
         targetfunctions = Targetfunctions( (x1,x2,x3,x4)->trgtfnctn_getevolpars_m13(x1,x2,x3,x4), (x1,x2,x3,x4,x5,x6,x7,x8,x9,x10)->trgtfnctn_getunknownmotherpars_m13(x1,x2,x3,x4,x5,x6,x7,x8,x9,dthdivdistr,x10), (x1,x2,x3,x4,x5)->trgtfnctn_getcellpars_m13(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->trgtfnctn_getcelltimes_m13(x1,x2,x3,dthdivdistr,x4) )
     elseif( model==14 )                              # 2d rw-inheritance GammaExponential model
         # death-division functions:
+        #dthdivdistr = getDthDivdistributionfromparameters( "GammaExponential" )
         dthdivdistr = getDthDivdistributionfromparameters( "GammaExponential" )
         # state- and targetfunctions:
         statefunctions = Statefunctions( (x1,x2,x3,x4)->stfnctn_getevolpars_m14(x1,x2,x3,x4), (x1,x2,x3,x4,x5)->stfnctn_getunknownmotherpars_m14(x1,x2,x3,x4,dthdivdistr,x5), (x1,x2,x3,x4,x5)->stfnctn_getcellpars_m14(x1,x2,x3,x4,x5), (x1,x2,x3,x4)->stfnctn_getcelltimes_m14(x1,x2,x3,dthdivdistr,x4), (x1,x2,x3)->stfnctn_updateunknownmotherpars_m14(x1,x2,dthdivdistr,x3) )
@@ -2750,14 +2748,14 @@ end     # end of getlistfromstate function
 function getlargestabseigenvaluepart( hiddenmatrix::Array{Float64,2}, uppars::Uppars2 )::Tuple{Float64,Array{ComplexF64,2},Array{ComplexF64,1}}
     # computes largest absolute value of real part of eigenvalues
 
-    if( any(isinf.(hiddenmatrix)) | any(isnan.(hiddenmatrix)) )
+    if( any(!isfinite, hiddenmatrix) )
         @printf( " (%s) Warning - getlargetstabseigenvaluepart (%d): Bad hiddenmatrix = [ %s].\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in hiddenmatrix[:]]) )
     end     # end if pathological input
     local largestabsev::Float64, eigenvectors::Array{ComplexF64,2}, eigenvalues::Array{ComplexF64,1}    # declare
-    if( (uppars.model==3) | (uppars.model==13) )    # 1D inheritance model
+    if( (uppars.model==3) || (uppars.model==13) )   # 1D inheritance model
         largestabsev = deepcopy(abs(hiddenmatrix[1]))
         eigenvectors = hcat([one(ComplexF64)]); eigenvalues = vcat(ComplexF64(hiddenmatrix[1]))
-    elseif( (uppars.model==4) | (uppars.model==14) )# higher dimensional inheritance model
+    elseif( (uppars.model==4) || (uppars.model==14) )   # higher dimensional inheritance model
         eigenstruct = eigen(hiddenmatrix); largestabsev = maximum(abs.(eigenstruct.values)) #largestabsev = maximum(abs.(real.(eigenstruct.values)))
         eigenvectors = eigenstruct.vectors; eigenvalues = eigenstruct.values
     elseif( uppars.model==9 )   # higher dimensional inheritance model, divisions-only
@@ -2772,20 +2770,20 @@ end     # end of getlargestabseigenvaluepart function
 function getequilibriumparametersofGaussianchain( hiddenmatrix::Array{Float64,2}, sigma::Array{Float64,2}, uppars::Uppars2 )::Tuple{Array{Float64},Float64}
     # computes the equilibrium parameters of Markov chain with x -> hiddenmatrix*x + sigma*(standard Gaussian)
 
-    if( (uppars.model==3) | (uppars.model==13) )    # 1D inheritance model
+    if( (uppars.model==3) || (uppars.model==13) )   # 1D inheritance model
         (largestabsev,eigenvalues) = getlargestabseigenvaluepart( hiddenmatrix, uppars )[[1,3]]
         if( largestabsev<1 )    # stationary state exists
             sigma_eq = [ abs(sigma[1])/sqrt(1-eigenvalues[1]^2) ]
         else                    # eigenvalue too large for stationary state
             sigma_eq = hcat(NaN)
         end     # end if eigenvalue too large
-    elseif( (uppars.model==4) | (uppars.model==14) )# higher dimensional inheritance model
+    elseif( (uppars.model==4) || (uppars.model==14) )   # higher dimensional inheritance model
         (largestabsev, eigenvectors,eigenvalues) = getlargestabseigenvaluepart( hiddenmatrix, uppars )
         if( largestabsev<1 )    # stationary state exists
             inveigenvec = inv(eigenvectors)
             sigma_eq_here = real.( eigenvectors*( ( inveigenvec*(sigma'*sigma)*(inveigenvec') )./(1 .-eigenvalues*(eigenvalues')) )*(eigenvectors') )     # 'real' to avoid numerical errors
             sigma_eq = sqrt(sigma_eq_here)          # sigma_eq'*sigma_eq is variance
-            if( !all(isreal(sigma_eq)) )
+            if( !all(isreal, sigma_eq) )
                 @printf( " (%s) Warning - getequilibriumparametersofGaussianchain (%d): Got imaginary sigma_eq:", uppars.chaincomment,uppars.MCit )
                 display( hiddenmatrix )
                 display( sigma_eq_here )
@@ -2812,7 +2810,7 @@ function getequilibriumparametersofGaussianchain( hiddenmatrix::Array{Float64,2}
             inveigenvec = inv(eigenvectors)
             sigma_eq_here = real.( eigenvectors*( ( inveigenvec*(sigma'*sigma)*(inveigenvec') )./(1 .-eigenvalues*(eigenvalues')) )*(eigenvectors') )     # 'real' to avoid numerical errors
             sigma_eq = sqrt(sigma_eq_here)       # sigma_eq'*sigma_eq is variance
-            if( !all(isreal(sigma_eq)) )
+            if( !all(isreal, sigma_eq) )
                 @printf( " (%s) Warning - getequilibriumparametersofGaussianchain (%d): Got imaginary sigma_eq:", uppars.chaincomment,uppars.MCit )
                 display( hiddenmatrix )
                 display( sigma_eq_here )
@@ -2839,16 +2837,21 @@ function getequilibriumparametersofGaussianchain( hiddenmatrix::Array{Float64,2}
 
     return sigma_eq, largestabsev
 end     # end of getequilibriumparametersofGaussianchain function
-function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Float64,1},MArray},unknownmothersamples::Unknownmotherequilibriumsamples, mygetunknownmotherpars::Function,mygetevolpars::Function,mygetcellpars::Function, dthdivdistr::DthDivdistr, uppars::Uppars2, overwritenomotherburnin::Int64=-1 )::Int64
+function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Float64,1},MArray},unknownmothersamples::Unknownmotherequilibriumsamples, mygetunknownmotherpars::Function,mygetevolpars::Function,mygetcellpars::Function, mygetevoltrgt::Function,mygetcelltrgt::Function,mygetcelltimestrgt::Function, dthdivdistr::DthDivdistr, uppars::Uppars2, overwritenomotherburnin::Int64=-1 )::Int64
     # samples lifetime and inheritance parameters for unknown mothers
     #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): pars_glob = [ %s].\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in pars_glob]) )
 
     # set auxiliary parameters:
-    convflag::Int64 = Int64(1)                                  # converged by default
-    starttime::Float64 = unknownmothersamples.starttime
+    convflag::Int64 = 1                                         # converged by default
+    initialisationtype::Int64 = 1                               # '1' for using heuristic based on perfect inheritance case; '2' for solving discretised eigenvalue problem to initialise
+    minnaivelyinitialised::Int64 = Int64(uppars.nomotherburnin) # minimum number of times cells have to be renewed
+    GRR_limit::Float64 = 1.2                                    # limit for GelmanRubin statistic
+    maxnomotherburnin::Int64 = Int64(1e7)                       # aborts, if nomotherburnin_here exceeds this value
+    starttime::Float64 = unknownmothersamples.starttime         # short-hand
     pars_cell_here::MArray{Tuple{Int64(uppars.nolocpars)},Float64} = @MArray zeros(Int64(uppars.nolocpars))                 # initialise
     myfac::Float64 = 0.0                                        # initialise rescaling factor of pars_cell_here vs pars_glob
     if( uppars.model==1 )                                       # simple FrechetWeibull model
+        initialisationtype = 1                                  # overwrite, as analytically correct to initialise like this
         pars_cell_here .= pars_glob[1:uppars.nolocpars]         # models with first couple of parameters in pars_glob coinciding with global means of pars_cell
         myfac = 1.0                                             # no rescaling
     elseif( uppars.model==2 )                                   # clock-modulated FrechetWeibull model
@@ -2877,6 +2880,7 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
         myfac = max( 0.01, (1-3*sigma_eq_here) )
         pars_cell_here[1] *= myfac
     elseif( uppars.model==11 )                                  # simple GammaExponential model
+        initialisationtype = 1                                  # overwrite, as analytically correct to initialise like this
         pars_cell_here .= pars_glob[1:uppars.nolocpars]         # models with first couple of parameters in pars_glob coinciding with global means of pars_cell
         myfac = 1.0                                             # no rescaling
     elseif( uppars.model==12 )                                  # clock-modulated GammaExponential model
@@ -2900,7 +2904,7 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
     else                                                        # unknown model
         @printf( " Warning - getjointequilibriumparameterswithnetgrowth: Model %d is not compatible for determining 'typical' pars_cell.\n", uppars.model )
     end     # end if models with appropriate formatting of pars_glob
-    if( (uppars.model==1)|(uppars.model==2)|(uppars.model==3)|(uppars.model==4) )   # division- and death-model with FrechetWeibull
+    if( uppars.model in (1,2,3,4) )                             # division- and death-model with FrechetWeibull
         (mean_div,std_div, mean_dth,std_dth, prob_dth) = estimateFrechetWeibullstats(pars_cell_here, UInt64(1000))
         mymean = deepcopy(mean_div); mystd = deepcopy(std_div)
         if( prob_dth==0.0 )                                     # only divisions
@@ -2914,276 +2918,393 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
         (mean_div,std_div, mean_dth,std_dth, prob_dth) = getFrechetstats(pars_cell_here)
         mymean = deepcopy(mean_div); mystd = deepcopy(std_div)
         meaninterdivisiontime = deepcopy( mean_div/(myfac) )    # no deaths; try to get upper bound, so /myfac instead of *myfac
-    elseif( (uppars.model==11)|(uppars.model==12)|(uppars.model==13)|(uppars.model==14) )   # division- and death-model with GammaExponential
+    elseif( uppars.model in (11,12,13,14) )                     # division- and death-model with GammaExponential
         (mean_div,std_div, mean_dth,std_dth, prob_dth) = estimateGammaExponentialstats(pars_cell_here, UInt64(1000))
         mymean = deepcopy(mean_div); mystd = deepcopy(std_div)
-        if( (prob_dth==0.0) | isnan(mean_dth) )                 # (effectively) only divisions
-            meaninterdivisiontime = deepcopy( mean_div/(myfac) )# no deaths; try to get upper bound, so /myfac instead of *myfac
+        if( (prob_dth==0.0) || isnan(mean_dth) )                # (effectively) only divisions
+            meaninterdivisiontime = deepcopy( mean_div/myfac )  # no deaths; try to get upper bound, so /myfac instead of *myfac
         elseif( prob_dth==1.0 )                                 # only deaths
-            meaninterdivisiontime = deepcopy( mean_dth/(myfac) )# no divisions; try to get upper bound, so /myfac instead of *myfac
+            meaninterdivisiontime = deepcopy( mean_dth/myfac )  # no divisions; try to get upper bound, so /myfac instead of *myfac
         else                                                    # both
-            meaninterdivisiontime = deepcopy( (mean_div*(1-prob_dth) + mean_dth*prob_dth)/(myfac) )   # convex combination; try to get upper bound, so /myfac instead of *myfac
+            meaninterdivisiontime = deepcopy( (mean_div*(1-prob_dth) + mean_dth*prob_dth)/myfac )   # convex combination; try to get upper bound, so /myfac instead of *myfac
         end     # end of distinguishing deathprobabilities
     else                                                        # unknown model
         @printf( " Warning - getjointequilibriumparameterswithnetgrowth: Model %d is not compatible for determining means.\n", uppars.model )
     end     # end of distinguishing models
     #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): div = %1.5e+-%1.5e, dth = %1.5e+-%1.5e, prob_dth = %1.5e (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, mean_div,std_div, mean_dth,std_dth, prob_dth, (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
-    if( uppars.without>=3 )
-        if( isnan(mystd) | isinf(mystd) )
-            @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Bad std for divisions %1.5e+-%1.5e, pars_cell_here = [ %s].\n", uppars.chaincomment,uppars.MCit, mymean,mystd, join([@sprintf("%+1.5e ",j) for j in pars_cell_here]) )
-        end     # end if pathological mystd
+    if( (uppars.without>=3) && !isfinite(mystd) )
+        @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Bad std for divisions %1.5e+-%1.5e, pars_cell_here = [ %s].\n", uppars.chaincomment,uppars.MCit, mymean,mystd, join([@sprintf("%+1.5e ",j) for j in pars_cell_here]) )
     end     # end if without
     #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): mean comparison %1.5e (bth) vs %1.5e (div only)(after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, meaninterdivisiontime, mymean, (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
     # ...set how to get the initial evol-pars:
-    if( (uppars.model==1) | (uppars.model==11) )            # simple model
+    if( (uppars.model==1) || (uppars.model==11) )               # simple model
         samplefirstevolpars = (()->( zeros(uppars.nohide) ))
-    elseif( (uppars.model==2) | (uppars.model==12) )        # clock-modulated model
+    elseif( (uppars.model==2) || (uppars.model==12) )           # clock-modulated model
         samplefirstevolpars = (()->( zeros(uppars.nohide) ))
-    elseif( (uppars.model==3) | (uppars.model==13) )        # rw-inheritance model
+    elseif( (uppars.model==3) || (uppars.model==13) )           # rw-inheritance model
         hiddenmatrix = hcat( pars_glob[uppars.nolocpars+1] )
         sigma = hcat( pars_glob[uppars.nolocpars+2] )
         sigma_eq = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )[1]
-        samplefirstevolpars = (()->vcat( sigma_eq*randn() ))
-    elseif( (uppars.model==4) | (uppars.model==14) )        # 2d rw-inheritance model
+        samplefirstevolpars = (()->vcat( sigma_eq*randn() ) .+ 1.0)
+    elseif( (uppars.model==4) || (uppars.model==14) )           # 2d rw-inheritance model
         (hiddenmatrix, sigma) = gethiddenmatrix_m4( pars_glob, uppars )
         sigma_eq = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )[1]
-        samplefirstevolpars = (()->vcat( sigma_eq*randn(2) ))
-    elseif( uppars.model==9 )                               # 2d rw-inheritance model; division-only
+        samplefirstevolpars = (()->vcat( sigma_eq*randn(2) ) .+ 1.0)
+    elseif( uppars.model==9 )                                   # 2d rw-inheritance model; division-only
         (hiddenmatrix, sigma) = gethiddenmatrix_m4( pars_glob, uppars ) # same for model 9
         sigma_eq = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )[1]
-        samplefirstevolpars = (()->vcat( sigma_eq*randn(2) ))
-    else                                                    # unknown model
+        samplefirstevolpars = (()->vcat( sigma_eq*randn(2) ) .+ 1.0)
+    else                                                        # unknown model
         @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
     end     # end of distinguishing models
     # ...get naive estamates for equilibrium parameters:
     uppercdflimit::Float64 = (1-1e-3)
-    notemps::UInt64 = UInt64(1000)                          # time-discretisation for estimating Euler-Lotka beta
+    notemps::UInt64 = UInt64(1000)                              # time-discretisation for estimating Euler-Lotka beta
     logprob_dth2::Float64 = dthdivdistr.get_dthprob( pars_cell_here ); logprob_div2::Float64 = log1mexp(logprob_dth2); prob_dth2::Float64 = exp(logprob_dth2)
+    beta::Float64 = NaN
     beta_init::Float64 = getEulerLotkabetaetstimate( mymean,mystd, logprob_div2 )
     alpha_init::Float64 = getEulerLotkaalphaestimate( mean_dth,std_dth, logprob_dth2, beta_init )
     prob_div_eq::Float64 = getEulerLotkaeqdivprobestimate( alpha_init, logprob_div2 )
-
-    # get initial state:
-    t_1::DateTime = DateTime(now()); sentwarning::Bool = false  # physical time to send warning, if stuck
-    keeptryinginitialising::Bool = true; local timerange::Array{Float64,1},dt::Float64, beta::Float64, logdivintegralterms::Array{Float64,1},logdthintegralterms::Array{Float64,1}, sampledindex::Int64,sampledindex_interp::Float64
     stillnaivelyinitialised::Array{UInt64,1} = zeros(UInt64,uppars.nomothersamples)  # all get naively updated based on pars_cell_here (counts number of times this cell got divided)
     logweight_samples::Array{Float64,1} = zeros(uppars.nomothersamples)
-    mysamples::Array{Int64,1} = zeros(Int64,uppars.nomothersamples)
-    local keeptrying::Bool, beta_sample::Float64, beta_diff::Float64, lifetime::Float64 # declare
-    while( keeptryinginitialising & (notemps<=1e6) )        # set upper limit for number of timesteps
-        if( (!sentwarning) & (((DateTime(now())-t_1)/Millisecond(1000))>900) ) # already trying since 15 mins
-            @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Already trying to initialise since %1.3f sec, with %d samples (prob_dth2=%1.4f, beta_init=%1.4f)(threadid %d/%d).\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-t_1)/Millisecond(1000),notemps, prob_dth2,beta_init, Threads.threadid(),Threads.nthreads() )
-            @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  div = %1.5e+-%1.5e, dth = %1.5e+-%1.5e, prob_dth = %1.5e (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, mean_div,std_div, mean_dth,std_dth, prob_dth, (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
-            @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  pars_glob = [ %s] (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in pars_glob]), (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
-            sentwarning = true                              # not again
-        end     # end if taking long
-        #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Start trying to initialise with notemps %d now, getting parameters now... (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, notemps, (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
-        (beta,timerange) = getEulerLotkabeta( pars_cell_here, dthdivdistr, uppercdflimit, notemps, beta_init ); dt = timerange[2]-timerange[1]; notimepoints::Int64 = length(timerange)
-        #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): beta = %+1.5e.\n", uppars.chaincomment,uppars.MCit, beta )
-        if( ~isinf(mystd) & (mystd>0) & (dt>(mystd/10)) )   # too large dt; increase notemps
-            notemps = UInt64(ceil(notemps*10*dt/mystd))
-            if( uppars.without>=2 )
-                @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): dt=%1.5e >> %1.5e=std_div, increase notemps to %d.\n", uppars.chaincomment,uppars.MCit, dt,mystd, notemps ); flush(stdout)
-            end     # end if without
-            (beta,timerange) = getEulerLotkabeta( pars_cell_here, dthdivdistr, uppercdflimit, notemps, beta_init ); dt = timerange[2]-timerange[1]; notimepoints = length(timerange)
-        end     # end if too large dt
-        if( isnan(beta) | isinf(beta) | (dt<=0) )
-            @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Got bad Euler-Lotka parameters beta = %+1.5e, dt=%1.5e,notimepoints=%d (pars_cell_here = [ %s]). Replace by beta = 0.\n", uppars.chaincomment,uppars.MCit, beta, dt,notimepoints, join([@sprintf("%+1.5e ",j) for j in pars_cell_here]) ); flush(stdout)
-            display( getFrechetstats(pars_cell_here) )
-            display( beta_init )
-            display( alpha_init )
-            display( prob_div_eq )
-            sdfoid
-            beta = 0.0
-        end     # end if pathological
+    
+    # get initial state:
+    if( initialisationtype==2 )                                 # use discretisation for equilibration:
+        #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Before discretisation approximation, convflag %d (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, convflag,  (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
+        (myevec_div::Array{Float64,3},myevec_dth::Array{Float64,3}, myeval_div::Float64, timerange_eigen::Array{Float64,1},scalerange_eigen::Array{Float64}, dt_eigen::Float64,ds_eigen::Array{Float64,1}, errorflag_eigen::Int64) = getdiscretisedjointequilibriumparameterswithnetgrowth( pars_glob,unknownmothersamples.starttime, mygetcellpars, mygetevoltrgt, dthdivdistr, uppars )[3:end]
+        if( errorflag_eigen==0 )                                # no error
+            notimes::UInt64 = length(timerange_eigen)
+            noscales::UInt64 = size(scalerange_eigen,1)
+            prob_dth_eigen::Float64 = sum(myevec_dth)/(sum(myevec_dth)+sum(myevec_div))           # probability to die
+            mysamples_eigen::Array{UInt64,1} = zeros(UInt64,unknownmothersamples.nomothersamples) # initialise
+            beta =  (myeval_div>=0) ? log(myeval_div)/dt_eigen : NaN                              # approximated version of beta
+            local j_time::Int64, j_scale1::Int64, j_scale2::Int64
+            logposmyevec_divlist::Array{Float64,1} = deepcopy(log.(max.(0.0,myevec_div[:])))    # listed logweights of divisions (corrected for zeros)
+            logposmyevec_dthlist::Array{Float64,1} = deepcopy(log.(max.(0.0,myevec_dth[:])))    # listed logweights of deaths (corrected for zeros)
+            for j_sample = 1:unknownmothersamples.nomothersamples
+                if( rand()<prob_dth_eigen )                     # death
+                    mysamples_eigen[j_sample] = samplefromdiscretemeasure( logposmyevec_dthlist )[1]
+                    unknownmothersamples.fate_cell_eq[j_sample] = 1
+                else                                            # division
+                    mysamples_eigen[j_sample] = samplefromdiscretemeasure( logposmyevec_divlist )[1]
+                    unknownmothersamples.fate_cell_eq[j_sample] = 2
+                end     # end of distinguishing death and division
+                #unknownmothersamples.time_cell_eq[j_sample,1] = unknownmothersamples.starttime - rand()
+                unknownmothersamples.weights_eq[j_sample] = 1.0
+            end     # end of sampling unknownmothersamples
+            if( (uppars.model==1) || (uppars.model==11) )       # simple models
+                for j_sample = 1:unknownmothersamples.nomothersamples
+                    j_time = mysamples_eigen[j_sample]
+                    unknownmothersamples.pars_cell_eq[j_sample,:] .= pars_glob[1:uppars.nolocpars]
+                    unknownmothersamples.time_cell_eq[j_sample,2] = unknownmothersamples.starttime + abs(timerange_eigen[j_time] + dt_eigen*(rand()-0.5))
+                    unknownmothersamples.time_cell_eq[j_sample,1] = -unknownmothersamples.time_cell_eq[j_sample,2]
+                end     # end of samples loop
+            elseif( (uppars.model==2) || (uppars.model==12) )   # clock models
+                for j_sample = 1:unknownmothersamples.nomothersamples
+                    j_scale1 = ceil(Int64,mysamples_eigen[j_sample]/notimes)
+                    j_time = mysamples_eigen[j_sample] - (j_scale1-1)*notimes
+                    unknownmothersamples.pars_cell_eq[j_sample,:] .= pars_glob[1:uppars.nolocpars]; unknownmothersamples.pars_cell_eq[j_sample,1] *= abs(scalerange_eigen[j_scale1,1])
+                    unknownmothersamples.time_cell_eq[j_sample,2] = unknownmothersamples.starttime + abs(timerange_eigen[j_time] + dt_eigen*(rand()-0.5))
+                    unknownmothersamples.time_cell_eq[j_sample,1] = -unknownmothersamples.time_cell_eq[j_sample,2]
+                end     # end of samples loop
+            elseif( (uppars.model==3) || (uppars.model==13) )   # RW models
+                for j_sample = 1:unknownmothersamples.nomothersamples
+                    j_scale1 = ceil(Int64,mysamples_eigen[j_sample]/notimes)
+                    j_time = mysamples_eigen[j_sample] - (j_scale1-1)*notimes 
+                    unknownmothersamples.pars_evol_eq[j_sample,1] = scalerange_eigen[j_scale1,1] + ds_eigen[1]*(rand()-0.5)
+                    unknownmothersamples.pars_cell_eq[j_sample,:] .= pars_glob[1:uppars.nolocpars]; unknownmothersamples.pars_cell_eq[j_sample,1] *= abs(unknownmothersamples.pars_evol_eq[j_sample,1])
+                    unknownmothersamples.time_cell_eq[j_sample,2] = unknownmothersamples.starttime + abs(timerange_eigen[j_time] + dt_eigen*(rand()-0.5))
+                    unknownmothersamples.time_cell_eq[j_sample,1] = -unknownmothersamples.time_cell_eq[j_sample,2]
+                end     # end of samples loop
+            elseif( uppars.model in (4,9,14) )                  # 2DRW models
+                for j_sample = 1:unknownmothersamples.nomothersamples
+                    j_scale2 = ceil(Int64,mysamples_eigen[j_sample]/(notimes*noscales))
+                    j_scale1 = ceil(Int64,(mysamples_eigen[j_sample] - (j_scale2-1)*(notimes*noscales))/notimes)
+                    j_time = mysamples_eigen[j_sample] - (j_scale1-1)*notimes - (j_scale2-1)*(notimes*noscales)
+                    unknownmothersamples.pars_evol_eq[j_sample,1] = scalerange_eigen[j_scale1,1] + ds_eigen[1]*(rand()-0.5)
+                    unknownmothersamples.pars_evol_eq[j_sample,2] = scalerange_eigen[j_scale2,2] + ds_eigen[2]*(rand()-0.5)     # ignore correlations inside voxel
+                    unknownmothersamples.pars_cell_eq[j_sample,:] .= pars_glob[1:uppars.nolocpars]; unknownmothersamples.pars_cell_eq[j_sample,1] *= abs(unknownmothersamples.pars_evol_eq[j_sample,1])
+                    unknownmothersamples.time_cell_eq[j_sample,2] = unknownmothersamples.starttime + abs(timerange_eigen[j_time] + dt_eigen*(rand()-0.5))
+                    unknownmothersamples.time_cell_eq[j_sample,1] = -unknownmothersamples.time_cell_eq[j_sample,2]
+                end     # end of samples loop
+            else                                                # unknown model
+                @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+            end     # end of distinguishing models
+            #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): After discretisation approximation, convflag %d (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, convflag,  (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
+            #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Discr init: avgfate %5.3f(%5.3f), div=%9.3e+-%9.3e, dth=%9.3e+-%9.3e, times=[%+1.1e..%1.1e..%+1.1e](%1.0e)(beta=%+1.3e(%+1.3e))(after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, mean(unknownmothersamples.fate_cell_eq),2-prob_dth_eigen, mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2]),std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2]), mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2]),std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2]), timerange_eigen[1],dt_eigen,timerange_eigen[end], notemps, beta,beta_init, (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
+            #plotequilibriumsamples( unknownmothersamples,starttime-0, "init", uppars )
+            #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Sleep now.\n", uppars.chaincomment,uppars.MCit );  sleep(10)
+        else                                                    # ie error thrown
+            initialisationtype = 1                              # shift to alternative initialisation
+            @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Error %d with initialisaitiontype %d, use %d instead.\n", uppars.chaincomment,uppars.MCit, errorflag_eigen, 2, initialisationtype )
+        end     # end if error thrown
+    end     # end of discretisation initialisation type
+    if( initialisationtype==1 )                                 # use heuristic based on perfect inheritance
+        #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Start naive init: (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
+        t_1::DateTime = DateTime(now()); sentwarning::Bool = false  # physical time to send warning, if stuck
+        keeptryinginitialising::Bool = true; local timerange::Array{Float64,1},dt::Float64, logdivintegralterms::Array{Float64,1},logdthintegralterms::Array{Float64,1}, sampledindex::Int64,sampledindex_interp::Float64
+        mysamples::Array{Int64,1} = zeros(Int64,uppars.nomothersamples)
+        local keeptrying::Bool, beta_sample::Float64, beta_diff::Float64, lifetime::Float64 # declare
+        while( keeptryinginitialising && (notemps<=1e6) )       # set upper limit for number of timesteps
+            if( (!sentwarning) && (((DateTime(now())-t_1)/Millisecond(1000))>1800) )# already trying since 30 mins
+                @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Already trying to initialise since %1.3f sec, with %d samples (prob_dth2=%1.4f, beta_init=%1.4f)(threadid %d/%d).\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-t_1)/Millisecond(1000),notemps, prob_dth2,beta_init, Threads.threadid(),Threads.nthreads() )
+                @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  div = %1.5e+-%1.5e, dth = %1.5e+-%1.5e, prob_dth = %1.5e (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, mean_div,std_div, mean_dth,std_dth, prob_dth, (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
+                @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  pars_glob = [ %s] (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in pars_glob]), (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
+                if( (uppars.model==3) || (uppars.model==13) )   # hidden factor model
+                    hiddenmatrix = hcat( pars_glob[uppars.nolocpars+1] ); sigma = hcat( pars_glob[uppars.nolocpars+2] )
+                    (sigma_eq, largestabsev) = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )
+                    @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  sigma_eq = [ %s], largestabsev = %+1.5e (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in sigma_eq]), largestabsev, (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
+                elseif( uppars.model in (4,9,14) )              # 2D hidden factors model
+                    (hiddenmatrix, sigma) = gethiddenmatrix_m4( pars_glob, uppars )
+                    (sigma_eq, largestabsev) = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )
+                    (largestabsev, eigenvalues) = getlargestabseigenvaluepart( hiddenmatrix, uppars )[[1,3]]
+                    @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  sigma_eq = [ %s], largestabsev = %+1.5e, eigenvalues = [ %s] (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in sigma_eq]), largestabsev, join([@sprintf("%+1.5e%+1.5e i  ",real(j),imag(j)) for j in eigenvalues]), (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
+                end     # end if hidden factors model
+                sentwarning = true                              # not again
+            end     # end if taking long
+            #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Start trying to initialise with notemps %d now, getting parameters now... (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, notemps, (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
+            (beta,timerange) = getEulerLotkabeta( pars_cell_here, dthdivdistr, uppercdflimit, notemps, beta_init ); dt = timerange[2]-timerange[1]; notimepoints::Int64 = length(timerange)
+            #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): beta = %+1.5e.\n", uppars.chaincomment,uppars.MCit, beta )
+            if( isfinite(mystd) && (mystd>0) && (dt>(mystd/10)) )   # too large dt; increase notemps
+                notemps = UInt64(ceil(notemps*10*dt/mystd))
+                if( uppars.without>=2 )
+                    @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): dt=%1.5e >> %1.5e=std_div, increase notemps to %d.\n", uppars.chaincomment,uppars.MCit, dt,mystd, notemps ); flush(stdout)
+                end     # end if without
+                (beta,timerange) = getEulerLotkabeta( pars_cell_here, dthdivdistr, uppercdflimit, notemps, beta_init ); dt = timerange[2]-timerange[1]; notimepoints = length(timerange)
+            end     # end if too large dt
+            if( !isfinite(beta) || (dt<=0) )
+                @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Got bad Euler-Lotka parameters beta = %+1.5e, dt=%1.5e,notimepoints=%d (pars_cell_here = [ %s]). Replace by beta = 0.\n", uppars.chaincomment,uppars.MCit, beta, dt,notimepoints, join([@sprintf("%+1.5e ",j) for j in pars_cell_here]) ); flush(stdout)
+                display( getFrechetstats(pars_cell_here) )
+                display( beta_init )
+                display( alpha_init )
+                display( prob_div_eq )
+                sdfoid
+                beta = 0.0
+            end     # end if pathological
 
-        # ...start sampling:
-        #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Start trying to initialise with notemps %d now, getting parameters now... (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, notemps, (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
-        if( dthdivdistr.typeno==UInt64(4) )     # GammaExponential 
-            if( beta>0.0 )                      # can sample from positive beta
-                beta_sample = deepcopy(beta)    # easier, because weights are all the same
-            elseif( !isnan(mymean) & (mymean>0) )   # negative beta, can't sample from exp(x/beta)
-                beta_sample = 1/mymean          # approximate limit behaviour
-                logweight_samples .= 0.0        # initialise logweights of samples
-                mysamples .= zero(Int64)        # for resampling
-                #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Negative beta %+1.5e, use mean-inspired  beta_sample = %+1.5e, beta_diff = %+1.5e, scalepar = %+1.5e, mymean = %+1.5e (beta_init = %+1.5e, alpha_init = %+1.5e, prob_div_eq = %+1.5e).\n", uppars.chaincomment,uppars.MCit, beta,beta_sample, beta_sample-beta, pars_cell_here[1],mymean, beta_init,alpha_init,prob_div_eq )
-            else                                # just a positive guess
-                beta_sample = 1/uppars.priors_glob.get_mean()
-                logweight_samples .= 0.0        # initialise logweights of samples
-                mysamples .= zero(Int64)        # for resampling
-                @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Negative beta %+1.5e, use prior-inspired beta_sample = %+1.5e, beta_diff = %+1.5e, scalepar = %+1.5e, mymean = %+1.5e (beta_init = %+1.5e, alpha_init = %+1.5e, prob_div_eq = %+1.5e).\n", uppars.chaincomment,uppars.MCit, beta,beta_sample, beta_sample-beta, pars_cell_here[1],mymean, beta_init,alpha_init,prob_div_eq )
-            end     # end of choosing beta_sample
-        else                                    # any non-GammaExponential model
-            beta_sample = max(beta,1e-7)        # for sampling
-            logweight_samples .= 0.0            # initialise logweights of samples
-            mysamples .= zero(Int64)            # for resampling
-        end     # end of distinguishing model type
-        beta_diff = beta_sample - beta          # for weighting
-        #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): beta = %+1.5e, beta_sample = %+1.5e, beta_diff = %+1.5e.\n", uppars.chaincomment,uppars.MCit, beta,beta_sample,beta_diff )
-        for j_sample = 1:uppars.nomothersamples
-            # ....sample times:
-            keeptrying = true
-            while( keeptrying )
-                # ....propose birthtime:
-                unknownmothersamples.time_cell_eq[j_sample,1] = log(rand())/beta_sample # negative
-                # ....propose lifetime/fate:
-                (lifetime,unknownmothersamples.fate_cell_eq[j_sample]) = dthdivdistr.get_sample( pars_cell_here )[[1,2]]
-                unknownmothersamples.time_cell_eq[j_sample,2] = unknownmothersamples.time_cell_eq[j_sample,1] + lifetime
-                if( unknownmothersamples.time_cell_eq[j_sample,2]>=0.0 )    # past start time of initialisation
-                    keeptrying = false          # accept this proposal
-                    logweight_samples[j_sample] = (-unknownmothersamples.time_cell_eq[j_sample,1])*beta_diff
-                end     # accept
-            end     # end if keeptrying
-            # ....sample evol-/cell-pars:
-            unknownmothersamples.pars_evol_eq[j_sample,:] .= samplefirstevolpars()
-            mygetcellpars( pars_glob,unknownmothersamples.pars_evol_eq[j_sample,:],unknownmothersamples.time_cell_eq[j_sample,:], view(unknownmothersamples.pars_cell_eq, j_sample,:), uppars )
-            if( isnan(unknownmothersamples.time_cell_eq[j_sample,2]) | (unknownmothersamples.time_cell_eq[j_sample,2]<0.0) )
-                @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Got bad end time %+1.5e for sample %d, sampleindex %d (%1.5e) (times = [ %s], evol = [ %s], cellpars = [ %s]).\n", uppars.chaincomment,uppars.MCit, unknownmothersamples.time_cell_eq[j_sample,2], j_sample, sampledindex,sampledindex_interp, join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.time_cell_eq[j_sample,:]]), join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.pars_evol_eq[j_sample,:]]), join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.pars_cell_eq[j_sample,:]]) )
-            end     # end if pathological times
-            # scale lifetime with cellpars:
-            myfac = unknownmothersamples.pars_cell_eq[j_sample,1]/pars_cell_here[1]
-            unknownmothersamples.time_cell_eq[j_sample,:] .*= myfac         # changes start-time, so wrong, if parameters are birth-time-dependent
-        end     # end of mothersamples loop
-        # ....subsample according to weight:
-        if( beta_diff>0.0 )     # only have non-trivial weighting if beta_diff non-zero
-            logweight_samples .-= maximum(logweight_samples)    # make sure maximum is zero
-            if( any(isnan.(logweight_samples)) | any(isinf.(logweight_samples)) )
-                @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): logweights are %d nans, %d infs. Replace by ones.\n", uppars.chaincomment,uppars.MCit, sum(isnan.(logweight_samples)),sum(isinf.(logweight_samples)) )
-                logweight_samples .= 0.0
-            end     # end if isnan
-            for j_sample in eachindex(mysamples)
+            # ...start sampling:
+            #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Start trying to initialise with notemps %d now, getting parameters now... (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, notemps, (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
+            if( dthdivdistr.typeno==UInt64(4) )     # GammaExponential 
+                if( beta>0.0 )                      # can sample from positive beta
+                    beta_sample = deepcopy(beta)    # easier, because weights are all the same
+                elseif( isfinite(mymean) && (mymean>0) )    # negative beta, can't sample from exp(x/beta)
+                    beta_sample = 1/mymean          # approximate limit behaviour
+                    logweight_samples .= 0.0        # initialise logweights of samples
+                    mysamples .= zero(Int64)        # for resampling
+                    #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Negative beta %+1.5e, use mean-inspired  beta_sample = %+1.5e, beta_diff = %+1.5e, scalepar = %+1.5e, mymean = %+1.5e (beta_init = %+1.5e, alpha_init = %+1.5e, prob_div_eq = %+1.5e).\n", uppars.chaincomment,uppars.MCit, beta,beta_sample, beta_sample-beta, pars_cell_here[1],mymean, beta_init,alpha_init,prob_div_eq )
+                else                                # just a positive guess
+                    beta_sample = 1/uppars.priors_glob.get_mean()
+                    logweight_samples .= 0.0        # initialise logweights of samples
+                    mysamples .= zero(Int64)        # for resampling
+                    @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Negative beta %+1.5e, use prior-inspired beta_sample = %+1.5e, beta_diff = %+1.5e, scalepar = %+1.5e, mymean = %+1.5e (beta_init = %+1.5e, alpha_init = %+1.5e, prob_div_eq = %+1.5e).\n", uppars.chaincomment,uppars.MCit, beta,beta_sample, beta_sample-beta, pars_cell_here[1],mymean, beta_init,alpha_init,prob_div_eq )
+                end     # end of choosing beta_sample
+            else                                    # any non-GammaExponential model
+                beta_sample = max(beta,1e-7)        # for sampling
+                logweight_samples .= 0.0            # initialise logweights of samples
+                mysamples .= zero(Int64)            # for resampling
+            end     # end of distinguishing model type
+            beta_diff = beta_sample - beta          # for weighting
+            #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): beta = %+1.5e, beta_sample = %+1.5e, beta_diff = %+1.5e.\n", uppars.chaincomment,uppars.MCit, beta,beta_sample,beta_diff )
+            for j_sample = 1:uppars.nomothersamples
+                # ....sample times:
                 keeptrying = true
                 while( keeptrying )
-                    randno::Float64 = rand()*uppars.nomothersamples # proposed sample
-                    mysamples[j_sample] = ceil(Int64,randno)
-                    if( log(randno%1)<logweight_samples[mysamples[j_sample]] )  # remainder is independent random variable uniformly in [0,1]
+                    # ....propose birthtime:
+                    unknownmothersamples.time_cell_eq[j_sample,1] = log(rand())/beta_sample # negative
+                    # ....propose lifetime/fate:
+                    (lifetime,unknownmothersamples.fate_cell_eq[j_sample]) = dthdivdistr.get_sample( pars_cell_here )[[1,2]]
+                    unknownmothersamples.time_cell_eq[j_sample,2] = unknownmothersamples.time_cell_eq[j_sample,1] + lifetime
+                    if( unknownmothersamples.time_cell_eq[j_sample,2]>=0.0 )    # past start time of initialisation
                         keeptrying = false          # accept this proposal
-                    end     # end if acceptable proposal
+                        logweight_samples[j_sample] = (-unknownmothersamples.time_cell_eq[j_sample,1])*beta_diff
+                    end     # accept
                 end     # end if keeptrying
-            end     # end of samples loop
-            unknownmothersamples.pars_evol_eq = unknownmothersamples.pars_evol_eq[mysamples,:]
-            unknownmothersamples.pars_cell_eq = unknownmothersamples.pars_cell_eq[mysamples,:]
-            unknownmothersamples.time_cell_eq = unknownmothersamples.time_cell_eq[mysamples,:]
-            unknownmothersamples.fate_cell_eq = unknownmothersamples.fate_cell_eq[mysamples]
-        end     # end if beta_diff positive
-        #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Init eq:    div %+1.5e +- %1.5e, dth %+1.5e +- %1.5e, probdth %+1.5e, since start: %+1.5e +- %1.5e.\n", uppars.chaincomment,uppars.MCit, mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,1]), std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,1]), mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,1]), std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,1]), mean(unknownmothersamples.fate_cell_eq.==1), mean(unknownmothersamples.time_cell_eq[:,2].-0.0),std(unknownmothersamples.time_cell_eq[:,2].-0.0) )
-        #plotequilibriumsamples( unknownmothersamples,0.0, "init", uppars )
-        #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Start trying to initialise with notemps %d now, getting parameters now... (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, notemps, (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
-        #=
-        logdivintegralterms = (-beta.*timerange) .+ dthdivdistr.get_logdistrfate( pars_cell_here, collect(timerange), Int64(2) ) .+ log(dt)           # exponentially weighted divisions
-        logdthintegralterms = (-beta.*timerange) .+ dthdivdistr.get_logdistrfate( pars_cell_here, collect(timerange), Int64(1) ) .+ log(dt)           # exponentially weighted deaths
-        if( uppars.without>=4 )     # for debugging
-            if( any(isnan.(logdivintegralterms)) )
-                @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Got %d nans for divintegral. beta = %+1.5e, timerange = [%+1.5e..(%+1.5e)..%+1.5e], pars_cell_here = [ %s].\n", uppars.chaincomment,uppars.MCit, sum(isnan.(logdivintegralterms)), beta, timerange[1],dt,timerange[end], join([@sprintf("%+1.5e ",j) for j in pars_cell_here]) ); flush(stdout)
-            end     # end if bad logdivintegralterms
-            if( any(isnan.(logdthintegralterms)) )
-                @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Got %d nans for dthintegral. beta = %+1.5e, timerange = [%+1.5e..(%+1.5e)..%+1.5e], pars_cell_here = [ %s].\n", uppars.chaincomment,uppars.MCit, sum(isnan.(logdthintegralterms)), beta, timerange[1],dt,timerange[end], join([@sprintf("%+1.5e ",j) for j in pars_cell_here]) ); flush(stdout)
-            end     # end if bad logdivintegralterms
-        end     # end if debugging
+                # ....sample evol-/cell-pars:
+                unknownmothersamples.pars_evol_eq[j_sample,:] .= samplefirstevolpars()
+                mygetcellpars( pars_glob,unknownmothersamples.pars_evol_eq[j_sample,:],unknownmothersamples.time_cell_eq[j_sample,:], view(unknownmothersamples.pars_cell_eq, j_sample,:), uppars )
+                if( isnan(unknownmothersamples.time_cell_eq[j_sample,2]) || (unknownmothersamples.time_cell_eq[j_sample,2]<0.0) )
+                    @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Got bad end time %+1.5e for sample %d, sampleindex %d (%1.5e) (times = [ %s], evol = [ %s], cellpars = [ %s]).\n", uppars.chaincomment,uppars.MCit, unknownmothersamples.time_cell_eq[j_sample,2], j_sample, sampledindex,sampledindex_interp, join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.time_cell_eq[j_sample,:]]), join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.pars_evol_eq[j_sample,:]]), join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.pars_cell_eq[j_sample,:]]) )
+                end     # end if pathological times
+                # scale lifetime with cellpars:
+                myfac = unknownmothersamples.pars_cell_eq[j_sample,1]/pars_cell_here[1]
+                unknownmothersamples.time_cell_eq[j_sample,:] .*= myfac         # changes start-time, so wrong, if parameters are birth-time-dependent
+            end     # end of mothersamples loop
+            # ....subsample according to weight:
+            if( beta_diff>0.0 )     # only have non-trivial weighting if beta_diff non-zero
+                logweight_samples .-= maximum(logweight_samples)    # make sure maximum is zero
+                if( any(!isfinite, logweight_samples) )
+                    @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): logweights are %d nans, %d infs. Replace by ones.\n", uppars.chaincomment,uppars.MCit, sum(isnan.(logweight_samples)),sum(isinf.(logweight_samples)) )
+                    logweight_samples .= 0.0
+                end     # end if isnan
+                for j_sample in eachindex(mysamples)
+                    keeptrying = true
+                    while( keeptrying )
+                        randno::Float64 = rand()*uppars.nomothersamples # proposed sample
+                        mysamples[j_sample] = ceil(Int64,randno)
+                        if( log(randno%1)<logweight_samples[mysamples[j_sample]] )  # remainder is independent random variable uniformly in [0,1]
+                            keeptrying = false          # accept this proposal
+                        end     # end if acceptable proposal
+                    end     # end if keeptrying
+                end     # end of samples loop
+                unknownmothersamples.pars_evol_eq = unknownmothersamples.pars_evol_eq[mysamples,:]
+                unknownmothersamples.pars_cell_eq = unknownmothersamples.pars_cell_eq[mysamples,:]
+                unknownmothersamples.time_cell_eq = unknownmothersamples.time_cell_eq[mysamples,:]
+                unknownmothersamples.fate_cell_eq = unknownmothersamples.fate_cell_eq[mysamples]
+            end     # end if beta_diff positive
+            #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Init eq:    div %+1.5e +- %1.5e, dth %+1.5e +- %1.5e, probdth %+1.5e, since start: %+1.5e +- %1.5e.\n", uppars.chaincomment,uppars.MCit, mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,1]), std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,1]), mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,1]), std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,1]), mean(unknownmothersamples.fate_cell_eq.==1), mean(unknownmothersamples.time_cell_eq[:,2].-0.0),std(unknownmothersamples.time_cell_eq[:,2].-0.0) )
+            #plotequilibriumsamples( unknownmothersamples,0.0, "init", uppars )
+            #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Start trying to initialise with notemps %d now, getting parameters now... (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, notemps, (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
+            #=
+            logdivintegralterms = (-beta.*timerange) .+ dthdivdistr.get_logdistrfate( pars_cell_here, collect(timerange), Int64(2) ) .+ log(dt)           # exponentially weighted divisions
+            logdthintegralterms = (-beta.*timerange) .+ dthdivdistr.get_logdistrfate( pars_cell_here, collect(timerange), Int64(1) ) .+ log(dt)           # exponentially weighted deaths
+            if( uppars.without>=4 )     # for debugging
+                if( any(isnan, logdivintegralterms) )
+                    @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Got %d nans for divintegral. beta = %+1.5e, timerange = [%+1.5e..(%+1.5e)..%+1.5e], pars_cell_here = [ %s].\n", uppars.chaincomment,uppars.MCit, sum(isnan.(logdivintegralterms)), beta, timerange[1],dt,timerange[end], join([@sprintf("%+1.5e ",j) for j in pars_cell_here]) ); flush(stdout)
+                end     # end if bad logdivintegralterms
+                if( any(isnan, logdthintegralterms) )
+                    @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Got %d nans for dthintegral. beta = %+1.5e, timerange = [%+1.5e..(%+1.5e)..%+1.5e], pars_cell_here = [ %s].\n", uppars.chaincomment,uppars.MCit, sum(isnan.(logdthintegralterms)), beta, timerange[1],dt,timerange[end], join([@sprintf("%+1.5e ",j) for j in pars_cell_here]) ); flush(stdout)
+                end     # end if bad logdivintegralterms
+            end     # end if debugging
 
-        # ...start sampling
-        #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Start trying to initialise with notemps %d now, going through samples... (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, notemps, (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
-        if( all(vcat(logdivintegralterms,logdthintegralterms).==-Inf) )
-            @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Got pathological integralterms, max=-Inf, notemps=%d, beta=%+1.5f, timerange=[%+1.5e..%+1.5e], logprob_dth2=%+1.5e, div=%1.5e+-%1.5e, dth=%1.5e+-%1.5e, prob_dth=%1.5f\n.", uppars.chaincomment,uppars.MCit, notemps, beta, timerange[1],timerange[end], logprob_dth2, mean_div,std_div, mean_dth,std_dth, prob_dth ); flush(stdout)
-        end     # end if pathological
-        for j_sample = 1:uppars.nomothersamples
-            (sampledindex,sampledindex_interp) = samplefromdiscretemeasure( vcat(logdivintegralterms,logdthintegralterms) )
-            if( (sampledindex==1) | (sampledindex==(notimepoints+1)) )  # if first index, then there is lower bound of 0 to times
-                sampledindex_interp = 1.0
-            end     # end if first index
-            if( sampledindex<=notimepoints )                    # division; first in stacked vector
-                unknownmothersamples.fate_cell_eq[j_sample] = 2
+            # ...start sampling
+            #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Start trying to initialise with notemps %d now, going through samples... (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, notemps, (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
+            if( all(vcat(logdivintegralterms,logdthintegralterms).==-Inf) )
+                @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Got pathological integralterms, max=-Inf, notemps=%d, beta=%+1.5f, timerange=[%+1.5e..%+1.5e], logprob_dth2=%+1.5e, div=%1.5e+-%1.5e, dth=%1.5e+-%1.5e, prob_dth=%1.5f\n.", uppars.chaincomment,uppars.MCit, notemps, beta, timerange[1],timerange[end], logprob_dth2, mean_div,std_div, mean_dth,std_dth, prob_dth ); flush(stdout)
+            end     # end if pathological
+            for j_sample = 1:uppars.nomothersamples
+                (sampledindex,sampledindex_interp) = samplefromdiscretemeasure( vcat(logdivintegralterms,logdthintegralterms) )
+                if( (sampledindex==1) || (sampledindex==(notimepoints+1)) ) # if first index, then there is lower bound of 0 to times
+                    sampledindex_interp = 1.0
+                end     # end if first index
+                if( sampledindex<=notimepoints )                    # division; first in stacked vector
+                    unknownmothersamples.fate_cell_eq[j_sample] = 2
+                    unknownmothersamples.time_cell_eq[j_sample,1] = 0.0
+                    unknownmothersamples.time_cell_eq[j_sample,2] = timerange[sampledindex] - (1-sampledindex_interp)*dt
+                else                                                # death; second in stacked vector
+                    unknownmothersamples.fate_cell_eq[j_sample] = 1
+                    unknownmothersamples.time_cell_eq[j_sample,1] = 0.0
+                    unknownmothersamples.time_cell_eq[j_sample,2] = timerange[sampledindex-notimepoints] - (1-sampledindex_interp)*dt
+                end     # end if death or division
+                unknownmothersamples.pars_evol_eq[j_sample,:] .= samplefirstevolpars()
+                mygetcellpars( pars_glob,unknownmothersamples.pars_evol_eq[j_sample,:],unknownmothersamples.time_cell_eq[j_sample,:], view(unknownmothersamples.pars_cell_eq, j_sample,:), uppars )
+                if( isnan(unknownmothersamples.time_cell_eq[j_sample,2]) || (unknownmothersamples.time_cell_eq[j_sample,2]<0) )
+                    @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Got bad end time %+1.5e for sample %d, sampleindex %d (%1.5e) (times = [ %s], evol = [ %s], cellpars = [ %s]).\n", uppars.chaincomment,uppars.MCit, unknownmothersamples.time_cell_eq[j_sample,2], j_sample, sampledindex,sampledindex_interp, join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.time_cell_eq[j_sample,:]]), join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.pars_evol_eq[j_sample,:]]), join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.pars_cell_eq[j_sample,:]]) )
+                    display(sampledindex); display(sampledindex_interp); display(notimepoints); display(sampledindex==1); display(sampledindex==(notimepoints+1))
+                    display( timerange[1:5] )
+                end     # end if pathological times
+                # scale lifetime with cellpars:
+                myfac = unknownmothersamples.pars_cell_eq[j_sample,1]/pars_glob[1]
+                unknownmothersamples.time_cell_eq[j_sample,2] = unknownmothersamples.time_cell_eq[j_sample,1] + myfac*(unknownmothersamples.time_cell_eq[j_sample,2]-unknownmothersamples.time_cell_eq[j_sample,1])
+            end     # end of samples loop
+            =#
+            #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Done  trying to initialise with notemps %d now, getting parameters now... (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, notemps, (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
+            if( (std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2])==0) )      # effectively single sample, due to wrong spacing of timerange
+                notemps *= 10                                       # increase number of timesteps
+                if( uppars.without>=2 )
+                    @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Got stddev of %1.1e in initial samples, try again for %d times (beta=%+1.2e(%+1.2e), div=%1.3e, dth=%1.3e, dthprob=%1.3e).\n", uppars.chaincomment,uppars.MCit, std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2]), notemps, beta,beta_init, mean_div,mean_dth,prob_dth2 ); flush(stdout)
+                end     # end if without
+            elseif( isnan(std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2])) )# no sample, ie only deaths
+                if( uppars.without>=2 )
+                    @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Got standard deviation of %1.1e in initial samples, set beta = 0.0 (beta=%+1.5e, beta_init=%+1.5e).\n", uppars.chaincomment,uppars.MCit, std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2]), beta,beta_init ); flush(stdout)
+                end     # end if without
+                beta = 0.0; keeptryinginitialising = false
+            else                                                # found satisfactory initialisation
+                keeptryinginitialising = false
+            end     # end if happy with initialisation
+        end     # end of keeptryinginitialising
+        if( keeptryinginitialising )                            # ie previous attempt failed because notemps got too large
+            @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): notemps=%d, abort trying to initialise from naive equilibrium with avgfate %1.5f(%1.5f), div=%1.5e+-%1.5e, dth=%1.5e+-%1.5e, timerange=[%+1.3e..%1.3e..%+1.3e](mystd=%1.3e,beta=%+1.3e(%+1.3e)). Sample from same timepoint now.\n", uppars.chaincomment,uppars.MCit, notemps, mean(unknownmothersamples.fate_cell_eq),1+prob_div_eq, mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2]),std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2]), mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2]),std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2]), timerange[1],dt,timerange[end], mystd, beta,beta_init )
+            @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Sample from same timepoint now.\n", uppars.chaincomment,uppars.MCit )
+            for j_sample = 1:uppars.nomothersamples
                 unknownmothersamples.time_cell_eq[j_sample,1] = 0.0
-                unknownmothersamples.time_cell_eq[j_sample,2] = timerange[sampledindex] - (1-sampledindex_interp)*dt
-            else                                                # death; second in stacked vector
-                unknownmothersamples.fate_cell_eq[j_sample] = 1
-                unknownmothersamples.time_cell_eq[j_sample,1] = 0.0
-                unknownmothersamples.time_cell_eq[j_sample,2] = timerange[sampledindex-notimepoints] - (1-sampledindex_interp)*dt
-            end     # end if death or division
-            unknownmothersamples.pars_evol_eq[j_sample,:] .= samplefirstevolpars()
-            mygetcellpars( pars_glob,unknownmothersamples.pars_evol_eq[j_sample,:],unknownmothersamples.time_cell_eq[j_sample,:], view(unknownmothersamples.pars_cell_eq, j_sample,:), uppars )
-            if( isnan(unknownmothersamples.time_cell_eq[j_sample,2]) | (unknownmothersamples.time_cell_eq[j_sample,2]<0) )
-                @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Got bad end time %+1.5e for sample %d, sampleindex %d (%1.5e) (times = [ %s], evol = [ %s], cellpars = [ %s]).\n", uppars.chaincomment,uppars.MCit, unknownmothersamples.time_cell_eq[j_sample,2], j_sample, sampledindex,sampledindex_interp, join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.time_cell_eq[j_sample,:]]), join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.pars_evol_eq[j_sample,:]]), join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.pars_cell_eq[j_sample,:]]) )
-                display(sampledindex); display(sampledindex_interp); display(notimepoints); display(sampledindex==1); display(sampledindex==(notimepoints+1))
-                display( timerange[1:5] )
-            end     # end if pathological times
-            # scale lifetime with cellpars:
-            myfac = unknownmothersamples.pars_cell_eq[j_sample,1]/pars_glob[1]
-            unknownmothersamples.time_cell_eq[j_sample,2] = unknownmothersamples.time_cell_eq[j_sample,1] + myfac*(unknownmothersamples.time_cell_eq[j_sample,2]-unknownmothersamples.time_cell_eq[j_sample,1])
-        end     # end of samples loop
-        =#
-        #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Done  trying to initialise with notemps %d now, getting parameters now... (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, notemps, (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
-        if( (std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2])==0) )      # effectively single sample, due to wrong spacing of timerange
-            notemps *= 10                                       # increase number of timesteps
-            if( uppars.without>=2 )
-                @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Got stddev of %1.1e in initial samples, try again for %d times (beta=%+1.2e(%+1.2e), div=%1.3e, dth=%1.3e, dthprob=%1.3e).\n", uppars.chaincomment,uppars.MCit, std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2]), notemps, beta,beta_init, mean_div,mean_dth,prob_dth2 ); flush(stdout)
-            end     # end if without
-        elseif( isnan(std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2])) )# no sample, ie only deaths
-            if( uppars.without>=2 )
-                @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Got standard deviation of %1.1e in initial samples, set beta = 0.0 (beta=%+1.5e, beta_init=%+1.5e).\n", uppars.chaincomment,uppars.MCit, std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2]), beta,beta_init ); flush(stdout)
-            end     # end if without
-            beta = 0.0; keeptryinginitialising = false
-        else                                                # found satisfactory initialisation
-            keeptryinginitialising = false
-        end     # end if happy with initialisation
-    end     # end of keeptryinginitialising
-    if( keeptryinginitialising )                            # ie previous attempt failed because notemps got too large
-        @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): notemps=%d, abort trying to initialise from naive equilibrium with avgfate %1.5f(%1.5f), div=%1.5e+-%1.5e, dth=%1.5e+-%1.5e, timerange=[%+1.3e..%1.3e..%+1.3e](mystd=%1.3e,beta=%+1.3e(%+1.3e)). Sample from same timepoint now.\n", uppars.chaincomment,uppars.MCit, notemps, mean(unknownmothersamples.fate_cell_eq),1+prob_div_eq, mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2]),std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2]), mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2]),std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2]), timerange[1],dt,timerange[end], mystd, beta,beta_init )
-        @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Sample from same timepoint now.\n", uppars.chaincomment,uppars.MCit )
-        for j_sample = 1:uppars.nomothersamples
-            unknownmothersamples.time_cell_eq[j_sample,1] = 0.0
-            unknownmothersamples.pars_evol_eq[j_sample,:] .= samplefirstevolpars()
-            mygetcellpars( pars_glob,unknownmothersamples.pars_evol_eq[j_sample,:],unknownmothersamples.time_cell_eq[j_sample,:], view(unknownmothersamples.pars_cell_eq, j_sample,:), uppars ) # only depends on start-time
-            (unknownmothersamples.time_cell_eq[j_sample,2], unknownmothersamples.fate_cell_eq[j_sample]) = dthdivdistr.get_sample( unknownmothersamples.pars_cell_eq[j_sample,:] )[1:2]
-            if( isnan(unknownmothersamples.time_cell_eq[j_sample,2]) | (unknownmothersamples.time_cell_eq[j_sample,2]<0) )
-                @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Got bad end time %+1.5e for sample %d, sampleindex %d (%1.5e) (times = [ %s], evol = [ %s], cellpars = [ %s]).\n", uppars.chaincomment,uppars.MCit, unknownmothersamples.time_cell_eq[j_sample,2], j_sample, sampledindex,sampledindex_interp, join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.time_cell_eq[j_sample,:]]), join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.pars_evol_eq[j_sample,:]]), join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.pars_cell_eq[j_sample,:]]) ); flush(stdout)
-                display( timerange[1:5] )
-            end     # end if pathological times
-        end     # end of samples loop
-        keeptryinginitialising = false                      # done now
-    end     # end if keeptryinginitialising
-    if( sentwarning )
-        @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Finally done initialising after %1.3f sec, with %d samples (prob_dth2=%1.4f, beta_init=%1.4f).\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-t_1)/Millisecond(1000),notemps, prob_dth2,beta_init ); flush(stdout)
-    end     # end if sentwarning
-    #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Naive init: avgfate %5.3f(%5.3f), div=%9.3e+-%9.3e, dth=%9.3e+-%9.3e, times=[%+1.1e..%1.1e..%+1.1e](%1.0e)(beta=%+1.3e(%+1.3e))(after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, mean(unknownmothersamples.fate_cell_eq),1+prob_div_eq, mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2]),std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2]), mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2]),std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2]), timerange[1],dt,timerange[end], notemps, beta,beta_init, (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
-    unknownmothersamples.time_cell_eq .-= maximum(unknownmothersamples.time_cell_eq[:,2])   # last event is at time zero
-    (time_next_memory::Float64, sample_next_memory::Int64) = findmin( unknownmothersamples.time_cell_eq[:,2] )    # next event time and index of respective sample
-    #unknownmothersamples_memory::Unknownmotherequilibriumsamples = deepcopy(unknownmothersamples)   # to memorise in case of restart
+                unknownmothersamples.pars_evol_eq[j_sample,:] .= samplefirstevolpars()
+                mygetcellpars( pars_glob,unknownmothersamples.pars_evol_eq[j_sample,:],unknownmothersamples.time_cell_eq[j_sample,:], view(unknownmothersamples.pars_cell_eq, j_sample,:), uppars ) # only depends on start-time
+                (unknownmothersamples.time_cell_eq[j_sample,2], unknownmothersamples.fate_cell_eq[j_sample]) = dthdivdistr.get_sample( unknownmothersamples.pars_cell_eq[j_sample,:] )[1:2]
+                if( isnan(unknownmothersamples.time_cell_eq[j_sample,2]) || (unknownmothersamples.time_cell_eq[j_sample,2]<0) )
+                    @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Got bad end time %+1.5e for sample %d, sampleindex %d (%1.5e) (times = [ %s], evol = [ %s], cellpars = [ %s]).\n", uppars.chaincomment,uppars.MCit, unknownmothersamples.time_cell_eq[j_sample,2], j_sample, sampledindex,sampledindex_interp, join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.time_cell_eq[j_sample,:]]), join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.pars_evol_eq[j_sample,:]]), join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.pars_cell_eq[j_sample,:]]) ); flush(stdout)
+                    display( timerange[1:5] )
+                end     # end if pathological times
+            end     # end of samples loop
+            keeptryinginitialising = false                      # done now
+        end     # end if keeptryinginitialising
+        if( sentwarning )
+            @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Finally done initialising after %1.3f sec, with %d samples (prob_dth2=%1.4f, beta_init=%1.4f).\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-t_1)/Millisecond(1000),notemps, prob_dth2,beta_init ); flush(stdout)
+        end     # end if sentwarning
+        #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Naive init: avgfate %5.3f(%5.3f), div=%9.3e+-%9.3e, dth=%9.3e+-%9.3e, times=[%+1.1e..%1.1e..%+1.1e](%1.0e)(beta=%+1.3e(%+1.3e))(after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, mean(unknownmothersamples.fate_cell_eq),1+prob_div_eq, mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2]),std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2]), mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2]),std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2]), timerange[1],dt,timerange[end], notemps, beta,beta_init, (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
+        #plotequilibriumsamples( unknownmothersamples,starttime-0.0, "preinit", uppars )
+    end     # end of heuristic initialisation type
+    unknownmothersamples.time_cell_eq .+= starttime - maximum(unknownmothersamples.time_cell_eq[:,2])   # last event is at starttime
+    myfatetimeordering_memory::Array{UInt32,1} = sortperm(unknownmothersamples.time_cell_eq[:,2])
+    myfatetimereordering_memory::Array{UInt32,1} = sortperm(myfatetimeordering_memory)                  # reverse of myfatetimeordering_memory
+    sample_next_memory::Int64 = Int64(myfatetimeordering_memory[1])
+    time_next_memory::Float64 = unknownmothersamples.time_cell_eq[sample_next_memory,2]
+    #unknownmothersamples_memory::Unknownmotherequilibriumsamples = deepcopy(unknownmothersamples)       # to memorise in case of restart
     unknownmothersamples_memory::Unknownmotherequilibriumsamples = Unknownmotherequilibriumsamples(deepcopy(unknownmothersamples.starttime), deepcopy(unknownmothersamples.nomothersamples),deepcopy(unknownmothersamples.nomotherburnin),deepcopy(unknownmothersamples.pars_evol_eq),deepcopy(unknownmothersamples.pars_cell_eq),deepcopy(unknownmothersamples.time_cell_eq),deepcopy(unknownmothersamples.fate_cell_eq),deepcopy(unknownmothersamples.weights_eq))   # initialise
+    stillnaivelyinitialised_memory::Array{UInt64,1} = deepcopy(stillnaivelyinitialised)
     nomotherburnin_here::UInt64 = deepcopy(uppars.nomotherburnin)
     if( overwritenomotherburnin>=0 )                        # actually given; otherwise keep default from uppars
         nomotherburnin_here = UInt64(overwritenomotherburnin)
     end     # end if overwritenomotherburnin actually given
-    local totaltime::Float64                                # declare
-    if( ~isinf(mystd) & ~isnan(mystd) )                     # finite mystd
-        totaltime = max(3*mystd,meaninterdivisiontime*nomotherburnin_here)   # to make sure, also tail gets updated at least once
-    else                                                    # i.e. no valid estimate of standard deviation
-        totaltime = meaninterdivisiontime*nomotherburnin_here
+    p_div_eq_pred::Float64 = exp(logprob_div2)              # probability to divide in equilibrium
+    if( dthdivdistr.typeno==UInt64(4) )                     # GammaExponential
+        p_div_eq_pred  = (2*p_div_eq_pred-1) * (1.0-(2^(-1/pars_glob[2]))) / (1.0-((2*p_div_eq_pred)^(-1/pars_glob[2])))
+        if( !(0<=p_div_eq_pred<=1) )
+            @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Got bad p_div_eq_pred %+1.5e from p_div %+1.5e, shape %+1.5e (beta %+1.5e, beta_init %+1.5e, prob_div_eq %+1.5e).", uppars.chaincomment,uppars.MCit, p_div_eq_pred, exp(logprob_div2),pars_glob[2], beta,beta_init,prob_div_eq  )
+        end     # end if pathological p_div_eq_pred
+    else                                                    # any other distribution
+        p_div_eq_pred = deepcopy(prob_div_eq)
+    end     # end if GammaExponential model
+    if( !isfinite(p_div_eq_pred) )
+        p_div_eq_pred = 1e-3                                # default
+    end     # end if pathlogocial 
+    totaltime::Float64 = 3*meaninterdivisiontime*nomotherburnin_here/p_div_eq_pred # only division increase stillnaivelyinitialised; factor "3*" as safety-cusion
+    if( !isfinite(mystd) )                                  # finite mystd
+        totaltime = max(3*mystd*myfac,totaltime)            # to make sure, also tail gets updated at least once
     end     # end if mystd non-pathological
+    if( (uppars.model==2) || (uppars.model==12) )           # clock models
+        totaltime = ceil(Int64, totaltime/pars_glob[uppars.nolocpars+2])*pars_glob[uppars.nolocpars+2]  # make sure totaltime is multiple of period, in case of a required restart
+    end     # end if clock models
     #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): meaninterdivisiontime %+1.5e, totaltime %+1.5e, latest initialised event %+1.5e, starttime %+1.5e.\n",  uppars.chaincomment,uppars.MCit, meaninterdivisiontime,totaltime, maximum(unknownmothersamples.time_cell_eq[:,2]),starttime ); flush(stdout)
 
     # sample until beyond zero time:
     t_2 = DateTime(now()); sentwarning = false              # physical time to send warning, if stuck
     nextplottime::Float64 = starttime + 1#deepcopy(currenttime-1)#   # time for next plot
     local sample_othr::Int64,sample_next::Int64, newbirthtime::Float64,newendtime::Float64, currenttime::Float64 # declare
+    myfatetimeordering::Array{UInt32,1} = zeros(UInt32,uppars.nomothersamples); myfatetimereordering::Array{UInt32,1} = zeros(UInt32,uppars.nomothersamples)
     newpars_evol::MArray{Tuple{Int64(uppars.nohide)},Float64} = @MArray zeros(Int64(uppars.nohide)); newpars_cell::MArray{Tuple{Int64(uppars.nolocpars)},Float64} = @MArray zeros(Int64(uppars.nolocpars)); pars_evol_mthr::MArray{Tuple{Int64(uppars.nohide)},Float64} = @MArray zeros(Int64(uppars.nohide)) # initialise
+    GRR_remtime::Float64 = +Inf; GRR_lambda::Float64 = +Inf # initialise GelmanRubin statistic
     #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): In eq:      div %+1.5e +- %1.5e, dth %+1.5e +- %1.5e, probdth %+1.5e, since start: %+1.5e +- %1.5e.\n", uppars.chaincomment,uppars.MCit, mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,1]), std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,1]), mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,1]), std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,1]), mean(unknownmothersamples.fate_cell_eq.==1), mean(unknownmothersamples.time_cell_eq[:,2].-(0.0)),std(unknownmothersamples.time_cell_eq[:,2].-(0.0)) )
-    #plotequilibriumsamples( unknownmothersamples,starttime-totaltime, "init", uppars )
-    while( (convflag>0) & any(stillnaivelyinitialised.<=1) )# sanity check, if "enough" divisions
+    keepequilibrising::Int64 = 2                            # '2' if still overcoming stillnaivelyinitialised cells, '1' if still waiting for GelmanRubin condition to be satisfied, '0' for considered equilibrised, '-1' for abortion
+    while( keepequilibrising>0 )                            # sanity check, if "enough" divisions
         # ...reset memory to initialisation: (deepcopy on entire structure not really deep here)
         unknownmothersamples.starttime = deepcopy(unknownmothersamples_memory.starttime);       unknownmothersamples.nomothersamples = deepcopy(unknownmothersamples_memory.nomothersamples); unknownmothersamples.nomotherburnin = deepcopy(unknownmothersamples_memory.nomotherburnin)
-        unknownmothersamples.pars_evol_eq = deepcopy(unknownmothersamples_memory.pars_evol_eq); unknownmothersamples.pars_cell_eq = deepcopy(unknownmothersamples_memory.pars_cell_eq)
-        unknownmothersamples.time_cell_eq = deepcopy(unknownmothersamples_memory.time_cell_eq); unknownmothersamples.fate_cell_eq = deepcopy(unknownmothersamples_memory.fate_cell_eq)
-        unknownmothersamples.weights_eq = deepcopy(unknownmothersamples_memory.weights_eq)
-        stillnaivelyinitialised .= zero(UInt64)             # reset to naive initialisation
-        unknownmothersamples.time_cell_eq .+= starttime-totaltime;   sample_next = deepcopy(sample_next_memory); time_next = unknownmothersamples.time_cell_eq[sample_next,2] # reset everything, so final time is starttime
+        unknownmothersamples.pars_evol_eq .= deepcopy(unknownmothersamples_memory.pars_evol_eq);unknownmothersamples.pars_cell_eq .= deepcopy(unknownmothersamples_memory.pars_cell_eq)
+        unknownmothersamples.time_cell_eq .= deepcopy(unknownmothersamples_memory.time_cell_eq);unknownmothersamples.fate_cell_eq .= deepcopy(unknownmothersamples_memory.fate_cell_eq)
+        unknownmothersamples.weights_eq .= deepcopy(unknownmothersamples_memory.weights_eq)
+        stillnaivelyinitialised .= deepcopy(stillnaivelyinitialised_memory)         # reset to naive initialisation
+        myfatetimeordering .= deepcopy(myfatetimeordering_memory)
+        myfatetimereordering .= deepcopy(myfatetimereordering_memory)
+        unknownmothersamples.time_cell_eq .-= totaltime;    sample_next = deepcopy(sample_next_memory); time_next = deepcopy(unknownmothersamples.time_cell_eq[sample_next,2]) # reset everything, so final time is starttime
         currenttime = deepcopy(time_next)                   # initialise
         while( time_next<starttime )
-            if( (!sentwarning) & (((DateTime(now())-t_2)/Millisecond(1000))>1800) )     # already trying since 30 mins
-                @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Already trying to evolve since %1.3f sec, time_next = %+1.5e,currenttime = %+1.5e, totaltime=%1.5e,starttime=%+1.5e (stillnaivelyinitialised=%1.4f, avgfate=%1.4f, prob_dth2=%1.4f, beta_init=%1.4f).\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-t_2)/Millisecond(1000), time_next,currenttime,totaltime,starttime, mean(stillnaivelyinitialised.==0),mean(unknownmothersamples.fate_cell_eq),prob_dth2,beta_init )
+            #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  Evolve at currenttime %+1.5e in [ %+1.5e..%+1.5e ] for pars_glob = [ %s] (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, currenttime, starttime-totaltime, starttime, join([@sprintf("%+1.5e ",j) for j in pars_glob]), (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
+            if( (!sentwarning) && (((DateTime(now())-t_2)/Millisecond(1000))>1800) ) # already trying since 30 mins
+                @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Already trying to evolve since %1.3f sec, time_next = %+1.5e,currenttime = %+1.5e, totaltime=%1.5e,starttime=%+1.5e (stillnaivelyinitialised=%1.4f (stats %1.4f+-%1.4f), avgfate=%1.4f, prob_dth2=%1.4f, beta_init=%1.4f).\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-t_2)/Millisecond(1000), time_next,currenttime,totaltime,starttime, mean(stillnaivelyinitialised.==0),mean(stillnaivelyinitialised),std(stillnaivelyinitialised),mean(unknownmothersamples.fate_cell_eq),prob_dth2,beta_init )
+                lambda_here::Array{Float64,1} = unknownmothersamples.pars_cell_eq[:,1]./pars_glob[1]
+                @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  nomotherburnin %d/%d, meaninterdivtime %+1.5e, p_div_eq_pred %1.5e, mystd %1.5e, myfac %1.5e; lambda = %+1.5e+-%1.5e.\n", uppars.chaincomment,uppars.MCit, nomotherburnin_here,uppars.nomotherburnin, meaninterdivisiontime, p_div_eq_pred, mystd, myfac, mean(lambda_here),std(lambda_here)  )
                 @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  div = %1.5e+-%1.5e, dth = %1.5e+-%1.5e, prob_dth = %1.5e (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, mean_div,std_div, mean_dth,std_dth, prob_dth, (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
-                @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  pars_glob = [ %s] (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in pars_glob]), (DateTime(now())-uppars.timestamp)/Millisecond(1000) )
-                sentwarning = true                              # not again
+                @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  pars_glob = [ %s] (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in pars_glob]), (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
+                if( (uppars.model==3) || (uppars.model==13) )   # hidden factor model
+                    hiddenmatrix = hcat( pars_glob[uppars.nolocpars+1] ); sigma = hcat( pars_glob[uppars.nolocpars+2] )
+                    (sigma_eq, largestabsev) = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )
+                    @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  sigma_eq = [ %s], largestabsev = %+1.5e (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in sigma_eq]), largestabsev, (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
+                elseif( uppars.model in (4,9,14) )          # 2D hidden factors model
+                    (hiddenmatrix, sigma) = gethiddenmatrix_m4( pars_glob, uppars )
+                    (sigma_eq, largestabsev) = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )
+                    (largestabsev, eigenvalues) = getlargestabseigenvaluepart( hiddenmatrix, uppars )[[1,3]]
+                    @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d):  sigma_eq = [ %s], largestabsev = %+1.5e, eigenvalues = [ %s] (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in sigma_eq]), largestabsev, join([@sprintf("%+1.5e%+1.5e i  ",real(j),imag(j)) for j in eigenvalues]), (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
+                end     # end if hidden factors model
+                sentwarning = true                          # not again
             end     # end if taking long
             currenttime = deepcopy(time_next)               # forward time
             #if( !((currenttime==time_next==unknownmothersamples.time_cell_eq[sample_next,2]) & (currenttime<=minimum(unknownmothersamples.time_cell_eq[:,2]))) )
@@ -3203,10 +3324,10 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
                 @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Sleep now, nextplottime = %1.3e.\n", uppars.chaincomment,uppars.MCit, nextplottime ); sleep(10)
                 =#
             end     # end of plotting intermediate images
-            if( (uppars.without>=3) & ((prob_dth2<0.0000)|(prob_dth2>0.999)) )
+            if( (uppars.without>=3) && ((prob_dth2<0.0000)||(prob_dth2>0.999)) )
                 @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Evolved to time %1.5e/%1.5e (fate=%d, pars_evol=[ %s], pars_cell=[ %s], prob_dth=%1.5e(%+1.5e)).\n", uppars.chaincomment,uppars.MCit, currenttime,totaltime, unknownmothersamples.fate_cell_eq[sample_next], join([@sprintf("%1.5e ",j) for j in unknownmothersamples.pars_evol_eq[sample_next,:]]), join([@sprintf("%1.5e ",j) for j in unknownmothersamples.pars_cell_eq[sample_next,:]]), prob_dth, prob_dth2 ); flush(stdout)
             end     # end if without
-            if( (uppars.without>=3) & (mean(unknownmothersamples.fate_cell_eq)<=1.00001) )
+            if( (uppars.without>=3) && (mean(unknownmothersamples.fate_cell_eq)<=1.00001) )
                 logdthintegral = logsumexp( logdthintegralterms ); alpha = 1/( 1 + 2*exp(logdthintegral) )
                 @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Simulated fates-avg = %1.5e, logdthprob = %+1.5e, pars_cell_here=[ %s], stats: div = %1.5e+-%1.5e, dth = %1.5e+-%1.5e, prob_dth = %1.5e, beta = %+1.5e, alpha = %1.5e, time = %+1.5e in [%+1.5e..%+1.5e].\n", uppars.chaincomment,uppars.MCit, mean(unknownmothersamples.fate_cell_eq), logprob_dth2, join([@sprintf("%1.5e ",j) for j in pars_cell_here]), mean_div,std_div, mean_dth,std_dth, prob_dth, beta, alpha, currenttime, starttime-totaltime,starttime )
                 @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Eq times: start = %1.5e+-%1.5e, end = %1.5e+-%1.5e, stillnaivelyinitialised = %1.5e.\n", uppars.chaincomment,uppars.MCit, mean(unknownmothersamples.time_cell_eq[:,1]),std(unknownmothersamples.time_cell_eq[:,1]), mean(unknownmothersamples.time_cell_eq[:,2]),std(unknownmothersamples.time_cell_eq[:,2]), mean(stillnaivelyinitialised.==0) )
@@ -3246,7 +3367,7 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
                 # ....pick old cell to replaced by dying one:
                 sample_othr = deepcopy(sample_next)             # initialise as already replaced mother
                 while( sample_othr==sample_next )               # keep trying until actual old cell gets replaced
-                    sample_othr = rand(collect(1:uppars.nomothersamples))
+                    sample_othr = ceil(Int64, uppars.nomothersamples*rand() )
                 end     # end while not replacing old cell
                 newbirthtime = deepcopy(unknownmothersamples.time_cell_eq[sample_othr,1])
                 newpars_evol .= deepcopy(unknownmothersamples.pars_evol_eq[sample_othr,:])
@@ -3263,9 +3384,9 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
                     @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Initial newendtime not small enough: newendtime = %1.5e, newbirthtime = %1.5e, currenttime = %1.5e; next: times_cell[%d] = [ %s], other: times_cell[%d] = [ %s]\n", uppars.chaincomment,uppars.MCit, newendtime,newbirthtime, currenttime, sample_next, join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.time_cell_eq[sample_next,:]]), sample_othr, join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.time_cell_eq[sample_othr,:]]) )
                     @printf( " (%s)  ...: fate_eq mean = %+1.5e, ratio of stillnaivelyinitialised = %d(mean %+1.5e), difftimes %+1.5e, startofburnin %+1.5e, starttime %+1.5e, totaltime %+1.5e.\n", uppars.chaincomment, mean(unknownmothersamples.fate_cell_eq), stillnaivelyinitialised[sample_next],mean(stillnaivelyinitialised.==0), currenttime-newbirthtime, starttime-totaltime, starttime, totaltime )
                     @printf( " (%s)  ...: pars_cell_here = [ %s] (pars_glob = [ %s]).\n", uppars.chaincomment, join([@sprintf("%+1.5e ", j) for j in pars_cell_here]), join([@sprintf("%+1.5e ", j) for j in pars_glob]) ) 
-                    if( (uppars.model==1) | (uppars.model==2) | (uppars.model==3) | (uppars.model==4) ) # FrechetWeibull distribution
+                    if( uppars.model in (1,2,3,4) )             # FrechetWeibull distribution
                         display( estimateFrechetWeibullcombstats(pars_cell_here) )
-                    elseif( (uppars.model==11) | (uppars.model==12) | (uppars.model==13) | (uppars.model==14) ) # GammaExponential distribution
+                    elseif( uppars.model in (11,12,13,14) )     # GammaExponential distribution
                         display( estimateGammaExponentialcombstats(pars_cell_here) )
                     end      # end of distinguishing models
                     #=
@@ -3279,8 +3400,9 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
                 (lifetime, newfate) = dthdivdistr.get_samplewindow( newpars_cell, [currenttime-newbirthtime,+Inf] )[1:2]
                 newendtime = newbirthtime + lifetime
                 # ...replace dead cell by other cell:
+                resortandupdatelist( view(myfatetimeordering,:),view(myfatetimereordering,:), myfatetimereordering[sample_next], view(unknownmothersamples.time_cell_eq, :,2), newendtime )
                 unknownmothersamples.fate_cell_eq[sample_next] = deepcopy(newfate)
-                unknownmothersamples.time_cell_eq[sample_next,:] .= deepcopy([newbirthtime,newendtime])
+                unknownmothersamples.time_cell_eq[sample_next,1] = deepcopy(newbirthtime); unknownmothersamples.time_cell_eq[sample_next,2] = deepcopy(newendtime)
                 unknownmothersamples.pars_evol_eq[sample_next,:] .= deepcopy(newpars_evol)
                 unknownmothersamples.pars_cell_eq[sample_next,:] .= deepcopy(newpars_cell)
                 #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Replace dead cell %3d with pars_cell=[ %s], times=[%+1.5e,%+1.5e], fate=%d, from %d.\n", uppars.chaincomment,uppars.MCit, sample_next, join([@sprintf("%+1.5e ",j) for j in unknownmothersamples.pars_cell_eq[sample_next,:]]), unknownmothersamples.time_cell_eq[sample_next,1],unknownmothersamples.time_cell_eq[sample_next,2], unknownmothersamples.fate_cell_eq[sample_next], sample_othr )
@@ -3295,11 +3417,9 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
                 mygetcellpars( pars_glob, newpars_evol,[newbirthtime,newbirthtime], view(newpars_cell, :), uppars )    # only start time matters
                 (lifetime, newfate) = dthdivdistr.get_sample( newpars_cell )[1:2]
                 # ...replace mother by daughter:
+                resortandupdatelist( view(myfatetimeordering,:),view(myfatetimereordering,:), myfatetimereordering[sample_next], view(unknownmothersamples.time_cell_eq, :,2), newbirthtime + lifetime )
                 unknownmothersamples.fate_cell_eq[sample_next] = deepcopy(newfate)
-                unknownmothersamples.time_cell_eq[sample_next,:] .= deepcopy([newbirthtime,newbirthtime + lifetime])
-                #if( unknownmothersamples.time_cell_eq[sample_next,1]>minimum(unknownmothersamples.time_cell_eq[:,2]) )
-                #    @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): divtime      larger than first end: divtime  %+1.15e, first end %+1.15e (%+1.5e), current %+1.15e, dividing %d.\n", uppars.chaincomment,uppars.MCit, unknownmothersamples.time_cell_eq[sample_next,1],minimum(unknownmothersamples.time_cell_eq[:,2]), minimum(unknownmothersamples.time_cell_eq[:,2])-unknownmothersamples.time_cell_eq[sample_next,1], currenttime, sample_next ); flush(stdout)
-                #end     # end if newbirthtime somewhat off
+                unknownmothersamples.time_cell_eq[sample_next,1] = deepcopy(newbirthtime); unknownmothersamples.time_cell_eq[sample_next,2] = deepcopy(newbirthtime + lifetime)
                 unknownmothersamples.pars_evol_eq[sample_next,:] .= deepcopy(newpars_evol)
                 unknownmothersamples.pars_cell_eq[sample_next,:] .= deepcopy(newpars_cell)
                 stillnaivelyinitialised[sample_next] += 1
@@ -3323,8 +3443,9 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
                         sample_othr = ceil(Int64, uppars.nomothersamples*rand() )
                     end     # end while not replacing old cell
                     # ....replace old cell by second daughter:
+                    resortandupdatelist( view(myfatetimeordering,:),view(myfatetimereordering,:), myfatetimereordering[sample_othr], view(unknownmothersamples.time_cell_eq, :,2), newbirthtime + lifetime )
                     unknownmothersamples.fate_cell_eq[sample_othr] = deepcopy(newfate)
-                    unknownmothersamples.time_cell_eq[sample_othr,:] .= deepcopy([newbirthtime,newbirthtime + lifetime])
+                    unknownmothersamples.time_cell_eq[sample_othr,1] = deepcopy(newbirthtime); unknownmothersamples.time_cell_eq[sample_othr,2] = deepcopy(newbirthtime + lifetime)
                     unknownmothersamples.pars_evol_eq[sample_othr,:] .= deepcopy(newpars_evol)
                     unknownmothersamples.pars_cell_eq[sample_othr,:] .= deepcopy(newpars_cell)
                     stillnaivelyinitialised[sample_othr] = deepcopy(stillnaivelyinitialised[sample_next])   # has same number of divisions as other sister
@@ -3341,29 +3462,428 @@ function getjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Floa
             #    @printf( " (%s)  badstarts [ %s], badends = [ %s]; just updated %d ([%+1.15e, %+1.5e]) from %d ([%+1.15e, %+1.5e]), currenttime %+1.15e.\n", uppars.chaincomment, join([@sprintf("%3d ",j) for j in selectbadstarts]),join([@sprintf("%3d ",j) for j in selectbadends]), sample_next,unknownmothersamples.time_cell_eq[sample_next,1],unknownmothersamples.time_cell_eq[sample_next,2] ,sample_othr,unknownmothersamples.time_cell_eq[sample_othr,1],unknownmothersamples.time_cell_eq[sample_othr,2], currenttime ); flush(stdout)
             #end     # end if birth and end times incompatible
             # update next time/sample:
-            (time_next, sample_next) = findmin( unknownmothersamples.time_cell_eq[:,2] )   # next event time and index of respective sample
+            #(time_next2, sample_next2) = findmin( unknownmothersamples.time_cell_eq[:,2] )   # next event time and index of respective sample
+            sample_next = Int64(myfatetimeordering[1])
+            time_next = unknownmothersamples.time_cell_eq[sample_next,2]
+            #if( time_next!=time_next2 )
+            #    @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): sample_next %d vs %d, time_next %+1.5e vs %+1.5e (%+1.5e).\n", uppars.chaincomment,uppars.MCit, sample_next,sample_next2, time_next,time_next2, time_next-time_next2 )
+            #end     # end if inconsistent
         end     # end of time-evolution
 
-        if( (convflag>0) & any(stillnaivelyinitialised.<=1) )
-            if( (overwritenomotherburnin>uppars.nomotherburnin) & (overwritenomotherburnin>1e5) )
-                @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Got too few nodivisions: 0: %1.4f, 1: %1.4f, 2: %1.4f, 3: %1.4f, 4: %1.4f, 5: %1.4f, >=6: %1.4f; mean %1.5e +- %1.5e. Try again with totaltime %1.3f*2 (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, mean(stillnaivelyinitialised.==0),mean(stillnaivelyinitialised.==1),mean(stillnaivelyinitialised.==2),mean(stillnaivelyinitialised.==3),mean(stillnaivelyinitialised.==4),mean(stillnaivelyinitialised.==5),mean(stillnaivelyinitialised.>=6), mean(stillnaivelyinitialised),std(stillnaivelyinitialised), totaltime,  (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
-            elseif( uppars.without>=2 )
-                @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Got too few nodivisions: 0: %1.4f, 1: %1.4f, 2: %1.4f, 3: %1.4f, 4: %1.4f, 5: %1.4f, >=6: %1.4f; mean %1.5e +- %1.5e. Try again with totaltime %1.3f*2 (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, mean(stillnaivelyinitialised.==0),mean(stillnaivelyinitialised.==1),mean(stillnaivelyinitialised.==2),mean(stillnaivelyinitialised.==3),mean(stillnaivelyinitialised.==4),mean(stillnaivelyinitialised.==5),mean(stillnaivelyinitialised.>=6), mean(stillnaivelyinitialised),std(stillnaivelyinitialised), totaltime,  (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
-            end     # end if without
-            totaltime *= 2      # double the burnin time
+        if( convflag>0 )
+            j_par_stillnaive::Int64 = 1                     # initialise counter, until first particle is not sufficiently often updated
+            while( (j_par_stillnaive<=uppars.nomothersamples) && ((stillnaivelyinitialised[j_par_stillnaive]-stillnaivelyinitialised_memory[j_par_stillnaive])>=minnaivelyinitialised) )
+                j_par_stillnaive += 1
+            end     # end while having enough updates per particle
+            if( j_par_stillnaive<=uppars.nomothersamples )  # denotes first particle not sufficiently often updated
+                if( nomotherburnin_here>(maxnomotherburnin/10) )
+                    if( nomotherburnin_here>maxnomotherburnin ) # abort
+                        @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Got too few nodivisions: 0: %1.5f (%d), 1: %1.5f, 2: %1.5f, 3: %1.5f, 4: %1.5f, 5: %1.5f, >=6: %1.5f; mean %1.5e +- %1.5e. Abort after totaltime %1.3e, nomotherburnin %d (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, mean(stillnaivelyinitialised.==0),sum(stillnaivelyinitialised.==0),mean(stillnaivelyinitialised.==1),mean(stillnaivelyinitialised.==2),mean(stillnaivelyinitialised.==3),mean(stillnaivelyinitialised.==4),mean(stillnaivelyinitialised.==5),mean(stillnaivelyinitialised.>=6), mean(stillnaivelyinitialised),std(stillnaivelyinitialised), totaltime,nomotherburnin_here,  (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
+                        convflag = -1                       # abort
+                        keepequilibrising = -1              # aborts with negative convflag
+                    else                                    # just throw warning, but keep going
+                        @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Got too few nodivisions: 0: %1.5f (%d), 1: %1.5f, 2: %1.5f, 3: %1.5f, 4: %1.5f, 5: %1.5f, >=6: %1.5f; mean %1.5e +- %1.5e. Try again with totaltime %1.3e*2, nomotherburnin %d*2 (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, mean(stillnaivelyinitialised.==0),sum(stillnaivelyinitialised.==0),mean(stillnaivelyinitialised.==1),mean(stillnaivelyinitialised.==2),mean(stillnaivelyinitialised.==3),mean(stillnaivelyinitialised.==4),mean(stillnaivelyinitialised.==5),mean(stillnaivelyinitialised.>=6), mean(stillnaivelyinitialised),std(stillnaivelyinitialised), totaltime,nomotherburnin_here,  (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
+                    end     # end if excessive nomotherburnin_here
+                elseif( uppars.without>=2 )
+                    @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Got too few nodivisions: 0: %1.5f (%d), 1: %1.5f, 2: %1.5f, 3: %1.5f, 4: %1.5f, 5: %1.5f, >=6: %1.5f; mean %1.5e +- %1.5e. Try again with totaltime %1.3e*2, nomotherburnin %d*2 (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, mean(stillnaivelyinitialised.==0),sum(stillnaivelyinitialised.==0),mean(stillnaivelyinitialised.==1),mean(stillnaivelyinitialised.==2),mean(stillnaivelyinitialised.==3),mean(stillnaivelyinitialised.==4),mean(stillnaivelyinitialised.==5),mean(stillnaivelyinitialised.>=6), mean(stillnaivelyinitialised),std(stillnaivelyinitialised), totaltime,nomotherburnin_here,  (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
+                    #@printf( " (%s)  %d > %d = %d - %d.\n", uppars.chaincomment, minnaivelyinitialised, stillnaivelyinitialised[j_par_stillnaive]-stillnaivelyinitialised_memory[j_par_stillnaive], stillnaivelyinitialised[j_par_stillnaive],stillnaivelyinitialised_memory[j_par_stillnaive] )
+                end     # end if without
+                totaltime *= 2; nomotherburnin_here *= 2    # double the burnin time (nomotherburnin_here just for consistency, but not called)
+                unknownmothersamples_memory.starttime = deepcopy(unknownmothersamples.starttime);       unknownmothersamples_memory.nomothersamples = deepcopy(unknownmothersamples.nomothersamples); unknownmothersamples_memory.nomotherburnin = deepcopy(unknownmothersamples.nomotherburnin)
+                unknownmothersamples_memory.pars_evol_eq .= deepcopy(unknownmothersamples.pars_evol_eq);unknownmothersamples_memory.pars_cell_eq .= deepcopy(unknownmothersamples.pars_cell_eq)
+                unknownmothersamples_memory.time_cell_eq .= deepcopy(unknownmothersamples.time_cell_eq);unknownmothersamples_memory.fate_cell_eq .= deepcopy(unknownmothersamples.fate_cell_eq)
+                unknownmothersamples_memory.weights_eq .= deepcopy(unknownmothersamples.weights_eq)
+                stillnaivelyinitialised_memory .= deepcopy(stillnaivelyinitialised)     # reset to naive initialisation
+                myfatetimeordering_memory .= deepcopy(myfatetimeordering);  myfatetimereordering_memory .= deepcopy(myfatetimereordering)
+                sample_next_memory = deepcopy(sample_next); time_next_memory = deepcopy(unknownmothersamples_memory.time_cell_eq[sample_next_memory,2]) # reset everything, so final time is starttime
+                keepequilibrising = 2                       # doubled totaltime here again, so no need to do again, if waiting for GelmanRubin alone
+            else                                            # check Gelman Rubin statistic for convergence
+                # ...get GelmanRubin statistic:
+                GRR_remtime = getGRR( vcat(reshape(unknownmothersamples_memory.time_cell_eq[:,2], 1,:), reshape(unknownmothersamples.time_cell_eq[:,2], 1,:)) )[2]
+                if( uppars.nohide>0 )
+                    GRR_lambda = getGRR( vcat(reshape(unknownmothersamples_memory.pars_evol_eq[:,1], 1,:), reshape(unknownmothersamples.pars_evol_eq[:,1], 1,:)) )[2]
+                else
+                    GRR_lambda = 1.0
+                end     # end if has hidden states
+                # ...test if having to contiue equilibrating:
+                if( !((1/GRR_limit)<GRR_remtime<GRR_limit) || !((1/GRR_limit)<GRR_lambda<GRR_limit) )   # not GelmanRubin converged, yet
+                    if( nomotherburnin_here>(maxnomotherburnin/10) )
+                        if( nomotherburnin_here>maxnomotherburnin ) # abort
+                            @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Got problematic GRR: %7.4f, %7.4f vs %7.4f; naivelyinitialised %1.5e +- %1.5e, keepequilibrising %d. Abort after totaltime %1.3e, nomotherburnin %d. (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, GRR_remtime,GRR_lambda, GRR_limit, mean(stillnaivelyinitialised),std(stillnaivelyinitialised), keepequilibrising, totaltime,nomotherburnin_here,  (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
+                            @printf( " (%s)   pars_glob = [ %s], p_div_eq_pred = %1.5e, beta = %+1.5e.\n", uppars.chaincomment, join([@sprintf("%+1.5e ",j) for j in pars_glob]), p_div_eq_pred, beta )
+                            convflag = -1                   # abort
+                            keepequilibrising = -1          # aborts with negative convflag
+                        else                                # just throw warning, but keep going
+                            @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth (%d): Got problematic GRR: %7.4f, %7.4f vs %7.4f; naivelyinitialised %1.5e +- %1.5e, keepequilibrising %d. Try again with totaltime %1.3e*%d, nomotherburnin %d*%d (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, GRR_remtime,GRR_lambda, GRR_limit, mean(stillnaivelyinitialised),std(stillnaivelyinitialised), keepequilibrising, totaltime,3-keepequilibrising,nomotherburnin_here,3-keepequilibrising,  (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
+                            @printf( " (%s)   pars_glob = [ %s], p_div_eq_pred = %1.5e, beta = %+1.5e.\n", uppars.chaincomment, join([@sprintf("%+1.5e ",j) for j in pars_glob]), p_div_eq_pred, beta )
+                        end     # end if excessive nomotherburnin_here
+                    elseif( (uppars.without>=2) && (keepequilibrising==1) )
+                        @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Got problematic GRR: %7.4f, %7.4f vs %7.4f; naivelyinitialised %1.5e +- %1.5e, keepequilibrising %d. Try again with totaltime %1.3e*%d, nomotherburnin %d*%d (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, GRR_remtime,GRR_lambda, GRR_limit, mean(stillnaivelyinitialised),std(stillnaivelyinitialised), keepequilibrising, totaltime,3-keepequilibrising,nomotherburnin_here,3-keepequilibrising,  (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
+                        @printf( " (%s)   pars_glob = [ %s], meaninterdivisiontime = %1.5e, p_div_eq_pred = %1.5e, beta = %+1.5e (after %1.3f sec).\n", uppars.chaincomment, join([@sprintf("%+1.5e ",j) for j in pars_glob]), meaninterdivisiontime, p_div_eq_pred, beta,  (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
+                    end     # end if without
+                    if( keepequilibrising==1 )                  # no increase in totaltime, if first time of checking GelmanRubin statistic
+                        totaltime *= 2; nomotherburnin_here *= 2# double the burnin time (nomotherburnin_here just for consistency, but not called)
+                    end     # end if have already been waiting for Gelman-Rubin to converge
+                    unknownmothersamples_memory.starttime = deepcopy(unknownmothersamples.starttime);       unknownmothersamples_memory.nomothersamples = deepcopy(unknownmothersamples.nomothersamples); unknownmothersamples_memory.nomotherburnin = deepcopy(unknownmothersamples.nomotherburnin)
+                    unknownmothersamples_memory.pars_evol_eq .= deepcopy(unknownmothersamples.pars_evol_eq);unknownmothersamples_memory.pars_cell_eq .= deepcopy(unknownmothersamples.pars_cell_eq)
+                    unknownmothersamples_memory.time_cell_eq .= deepcopy(unknownmothersamples.time_cell_eq);unknownmothersamples_memory.fate_cell_eq .= deepcopy(unknownmothersamples.fate_cell_eq)
+                    unknownmothersamples_memory.weights_eq .= deepcopy(unknownmothersamples.weights_eq)
+                    stillnaivelyinitialised_memory .= deepcopy(stillnaivelyinitialised)     # reset to naive initialisation
+                    myfatetimeordering_memory .= deepcopy(myfatetimeordering);  myfatetimereordering_memory .= deepcopy(myfatetimereordering)
+                    sample_next_memory = deepcopy(sample_next); time_next_memory = deepcopy(unknownmothersamples_memory.time_cell_eq[sample_next_memory,2]) # reset everything, so final time is starttime
+                    keepequilibrising = 1                       # only waiting for GelmanRubin statistic to be satisfactory
+                else                                            # converged accoring to GelmanRubin statistic
+                    keepequilibrising = 0                       # non-positive signals to stop loop
+                end     # end if not GelmanRubin converged, yet
+            end     # end if still overcoming stillnaivelyinitialised cells
+        else                                                    # ie convflag signals abort
+            keepequilibrising = -1                              # aborts with negative convflag
         end     # end if have to repeat with longer burnin
     end     # end if not enough divisions
 
     if( sentwarning )
-        @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Finally done evolving after %1.3f sec, with %d samples (prob_dth2=%1.4f, beta_init=%1.4f).\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-t_2)/Millisecond(1000),notemps, prob_dth2,beta_init )
+        lambda_here = unknownmothersamples.pars_cell_eq[:,1]./pars_glob[1]
+        @printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Finally done evolving after %1.3f sec (prob_dth2=%1.4f, beta_init=%1.4f, nomotherburnin %d/%d, totaltime=%+1.5e, stillnaivelyinitialised_stats=%1.5e+-%1.5e, lambda=%+1.5e+-%1.5e).\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-t_2)/Millisecond(1000), prob_dth2,beta_init, nomotherburnin_here,uppars.nomotherburnin, totaltime, mean(stillnaivelyinitialised),std(stillnaivelyinitialised), mean(lambda_here),std(lambda_here) )
     end     # end if sentwarning
-    
-    #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): End eq:     div %+1.5e +- %1.5e, dth %+1.5e +- %1.5e, probdth %+1.5e, since start: %+1.5e +- %1.5e.\n", uppars.chaincomment,uppars.MCit, mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,1]), std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,1]), mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,1]), std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,1]), mean(unknownmothersamples.fate_cell_eq.==1), mean(unknownmothersamples.time_cell_eq[:,2].-starttime),std(unknownmothersamples.time_cell_eq[:,2].-starttime) )
-    #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Done now with sampling, convflag %d (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, convflag,  (DateTime(now())-t_2)/Millisecond(1000) )
+
+    #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): After full-scale equilibration, convflag %d (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, convflag,  (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
     #plotequilibriumsamples( unknownmothersamples,starttime, "end", uppars )
+    #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): End eq:     avgfate %5.3f(%5.3f), div=%9.3e+-%9.3e, dth=%9.3e+-%9.3e, times=[%+1.1e..%1.1e..%+1.1e](%1.0e)(beta=%+1.3e(%+1.3e))(after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, mean(unknownmothersamples.fate_cell_eq),2-prob_dth_eigen, mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2]),std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2]), mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2]),std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2]), timerange_eigen[1],dt_eigen,timerange_eigen[end], notemps, beta,beta_init, (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
+    #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): End eq:     div %+1.5e +- %1.5e, dth %+1.5e +- %1.5e, probdth %+1.5e, since start: %+1.5e +- %1.5e.\n", uppars.chaincomment,uppars.MCit, mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,1]), std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,1]), mean(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,1]), std(unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2].-unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,1]), mean(unknownmothersamples.fate_cell_eq.==1), mean(unknownmothersamples.time_cell_eq[:,2].-starttime),std(unknownmothersamples.time_cell_eq[:,2].-starttime) )
+    #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Nodivisions: 0: %1.5f (%d), 1: %1.5f, 2: %1.5f, 3: %1.5f, 4: %1.5f, 5: %1.5f, >=6: %1.5f; mean %1.5e +- %1.5e. After totaltime %1.3e, nomotherburnin %d, p_div_eq_pred = %1.5f (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, mean(stillnaivelyinitialised.==0),sum(stillnaivelyinitialised.==0),mean(stillnaivelyinitialised.==1),mean(stillnaivelyinitialised.==2),mean(stillnaivelyinitialised.==3),mean(stillnaivelyinitialised.==4),mean(stillnaivelyinitialised.==5),mean(stillnaivelyinitialised.>=6), mean(stillnaivelyinitialised),std(stillnaivelyinitialised), totaltime,nomotherburnin_here, p_div_eq_pred,  (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
+    #@printf( " (%s) Info - getjointequilibriumparameterswithnetgrowth (%d): Done now with sampling, convflag %d (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, convflag,  (DateTime(now())-t_2)/Millisecond(1000) ); flush(stdout)
 
     return convflag       # equilibrium samples
 end     # end of getjointequilibriumparameterswithnetgrowth function
+function getdiscretisedjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Float64,1},MArray}, starttime::Float64, mygetcellpars::Function, mygetevoltrgt::Function, dthdivdistr::DthDivdistr, uppars::Uppars2 )::Tuple{Array{Float64,1},Array{Float64,1}, Array{Float64,3},Array{Float64,3}, Float64, Array{Float64,1},Array{Float64}, Float64,Array{Float64,1}, Int64}
+    # discretise time and scale-parameters and solve for eigenvectors of largest absolute eigenvalue
+
+    # set auxiliary parameters:
+    t1::DateTime = DateTime(now())                      # for timer
+    errorflag::Int64 = 0                                # '0' for no error, >0 for errors
+    notimes::UInt64 = 20                                # number of discretised positions in remaining life-times
+    noscales::UInt64 = 20                               # number of discretised positions in scale-parameter
+    timerange::Array{Float64,1} = zeros(notimes)        # allocate
+    local scalerange::Array{Float64}, ds::Array{Float64,1}, nonoscales::Int64# declare (shape depends on nohide)
+    local mean_div::Float64, mean_std::Float64
+    if( uppars.model in (1,2,3,4) )                     # Frechet-Weibull models
+        (mean_div,mean_std) = estimateFrechetWeibullstats( pars_glob[1:uppars.nolocpars], UInt64(1000) )[1:2]
+    elseif( uppars.model==9 )                           # Frechet-models
+        (mean_div,mean_std) = getFrechetstats( pars_glob[1:uppars.nolocpars], UInt64(1000) )[1:2]
+    elseif( uppars.model in (11,12,13,14) )             # Gamma-Exponential
+        (mean_div,mean_std) = estimateGammaExponentialstats( pars_glob[1:uppars.nolocpars], UInt64(0) )[1:2]
+    else                                                # unknown model
+        @printf( " (%s) Warning - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+    end     # end of distinguishing models
+    if( (uppars.model==1) || (uppars.model==11) )       # simple model
+        scalerange = [1.0]; noscales = UInt64(1); ds = [1.0]; nonoscales = 0
+    elseif( (uppars.model==2) || (uppars.model==12) )   # clock model
+        scalerange = collect(range( 1-pars_glob[uppars.nolocpars+2], 1+pars_glob[uppars.nolocpars+2], noscales))
+        ds = [ scalerange[2]-scalerange[1] ]
+        nonoscales = 1
+    elseif( (uppars.model==3) || (uppars.model==13) )   # RW model
+        hiddenmatrix = hcat( pars_glob[uppars.nolocpars+1] )
+        sigma = hcat( pars_glob[uppars.nolocpars+2] )
+        sigma_eq = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )[1][1]     # matrix with single element
+        scalerange = zeros(noscales,uppars.nohide); ds = zeros(uppars.nohide)
+        for j_hide = 1:uppars.nohide
+            scalerange[:,j_hide] .= collect(range(1-3*sigma_eq[j_hide,j_hide],1+3*sigma_eq[j_hide,j_hide], Int64(noscales)))
+            ds[j_hide] = scalerange[2,j_hide]-scalerange[1,j_hide]
+        end     # end of individual scale for each hidden factor
+        nonoscales = 1
+    elseif( uppars.model in (4,9,14) )                  # 2DRW model
+        (hiddenmatrix, sigma) = gethiddenmatrix_m4( pars_glob, uppars )
+        sigma_eq = getequilibriumparametersofGaussianchain( hiddenmatrix, sigma, uppars )[1]
+        scalerange = zeros(noscales,uppars.nohide); ds = zeros(uppars.nohide)
+        for j_hide = 1:uppars.nohide
+            scalerange[:,j_hide] .= collect(range(1-3*sigma_eq[j_hide,j_hide],1+3*sigma_eq[j_hide,j_hide], Int64(noscales)))
+            ds[j_hide] = scalerange[2,j_hide]-scalerange[1,j_hide]
+        end     # end of individual scale for each hidden factor
+        nonoscales = 2
+    else                                                # unkwnown model
+        @printf( " (%s) Warning - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+    end     # end of distinguishing model
+    timerange .= reverse( collect(range(0.0, scalerange[end,1]*(mean_div+3*mean_std), Int64(notimes))) )   # timepoint zero at end
+    dt::Float64 = timerange[1]-timerange[2]             # time-increment (not reverse order with time 0 at end)
+    timerange .+= (dt/2)                                # to avoid position at zero being half as large
+    tonoscales::Int64 = (noscales^nonoscales)           # total number of discretised positions over all scale variables
+    
+    # get transition matrix:
+    # order of indices is time, scale1, scale2, ..., where the last time-index is time 0 = timerange[end]
+    # ie ordering is: t1_s11_s21,t2_s11_s21, ..., t1_s12_s21,t2_s12_s21, ...,  t1_s11_s22,t2_s11_s22, ....
+    myrows::Array{Int64,1} = zeros(Int64, (notimes-1)*tonoscales + notimes*(tonoscales^2))
+    mycolumns::Array{Int64,1} = zeros(Int64, (notimes-1)*tonoscales + notimes*(tonoscales^2))
+    myvalues::Array{Float64,1} = zeros(Float64, (notimes-1)*tonoscales + notimes*(tonoscales^2))
+    pars_cell_here::Array{Float64,1} = deepcopy(pars_glob[1:uppars.nolocpars])  # initialise
+    pars_evol_here::Array{Float64,1} = zeros(uppars.nohide)     # initialise
+    pars_evol_mthr::Array{Float64,1} = zeros(uppars.nohide)     # initialise
+    divdistr_here::Array{Float64,1} = zeros(notimes)            # inintialise
+    sofar::Int64 = 0; newhere::Int64 = 0                        # initialise
+    # ...progress times:
+    for j_scale = 1:tonoscales
+        newhere = notimes-1
+        myrows[(1:newhere).+sofar] .= collect(2:notimes) .+ (j_scale-1)*notimes
+        mycolumns[(1:newhere).+sofar] .= collect(1:(notimes-1)) .+ (j_scale-1)*notimes
+        myvalues[(1:newhere).+sofar] .= ones(notimes-1)         # deterministic transition
+        sofar += newhere
+    end     # end of progressing times through each scale
+    #@printf( " (%s) Info - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): After time-progression allocation %1.3f sec.\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-t1)/Millisecond(1000) ); flush(stdout)
+    # ...birth of new cells:
+    if( uppars.nohide==0 )                                      # simple model or clock
+        if( (uppars.model==1) || (uppars.model==11) )           # has nonoscales==0
+            pars_cell_here = deepcopy(pars_glob[1:uppars.nolocpars])    # same for all indices
+            divdistr_here .= 2.0 .*exp.(dthdivdistr.get_logdistrfate(pars_cell_here,timerange,2) .+ log(dt))
+            newhere = notimes
+            myrows[(1:newhere).+sofar] .= collect(1:notimes)    # distributed over the various times of scale to_scale
+            mycolumns[(1:newhere).+sofar] .= fill(notimes, notimes)     # all come from the single cell dividing at time 0 and scale from_scale
+            myvalues[(1:newhere).+sofar] .= divdistr_here
+            sofar += newhere
+        else
+            @printf( " (%s) Warning - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Model %d not yet implemented.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+        end     # end of distinguishing models
+    elseif( uppars.nohide==1 )                                  # ie singe hidden factor; should also have nonoscales==1
+        for to_scale = 1:noscales
+            pars_evol_here[1] = scalerange[to_scale]
+            mygetcellpars( pars_glob, pars_evol_here,[starttime,starttime], view(pars_cell_here, :), uppars )    # only start time matters; should be deterministic for all models
+            divdistr_here .= 2.0 .*exp.(dthdivdistr.get_logdistrfate(pars_cell_here,timerange,2) .+ log(dt))
+            for from_scale = 1:noscales
+                pars_evol_mthr[1] = scalerange[from_scale]
+                weight_here = exp(mygetevoltrgt( pars_glob,pars_evol_mthr, pars_evol_here, uppars ))*ds[1]
+                newhere = notimes
+                myrows[(1:newhere).+sofar] .= (to_scale-1)*notimes .+ collect(1:notimes)# distributed over the various times of scale to_scale
+                mycolumns[(1:newhere).+sofar] .= fill(from_scale*notimes, notimes)      # all come from the single cell dividing at time 0 and scale from_scale
+                myvalues[(1:newhere).+sofar] .= divdistr_here.*weight_here
+                sofar += newhere
+            end     # end of adding daughters of the mothers of this scale
+        end     # end of adding daughter to this scale
+    elseif( uppars.nohide==2 )                                  # ie two hidden factors; should also have nonoscales==2
+        for to_scale1 = 1:noscales
+            pars_evol_here[1] = scalerange[to_scale1,1]
+            for to_scale2 = 1:noscales
+                pars_evol_here[2] = scalerange[to_scale2,2]
+                mygetcellpars( pars_glob, pars_evol_here,[starttime,starttime], view(pars_cell_here, :), uppars )    # only start time matters; should be deterministic for all models
+                divdistr_here .= 2.0 .*exp.(dthdivdistr.get_logdistrfate(pars_cell_here,timerange,2) .+ log(dt))
+                for from_scale1 = 1:noscales
+                    pars_evol_mthr[1] = scalerange[from_scale1,1]
+                    for from_scale2 = 1:noscales
+                        pars_evol_mthr[2] = scalerange[from_scale2,2]
+                        weight_here = exp(mygetevoltrgt( pars_glob,pars_evol_mthr, pars_evol_here, uppars ))*ds[1]*ds[2]
+                        newhere = notimes
+                        myrows[(1:newhere).+sofar] .= (to_scale2-1)*noscales*notimes .+ (to_scale1-1)*notimes .+ collect(1:notimes) # distributed over the various times of scale to_scale
+                        mycolumns[(1:newhere).+sofar] .= fill((from_scale2-1)*noscales*notimes + from_scale1*notimes, notimes)      # all come from the single cell dividing at time 0 and scale from_scale
+                        myvalues[(1:newhere).+sofar] .= divdistr_here.*weight_here
+                        sofar += newhere
+                    end     # end of from_scale2 loop
+                end     # end of from_scale1 loop
+            end     # end of to_scale2 loop
+        end     # end of to_scale1 loop
+    else                                                        # not implemented number of scales
+        @printf( " (%s) Warning - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Hidden scales of %d not implemented.\n", uppars.chaincomment,uppars.MCit, nonoscales )
+    end     # end of distinguishing number of hidden scales
+    T_div::SparseMatrixCSC{Float64,Int64} = sparse( myrows,mycolumns, myvalues )
+    #@printf( " (%s) Info - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): After matrix allocation %1.3f sec.\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-t1)/Millisecond(1000) ); flush(stdout)
+    
+    # get eigenvector of largest eigenvalue:
+    local myeval::ComplexF64, myevec::Array{ComplexF64,1}, maxindex::Int64
+    try myeigen = eigs(T_div, nev=1, maxiter=10000)             # default maxiter is 1000
+        #@printf( " (%s) Info - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Got eigenvector from sparse matrix for pars_glob = [ %s].\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in pars_glob]) )
+        myeval = myeigen[1][1]
+        myevec = myeigen[2][:,1]
+    catch myerr2
+        @printf( " (%s) Warning - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Sparse matrix not able to get eigenvectors for pars_glob = [ %s]: %s. Try full matrix instead.\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in pars_glob]), myerr2 )
+        myeigen = eigen( Array{Float64,2}(T_div) )              # acts on full matrix
+        maxindex = argmax( abs.(myeigen.values) )
+        myeval = myeigen.values[maxindex]                       # largest real part
+        myevec = myeigen.vectors[:,maxindex]
+        errorflag = 1                                           # not clear if correct
+    end     # end of getting eigenvalue
+    #if( (abs(imag(myeval))>eps(Float64)) || any(abs.(imag.(myevec)).>eps(Float64)) )
+    if( (abs(imag(myeval))>eps(Float64)) || any( x->(abs(imag(x))>eps(Float64)), myevec ) ) # see Perron–Frobenius theorem
+        @printf( " (%s) Warning - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Got imaginary parts of the eigenvector for eigenvalue %+1.5e%+1.5e i.\n", uppars.chaincomment,uppars.MCit, real(myeval),imag(myeval) )
+        #mypow::Int64 = 100*notimes; myvechere = (T_div^mypow)[:,1]; @printf( " (%s)  after %3d iterations: [ %s].\n", uppars.chaincomment, mypow, join([@sprintf("%+5.3f         ",j) for j in myvechere/norm(myvechere)]) )
+        @printf( " (%s)  myevec:               [ %s].\n", uppars.chaincomment, join([@sprintf("%+5.3f%+5.3f i  ",real(j),imag(j)) for j in myevec]) )
+        #display( myevec )
+        errorflag = 1                                           # throw error
+        return fill(NaN,1), fill(NaN,1), fill(NaN,(1,1,1)), fill(NaN,(1,1,1)), NaN, timerange,scalerange, dt,ds, errorflag
+    else                                                        # ie all components real
+        myeval_div::Float64 = real(myeval)
+        myevec_div::Array{Float64,1} = real.(myevec)
+        maxindex = argmax(abs.(myevec_div)); myevec_div .*= sign(myevec_div[maxindex])  # make sure, eigenvector entries are positive
+    end     # end if imaginary eigenvector
+    #@printf( " (%s) Info - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): After ev calculation %1.3f sec.\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-t1)/Millisecond(1000) ); flush(stdout)
+    #@printf( " (%s) Info - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Got eigenvector for %d times, [ %s] scales, divisionstats %+1.5e +- %1.5e, largest eigenvalue %+1.5e%+1.5e i.\n", uppars.chaincomment,uppars.MCit, notimes, join([@sprintf("%d ",noscales) for j in 1:nonoscales]), mean_div,mean_std, real(myeval),imag(myeval) )
+    #mypow::Int64 = 100*notimes; myvechere = (T_div^mypow)[:,1]; @printf( " (%s)  after %3d iterations: [ %s].\n", uppars.chaincomment, mypow, join([@sprintf("%+1.3f ",j) for j in myvechere/norm(myvechere)]) )
+    #@printf( " (%s)  myevec:               [ %s].\n", uppars.chaincomment, join([@sprintf("%+1.3f ",j) for j in myevec_div]) )
+    #@printf( " (%s)  times    [ %s]\n", uppars.chaincomment, join([@sprintf("%+9.3f ",j) for j in timerange]) )
+    #for j_hide = 1:uppars.nohide
+    #    @printf( " (%s)  scale[%d] [ %s]\n", uppars.chaincomment, j_hide, join([@sprintf("%+9.3f ",j) for j in scalerange[:,j_hide]]) )
+    #end     # end of hide loop
+
+    # get death equilibrium vector:
+    myrows = zeros(Int64, (notimes-1)*tonoscales + 1)           # only time-progression
+    mycolumns = zeros(Int64, (notimes-1)*tonoscales + 1)        # only time-progression
+    myvalues = zeros(Float64, (notimes-1)*tonoscales + 1)       # only time-progression
+    sofar = 0; newhere = 0                                      # reset
+    # ...progress times:
+    for j_scale = 1:tonoscales
+        newhere = notimes-1
+        myrows[(1:newhere).+sofar] .= collect(2:notimes) .+ (j_scale-1)*notimes
+        mycolumns[(1:newhere).+sofar] .= collect(1:(notimes-1)) .+ (j_scale-1)*notimes
+        myvalues[(1:newhere).+sofar] .= ones(notimes-1)         # deterministic transition
+        sofar += newhere
+    end     # end of progressing times through each scale
+    myrows[1 + sofar] = notimes*tonoscales
+    mycolumns[1 + sofar] = notimes*tonoscales
+    myvalues[1 + sofar] = 0.0                                   # just to get sizing right
+    sofar += 1
+    #@printf( " (%s) Info - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Before matrix allocation %1.3f sec.\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-t1)/Millisecond(1000) ); flush(stdout)
+    T_dth::SparseMatrixCSC{Float64,Int64} = sparse( myrows,mycolumns, myvalues )
+    # ...contribution from new births:
+    myrows = zeros(Int64, notimes*(tonoscales^2))               # only births
+    mycolumns = zeros(Int64, notimes*(tonoscales^2))            # only births
+    myvalues = zeros( notimes*(tonoscales^2))                   # only births
+    dthdistr_here::Array{Float64,1} = zeros(notimes)            # inintialise
+    sofar = 0; newhere = 0                                      # reset
+    if( uppars.nohide==0 )                                      # simple model or clock
+        if( (uppars.model==1) || (uppars.model==11) )           # has nonoscales==0
+            pars_cell_here = deepcopy(pars_glob[1:uppars.nolocpars])    # same for all indices
+            dthdistr_here .= exp.(dthdivdistr.get_logdistrfate(pars_cell_here,timerange,1) .+ log(dt))
+            newhere = notimes
+            myrows[(1:newhere).+sofar] .= collect(1:notimes)    # distributed over the various times of scale to_scale
+            mycolumns[(1:newhere).+sofar] .= fill(notimes, notimes)     # all come from the single cell dividing at time 0 and scale from_scale
+            myvalues[(1:newhere).+sofar] .= dthdistr_here
+            sofar += newhere
+        else
+            @printf( " (%s) Warning - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Model %d not yet implemented.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+        end     # end of distinguishing models
+    elseif( uppars.nohide==1 )                                  # ie singe hidden factor; should also have nonoscales==1
+        for to_scale = 1:noscales
+            pars_evol_here[1] = scalerange[to_scale]
+            mygetcellpars( pars_glob, pars_evol_here,[starttime,starttime], view(pars_cell_here, :), uppars )    # only start time matters; should be deterministic for all models
+            dthdistr_here .= exp.(dthdivdistr.get_logdistrfate(pars_cell_here,timerange,1) .+ log(dt))
+            for from_scale = 1:noscales
+                pars_evol_mthr[1] = scalerange[from_scale]
+                weight_here = exp(mygetevoltrgt( pars_glob,pars_evol_mthr, pars_evol_here, uppars ))*ds[1]
+                newhere = notimes
+                myrows[(1:newhere).+sofar] .= (to_scale-1)*notimes .+ collect(1:notimes)# distributed over the various times of scale to_scale
+                mycolumns[(1:newhere).+sofar] .= fill(from_scale*notimes, notimes)      # all come from the single cell dividing at time 0 and scale from_scale
+                myvalues[(1:newhere).+sofar] .= dthdistr_here.*weight_here
+                sofar += newhere
+            end     # end of adding daughters of the mothers of this scale
+        end     # end of adding daughter to this scale
+    elseif( uppars.nohide==2 )                                  # ie two hidden factors; should also have nonoscales==2
+        for to_scale1 = 1:noscales
+            pars_evol_here[1] = scalerange[to_scale1,1]
+            for to_scale2 = 1:noscales
+                pars_evol_here[2] = scalerange[to_scale2,2]
+                mygetcellpars( pars_glob, pars_evol_here,[starttime,starttime], view(pars_cell_here, :), uppars )    # only start time matters; should be deterministic for all models
+                dthdistr_here .= exp.(dthdivdistr.get_logdistrfate(pars_cell_here,timerange,1) .+ log(dt))
+                for from_scale1 = 1:noscales
+                    pars_evol_mthr[1] = scalerange[from_scale1,1]
+                    for from_scale2 = 1:noscales
+                        pars_evol_mthr[2] = scalerange[from_scale2,2]
+                        weight_here = exp(mygetevoltrgt( pars_glob,pars_evol_mthr, pars_evol_here, uppars ))*ds[1]*ds[2]
+                        newhere = notimes
+                        myrows[(1:newhere).+sofar] .= (to_scale2-1)*noscales*notimes .+ (to_scale1-1)*notimes .+ collect(1:notimes) # distributed over the various times of scale to_scale
+                        mycolumns[(1:newhere).+sofar] .= fill((from_scale2-1)*noscales*notimes + from_scale1*notimes, notimes)      # all come from the single cell dividing at time 0 and scale from_scale
+                        myvalues[(1:newhere).+sofar] .= dthdistr_here.*weight_here
+                        sofar += newhere
+                    end     # end of from_scale2 loop
+                end     # end of from_scale1 loop
+            end     # end of to_scale2 loop
+        end     # end of to_scale1 loop
+    else                                                        # not implemented number of scales
+        @printf( " (%s) Warning - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Hidden scales of %d not implemented.\n", uppars.chaincomment,uppars.MCit, nonoscales )
+    end     # end of distinguishing number of hidden scales
+    #@printf( " (%s) Info - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Before brthdth matrix allocation %1.3f sec.\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-t1)/Millisecond(1000) ); flush(stdout)
+    T_brthdth::SparseMatrixCSC{Float64,Int64} = sparse( myrows,mycolumns, myvalues )
+    id_here::SparseMatrixCSC{Float64,Int64} = sparse(1:notimes*tonoscales,1:notimes*tonoscales,fill(myeval_div,notimes*tonoscales))
+    myevec_dth::Array{Float64,1} = (T_dth-id_here)\T_brthdth*myevec_div
+    maxindex = argmax(abs.(myevec_dth));    myevec_dth .*= sign(myevec_dth[maxindex])   # make sure, eigenvector values are positive
+    #@printf( " (%s) Info - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): After brthdth matrix inversion %1.3f sec.\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-t1)/Millisecond(1000) ); flush(stdout)
+    local myevec_div_reshaped::Array{Float64,3}, myevec_dth_reshaped::Array{Float64,3} # declare
+    if( nonoscales==0 )
+        myevec_div_reshaped = reshape( myevec_div, (notimes,1,1) )
+        myevec_dth_reshaped = reshape( myevec_dth, (notimes,1,1) )
+    elseif( nonoscales==1 )
+        myevec_div_reshaped = reshape( myevec_div, (notimes,noscales,1) )
+        myevec_dth_reshaped = reshape( myevec_dth, (notimes,noscales,1) )
+    elseif( nonoscales==2 )
+        myevec_div_reshaped = reshape( myevec_div, (notimes,noscales,noscales) )
+        myevec_dth_reshaped = reshape( myevec_dth, (notimes,noscales,noscales) )
+    else                                    # unknown
+        @printf( " (%s) Info - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Unknown number of noscales %d.\n", uppars.chaincomment,uppars.MCit, nonoscales )
+    end      # end of reshaping
+
+    # sample from eigenvalue:
+    #=
+    prob_dth::Float64 = sum(myevec_dth)/(sum(myevec_dth)+sum(myevec_div))           # probability to die
+    mysamples::Array{UInt64,1} = zeros(UInt64,uppars.nomothersamples) # initialise
+    local j_time::Int64, j_scale1::Int64, j_scale2::Int64
+    for j_sample = 1:uppars.nomothersamples
+        if( rand()<prob_dth )               # death
+            mysamples[j_sample] = samplefromdiscretemeasure( log.(max.(myevec_dth,0.0)) )[1]
+            unknownmothersamples.fate_cell_eq[j_sample] = 1
+        else                                # division
+            mysamples[j_sample] = samplefromdiscretemeasure( log.(max.(myevec_div,0.0)) )[1]
+            unknownmothersamples.fate_cell_eq[j_sample] = 2
+        end     # end of distinguishing death and division
+        unknownmothersamples.weights_eq[j_sample] = 1.0
+    end     # end of sampling unknownmothersamples
+    if( (uppars.model==1) || (uppars.model==11) )       # simple models
+        for j_sample = 1:unknownmothersamples.nomothersamples
+            j_time = mysamples[j_sample]
+            unknownmothersamples.pars_cell_eq[j_sample,:] = pars_glob[1:uppars.nolocpars]
+            unknownmothersamples.time_cell_eq[j_sample,2] = unknownmothersamples.starttime + abs(timerange[j_time] + dt*(rand()-0.5))
+        end     # end of samples loop
+    elseif( (uppars.model==2) || (uppars.model==12) )   # clock models
+        for j_sample = 1:unknownmothersamples.nomothersamples
+            j_scale1 = ceil(Int64,mysamples[j_sample]/notimes)
+            j_time = mysamples[j_sample] - (j_scale1-1)*notimes
+            unknownmothersamples.pars_cell_eq[j_sample,:] = pars_glob[1:uppars.nolocpars]; unknownmothersamples.pars_cell_eq[j_sample,1] *= abs(scalerange[j_scale1,1])
+            unknownmothersamples.time_cell_eq[j_sample,2] = unknownmothersamples.starttime + abs(timerange[j_time] + dt*(rand()-0.5))
+        end     # end of samples loop
+    elseif( (uppars.model==3) || (uppars.model==13) )   # RW models
+        for j_sample = 1:unknownmothersamples.nomothersamples
+            j_scale1 = ceil(Int64,mysamples[j_sample]/notimes)
+            j_time = mysamples[j_sample] - (j_scale1-1)*notimes 
+            unknownmothersamples.pars_evol_eq[j_sample,1] = scalerange[j_scale1,1] + ds[1]*(rand()-0.5)
+            unknownmothersamples.pars_cell_eq[j_sample,:] = pars_glob[1:uppars.nolocpars]; unknownmothersamples.pars_cell_eq[j_sample,1] *= abs(unknownmothersamples.pars_evol_eq[j_sample,1])
+            unknownmothersamples.time_cell_eq[j_sample,2] = unknownmothersamples.starttime + abs(timerange[j_time] + dt*(rand()-0.5))
+        end     # end of samples loop
+    elseif( uppars.model in (4,9,14) )                  # 2DRW models
+        for j_sample = 1:unknownmothersamples.nomothersamples
+            j_scale2 = ceil(Int64,mysamples[j_sample]/(notimes*noscales))
+            j_scale1 = ceil(Int64,(mysamples[j_sample] - (j_scale2-1)*(notimes*noscales))/notimes)
+            j_time = mysamples[j_sample] - (j_scale1-1)*notimes - (j_scale2-1)*(notimes*noscales)
+            unknownmothersamples.pars_evol_eq[j_sample,1] = scalerange[j_scale1,1] + ds[1]*(rand()-0.5)
+            unknownmothersamples.pars_evol_eq[j_sample,2] = scalerange[j_scale2,2] + ds[2]*(rand()-0.5) # ignore correlations inside voxel
+            unknownmothersamples.pars_cell_eq[j_sample,:] = pars_glob[1:uppars.nolocpars]; unknownmothersamples.pars_cell_eq[j_sample,1] *= abs(unknownmothersamples.pars_evol_eq[j_sample,1])
+            unknownmothersamples.time_cell_eq[j_sample,2] = unknownmothersamples.starttime + abs(timerange[j_time] + dt*(rand()-0.5))
+        end     # end of samples loop
+    else                                                # unknown model
+        @printf( " (%s) Warning - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Unknown model %d.\n", uppars.chaincomment,uppars.MCit, uppars.model )
+    end     # end of distinguishing models
+    =#
+    # plot results:
+    #=
+    if( (uppars.model==1) || (uppars.model==11) )
+        p1 = plot( xlabel="Frames", ylabel="Frequency", grid=false )
+        plot!( timerange, myevec_div_reshaped[:,1,1], lw=2, colour=mycolours(1), label="div" )
+        plot!( timerange, myevec_dth_reshaped[:,1,1], lw=2, colour=mycolours(2), label="dth" )
+        display(p1)
+    else
+        p1 = plot( title="div", xlabel="Frames", ylabel="Scale-parameter", grid=false )
+        heatmap!( reverse(dropdims(sum(myevec_div_reshaped,dims=3),dims=3),dims=1)', colour=mycolours(-1), lw=0, label="", xticks=(1:length(timerange),[@sprintf("%1.2e",j) for j in reverse(timerange)]), yticks=(1:size(scalerange,1),[@sprintf("%+1.2e",j) for j in scalerange[:,1]]) )
+        display(p1)
+        p2 = plot( title="dth", xlabel="Frames", ylabel="Scale-parameter", grid=false )
+        heatmap!( reverse(dropdims(sum(myevec_dth_reshaped,dims=3),dims=3),dims=1)', colour=mycolours(-1), lw=0, label="", xticks=(1:length(timerange),[@sprintf("%1.2e",j) for j in reverse(timerange)]), yticks=(1:size(scalerange,1),[@sprintf("%+1.2e",j) for j in scalerange[:,1]]) )
+        display(p2)
+    end     # end of distinguishing models
+    =#
+    #@printf( " (%s) Info - getdiscretisedjointequilibriumparameterswithnetgrowth (%d): Done now %1.3f sec.\n", uppars.chaincomment,uppars.MCit, (DateTime(now())-t1)/Millisecond(1000) ); flush(stdout)
+    return myevec_div,myevec_dth, myevec_div_reshaped,myevec_dth_reshaped, myeval_div, timerange,scalerange, dt,ds, errorflag
+end     # end of getdiscretisedjointequilibriumparameterswithnetgrowth function
 function getsamplefromjointequilibriumparameterswithnetgrowth( pars_glob::Union{Array{Float64,1},MArray}, unknownmothersamples::Unknownmotherequilibriumsamples, lineagexbounds::Union{Array{Float64,1},MArray}, fate_cell_cond::Int64, myupdateunknownmotherpars::Function, dthdivdistr::DthDivdistr, uppars::Uppars2 )::Tuple{UInt64,Bool}
     # selects a suitable sample from the joint equilibrium distribution
     #@printf( " (%s) Info - getsamplefromjointequilibriumparameterswithnetgrowth (%d): Start now with pars_glob = [ %s], lineagexbounds = [ %s],fate_cell_cond = %d.\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in pars_glob]), join([@sprintf("%+1.5e ",j) for j in lineagexbounds]), fate_cell_cond )
@@ -3372,19 +3892,19 @@ function getsamplefromjointequilibriumparameterswithnetgrowth( pars_glob::Union{
     notries::Int64 = 0                                  # notries counts number of tries
     fatecond::Bool = (fate_cell_cond>0)                 # 'true', if still need to search for correct fate, 'false' otherwise
     timecond::Bool = true                               # 'true', if still need to search for correct time-window, 'false' otherwise
-    while( timecond | fatecond )                        # stop as soon as reject_this_for_sure
+    while( timecond || fatecond )                       # stop as soon as reject_this_for_sure
         notries += 1                                    # one more try
         if( notries>100 )                               # out of patience
             fullrange::Array{UInt64,1} = collect(1:unknownmothersamples.nomothersamples)
             select::Array{Bool,1} = trues(unknownmothersamples.nomothersamples);
             if( fate_cell_cond==-1 )                    # no fate-condition given
-                select .= (unknownmothersamples.time_cell_eq[:,2].>=lineagexbounds[1]).&(unknownmothersamples.time_cell_eq[:,2].<=lineagexbounds[2])
+                select .= (unknownmothersamples.time_cell_eq[:,2].>=lineagexbounds[1]).&&(unknownmothersamples.time_cell_eq[:,2].<=lineagexbounds[2])
             else                                        # fate condition specified
                 #@printf( " (%s) Info - getsamplefromjointequilibriumparameterswithnetgrowth (%d): fate_cell_cond %d, notries %d\n", uppars.chaincomment,uppars.MCit, fate_cell_cond, notries )
                 #@printf( " (%s)  fatecond %5d\n", uppars.chaincomment, sum(unknownmothersamples.fate_cell_eq.==fate_cell_cond) )
                 #@printf( " (%s)  brthcond %5d\n", uppars.chaincomment, sum(unknownmothersamples.time_cell_eq[:,2].>=lineagexbounds[1]) )
                 #@printf( " (%s)  endcond  %5d\n", uppars.chaincomment, sum(unknownmothersamples.time_cell_eq[:,2].<=lineagexbounds[2]) )
-                select .= (unknownmothersamples.fate_cell_eq.==fate_cell_cond).&(unknownmothersamples.time_cell_eq[:,2].>=lineagexbounds[1]).&(unknownmothersamples.time_cell_eq[:,2].<=lineagexbounds[2])
+                select .= (unknownmothersamples.fate_cell_eq.==fate_cell_cond).&&(unknownmothersamples.time_cell_eq[:,2].>=lineagexbounds[1]).&&(unknownmothersamples.time_cell_eq[:,2].<=lineagexbounds[2])
                 #@printf( " (%s)  select   %5d (%d)\n", uppars.chaincomment, sum(select), isempty(fullrange[select]) )
             end     # end if fate-condition given
             if( isempty(fullrange[select]) )            # no datapoints in current collection
@@ -3407,8 +3927,8 @@ function getsamplefromjointequilibriumparameterswithnetgrowth( pars_glob::Union{
             j_sample = UInt64(ceil(rand()*unknownmothersamples.nomothersamples))
         end     # end if too many tries
         #@printf( " (%s) Info - getsamplefromjointequilibriumparameterswithnetgrowth (%d): Get sample now...\n", uppars.chaincomment,uppars.MCit )
-        fatecond = ((fate_cell_cond>0) & (unknownmothersamples.fate_cell_eq[j_sample]!=fate_cell_cond))
-        timecond = ((unknownmothersamples.time_cell_eq[j_sample,2]>lineagexbounds[2]) | (unknownmothersamples.time_cell_eq[j_sample,2]<lineagexbounds[1]))  # lineagexbounds act on disappearance time only
+        fatecond = ((fate_cell_cond>0) && (unknownmothersamples.fate_cell_eq[j_sample]!=fate_cell_cond))
+        timecond = ((unknownmothersamples.time_cell_eq[j_sample,2]>lineagexbounds[2]) || (unknownmothersamples.time_cell_eq[j_sample,2]<lineagexbounds[1]))  # lineagexbounds act on disappearance time only
         #@printf( " (%s) Info - getsamplefromjointequilibriumparameterswithnetgrowth (%d): Got sample %d at try %d (%d,  %d,%d, %d).\n", uppars.chaincomment,uppars.MCit, j_sample,notries, !reject_this_for_sure, times_cell_here[2]>lineagexbounds[2], (times_cell_here[2]<lineagexbounds[1]), fatecond )
         #@printf( " (%s)  end time %+1.5e vs [%+1.5e..%+1.5e]\n", uppars.chaincomment, times_cell_here[2], lineagexbounds[1],lineagexbounds[2] )
         #@printf( " (%s)  fatecond %d (%d,%d)\n", uppars.chaincomment, fatecond, fate_cell_cond,fate_cell_here )
@@ -3428,15 +3948,15 @@ function getjointequilibriumparameterswithnetgrowth_distr( pars_evol_here::Union
     #buffer = dropdims(sort( unknownmothersamples.time_cell_eq[:,2]', dims=2 ),dims=1); nobuffer = length(buffer); buffer = vcat(buffer[1:min(13,nobuffer-1)],buffer[end]); @printf( " (%s)  unknownmother_endtimes: [ %s]\n", uppars.chaincomment, join([@sprintf("%+1.5e ",j) for j in buffer]) )
 
     # set auxiliary parameters:
-    if( (fate_cell_cond==1) | (fate_cell_cond==2) )         # death or division specified
+    if( (fate_cell_cond==1) || (fate_cell_cond==2) )        # death or division specified
         fatecondselect = (unknownmothersamples.fate_cell_eq.==fate_cell_cond)  # only those of correct fate
     elseif( fate_cell_cond==-1 )                            # unknown fate specified
         fatecondselect = trues( uppars.nomothersamples )    # all
     else                                                    # something wrong
         @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth_distr (%d): Unknown fate_cond %d.\n", uppars.chaincomment,uppars.MCit, fate_cell_cond )
     end     # end of distinguishing fates
-    if( (fate_here==1) | (fate_here==2) )                   # death or division specified
-        fatehereselect = fatecondselect.&(unknownmothersamples.fate_cell_eq.==fate_here); nofatehereselect = sum(fatehereselect)  # only those of correct fate
+    if( (fate_here==1) || (fate_here==2) )                  # death or division specified
+        fatehereselect = fatecondselect.&&(unknownmothersamples.fate_cell_eq.==fate_here); nofatehereselect = sum(fatehereselect)  # only those of correct fate
     elseif( fate_here==-1 )                                 # unknown fate specified
         fatehereselect = deepcopy(fatecondselect); nofatehereselect = sum(fatehereselect)    # all
     else                                                    # something wrong
@@ -3446,7 +3966,7 @@ function getjointequilibriumparameterswithnetgrowth_distr( pars_evol_here::Union
     devolpars = scaling.*[min(std(unknownmothersamples.pars_evol_eq[:,j_hide]),iqr(unknownmothersamples.pars_evol_eq[:,j_hide])/1.34) for j_hide = 1:uppars.nohide]     # nohide-vector
     dcellpars = scaling.*[min(std(unknownmothersamples.pars_cell_eq[:,j_locpar]),iqr(unknownmothersamples.pars_cell_eq[:,j_locpar])/1.34) for j_locpar = 1:uppars.nolocpars]    # nolocpars-vector
     dcelltimes = scaling.*[min(std(unknownmothersamples.time_cell_eq[:,j_time]),iqr(unknownmothersamples.time_cell_eq[:,j_time])/1.34) for j_time = 1:2]                # start,end
-    if( any(isnan.(devolpars)) | any(isinf.(devolpars)) | any(isnan.(dcellpars)) | any(isinf.(dcellpars)) | any(isnan.(dcelltimes)) | any(isinf.(dcelltimes)) )
+    if( any(!isfinite, devolpars) || any(!isfinite, dcellpars) || any(!isfinite, dcellpars) || any(!isfinite, dcelltimes) )
         @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth_distr (%d): Got pathological spacings devol=[ %s], dcell=[ %s], dtime=[ %s].\n", uppars.chaincomment,uppars.MCit, join([@sprintf("%+1.5e ",j) for j in devolpars]), join([@sprintf("%+1.5e ",j) for j in dcellpars]), join([@sprintf("%+1.5e ",j) for j in dcelltimes]) )
         @printf( " (%s)  evol: std = [ %s], iqr = [ %s].\n", uppars.chaincomment, join([@sprintf("%1.5e ",std(unknownmothersamples.pars_evol_eq[:,j_hide])) for j_hide = 1:uppars.nohide]), join([@sprintf("%1.5e ",iqr(unknownmothersamples.pars_evol_eq[:,j_hide])) for j_hide = 1:uppars.nohide]) ); 
         @printf( " (%s)  cpar: std = [ %s], iqr = [ %s].\n", uppars.chaincomment, join([@sprintf("%1.5e ",std(unknownmothersamples.pars_cell_eq[:,j_locpar])) for j_locpar = 1:uppars.nolocpars]), join([@sprintf("%1.5e ",iqr(unknownmothersamples.pars_cell_eq[:,j_locpar])) for j_locpar = 1:uppars.nolocpars]) ); 
@@ -3468,7 +3988,7 @@ function getjointequilibriumparameterswithnetgrowth_distr( pars_evol_here::Union
         # time:
         j_time = 2                                          # end-time
         d_here = min( dcelltimes[j_time], unknownmothersamples.time_cell_eq[j_sample,j_time] )  # cut-off at zero
-        if( isnan(d_here) | isinf(d_here) | (d_here<=0) )
+        if( !isfinite(d_here) || (d_here<=0) )
             @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth_distr (%d): For j_sample=%d,jj_sample=%d: Bad d_here=%+1.5e for starttimes.\n", uppars.chaincomment,uppars.MCit, j_sample,jj_sample, d_here )
         end     # end if bad d_here
         # ...get support given conditional:
@@ -3490,7 +4010,7 @@ function getjointequilibriumparameterswithnetgrowth_distr( pars_evol_here::Union
         end     # end if not inside support
         j_time = 1                                          # start-time
         d_here = min( dcelltimes[j_time], -unknownmothersamples.time_cell_eq[j_sample,j_time] )    # cut-off at zero
-        if( isnan(d_here) | isinf(d_here) | (d_here<0) )
+        if( !isfinite(d_here) || (d_here<=0) )
             @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth_distr (%d): For j_sample=%d,jj_sample=%d: Bad d_here=%+1.5e for endtimes.\n", uppars.chaincomment,uppars.MCit, j_sample,jj_sample, d_here )
         end     # end if bad d_here
         # ...get distribution value at given value:
@@ -3506,7 +4026,7 @@ function getjointequilibriumparameterswithnetgrowth_distr( pars_evol_here::Union
         # evol-pars:
         for j_hide = 1:uppars.nohide
             d_here = deepcopy(devolpars[j_hide])            # no cut-off
-            if( isnan(d_here) | isinf(d_here) | (d_here<0) )
+            if( !isfinite(d_here) || (d_here<=0) )
                 @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth_distr (%d): For j_sample=%d,jj_sample=%d: Bad d_here=%+1.5e for hide %d.\n", uppars.chaincomment,uppars.MCit, j_sample,jj_sample, d_here, j_hide )
             end     # end if bad d_here
             if( !(abs(pars_evol_here[j_hide]-unknownmothersamples.pars_evol_eq[j_sample,j_hide])<=d_here) )
@@ -3525,7 +4045,7 @@ function getjointequilibriumparameterswithnetgrowth_distr( pars_evol_here::Union
         # cell-pars:
         for j_locpar = 1:uppars.nolocpars
             d_here = min( dcellpars[j_locpar], unknownmothersamples.pars_cell_eq[j_sample,j_locpar] ) # cut-off at zero
-            if( isnan(d_here) | isinf(d_here) | (d_here<0) )
+            if( !isfinite(d_here) || (d_here<=0) )
                 @printf( " (%s) Warning - getjointequilibriumparameterswithnetgrowth_distr (%d): For j_sample=%d,jj_sample=%d: Bad d_here=%+1.5e (%+1.5e,%+1.5e) for j_locpar=%d.\n", uppars.chaincomment,uppars.MCit, j_sample,jj_sample, d_here, dcellpars[j_locpar],unknownmothersamples.pars_cell_eq[j_sample,j_locpar], j_locpar )
             end     # end if bad d_here
             if( !(abs(pars_cell_here[j_locpar]-unknownmothersamples.pars_cell_eq[j_sample,j_locpar])<=d_here) )
@@ -3545,7 +4065,7 @@ function getjointequilibriumparameterswithnetgrowth_distr( pars_evol_here::Union
     # normalise:
     normhere = logsumexp(logsuppweights)
     logconditionalnormpersample = logsuppweights.-normhere  # norm per sample, due to conditional
-    if( !isnan(normhere) & !(normhere==-Inf) )              # ie if not all logsuppweights are -Inf
+    if( isfinite(normhere) )                                # ie if not all logsuppweights are -Inf
         logweights .+= logconditionalnormpersample          # weight according to overlap with support in lineagexbounds
         logmargweights .+= logconditionalnormpersample      # weight according to overlap with support in lineagexbounds
     else                                                    # no samples have weight in conditional
@@ -3677,7 +4197,7 @@ function getjointpriorrejection( pars_glob::Union{Array{Float64,1},MArray}, dthd
         end     # end if negative global parameters
     elseif( (uppars.model==11) )                    # simple GammaExponential model
         logprior = -uppars.overalllognormalisation
-        if( any(pars_glob.<=0) | (pars_glob[3]>1) ) # should not have negative global parameters
+        if( any(pars_glob.<=0) || (pars_glob[3]>1) )# should not have negative global parameters
             logprior = -Inf
         else                                        # all global parameters are positive, check death probability
             logdeathprob = dthdivdistr.get_dthprob( pars_glob[1:uppars.nolocpars] )
@@ -3687,7 +4207,7 @@ function getjointpriorrejection( pars_glob::Union{Array{Float64,1},MArray}, dthd
         end     # end if negative global parameters
     elseif( (uppars.model==12) )                    # clock-modulated GammaExponential model
         logprior = -uppars.overalllognormalisation
-        if( any(pars_glob.<=0) | (pars_glob[3]>1) ) # should not have negative global parameters
+        if( any(pars_glob.<=0) || (pars_glob[3]>1) )# should not have negative global parameters
             logprior = -Inf
         elseif( pars_glob[uppars.nolocpars+1]>=1 )  # sinusoidal amplitude too large
             logprior = -Inf
@@ -3698,7 +4218,7 @@ function getjointpriorrejection( pars_glob::Union{Array{Float64,1},MArray}, dthd
             end     # end if too little probability to divide
         end     # end if negative global parameters
     elseif( (uppars.model==13) )                    # inheritance GammaExponential model; also check "joint" condition on eigenvalues (ie, if single hiddenmatrix entry is too large)
-        if( any(pars_glob[1:uppars.nolocpars].<=0) | (pars_glob[3]>1) )# should not have negative global parameters
+        if( any(pars_glob[1:uppars.nolocpars].<=0) || (pars_glob[3]>1) )    # should not have negative global parameters
             logprior = -Inf
         else                                        # all global parameters are positive, check death probability
             myf = abs(pars_glob[uppars.nolocpars+1])
@@ -3713,7 +4233,7 @@ function getjointpriorrejection( pars_glob::Union{Array{Float64,1},MArray}, dthd
             end     # end if outside of support
         end     # end if negative global parameters
     elseif( uppars.model==14 )                      # 2d inheritance GammaExponential model; also check joint condition on eigenvalues
-        if( any(pars_glob[1:uppars.nolocpars].<=0) | (pars_glob[3]>1) )# should not have negative global parameters
+        if( any(pars_glob[1:uppars.nolocpars].<=0) || (pars_glob[3]>1) )    # should not have negative global parameters
             logprior = -Inf
         else                                        # all global parameters are positive, check death probability
             (hiddenmatrix, sigma) = gethiddenmatrix_m4( pars_glob, uppars )
@@ -3759,12 +4279,12 @@ end     # end of gethiidenmatrix_m4 function
 function getnormalisation( uppars::Uppars2 )
     # computes normalisation of model 4 given the priors
 
-    if( (uppars.model==1) | (uppars.model==2) | (uppars.model==11) | (uppars.model==12) )   # simple model or clock-modulated model
+    if( uppars.model in (1,2,11,12) )                   # simple model or clock-modulated model
         mynormalisation = 1.0
-    elseif( (uppars.model==3) | (uppars.model==13) )    # rw-inheritance model
+    elseif( (uppars.model==3) || (uppars.model==13) )   # rw-inheritance model
         mynormalisation = erf( 1/(sqrt(2)*uppars.priors_glob[uppars.nolocpars+1].get_std()) )
-    elseif( (uppars.model==4) | (uppars.model==14) )    # 2d rw-inheritance model
-        if( (uppars.priors_glob[uppars.nolocpars+1].typeno==UInt64(2)) & (uppars.priors_glob[uppars.nolocpars+1].get_mean()==0) )   # needs to be Gaussian with zero mean
+    elseif( (uppars.model==4) || (uppars.model==14) )   # 2d rw-inheritance model
+        if( (uppars.priors_glob[uppars.nolocpars+1].typeno==UInt64(2)) && (uppars.priors_glob[uppars.nolocpars+1].get_mean()==0) )  # needs to be Gaussian with zero mean
             if( uppars.priors_glob[uppars.nolocpars+1].get_std()==uppars.priors_glob[uppars.nolocpars+2].get_std()==uppars.priors_glob[uppars.nolocpars+3].get_std()==uppars.priors_glob[uppars.nolocpars+4].get_std() )    # ie same prior for all matrix entries
                 sigma_here = uppars.priors_glob[uppars.nolocpars+1].get_std()       # assume distribution is Gaussian and the parameters are the same for all matrix entries
                 mynormalisation = (1/sqrt(2))*erf(1/sigma_here)-erf(1/(sqrt(2)*sigma_here))*exp(-(1/(sqrt(2)*sigma_here))^2)    # for real part
@@ -3784,7 +4304,7 @@ function getnormalisation( uppars::Uppars2 )
             @printf( " (%s) Warning - getnormalisation (%d): Got wrong type or mean: %d, %+1.5e\n", uppars.chaincomment,uppars.MCit, uppars.priors_glob[uppars.nolocpars+1].typeno,uppars.priors_glob[uppars.nolocpars+1].get_mean() )
         end     # end if wrong prior distribution
     elseif( uppars.model==9 )                           # 2d rw-inheritance model, divisions-only
-        if( (uppars.priors_glob[uppars.nolocpars+1].typeno==UInt64(2)) & (uppars.priors_glob[uppars.nolocpars+1].get_mean()==0) )   # needs to be Gaussian with zero mean
+        if( (uppars.priors_glob[uppars.nolocpars+1].typeno==UInt64(2)) && (uppars.priors_glob[uppars.nolocpars+1].get_mean()==0) )      # needs to be Gaussian with zero mean
             if( uppars.priors_glob[uppars.nolocpars+1].get_std()==uppars.priors_glob[uppars.nolocpars+2].get_std()==uppars.priors_glob[uppars.nolocpars+3].get_std()==uppars.priors_glob[uppars.nolocpars+4].get_std() )    # ie same prior for all matrix entries
                 sigma_here = uppars.priors_glob[uppars.nolocpars+1].get_std()       # assume distribution is Gaussian and the parameters are the same for all matrix entries
                 mynormalisation = (1/sqrt(2))*erf(1/sigma_here)-erf(1/(sqrt(2)*sigma_here))*exp(-(1/(sqrt(2)*sigma_here))^2)    # for real part
@@ -3838,7 +4358,7 @@ function getmeanstdforFrechetWeibull( pars::Union{Array{Float64,1},MArray}, cell
             end     # end if dth and div exist
             =#
         end     # end of distinguishing cellfate
-        if( isnan(mystd) & !(mymean>upperthreshold) )   # need to increase number of samples
+        if( isnan(mystd) && !(mymean>upperthreshold) )   # need to increase number of samples
             if( uppars.without>=2 )
                 @printf( " (%s) Info - getmeanstdforFrechetWeibull (%d): Increase nosamples from %d (pars = [ %s], prob_dth = %1.5e, cellfate = %d).\n", uppars.chaincomment,uppars.MCit, nosamples, join([@sprintf("%+1.5e ",j) for j in pars]), prob_dth, cellfate )
                 @printf( " (%s)  Lifestats: div = %1.5e +- %1.5e, dth = %1.5e +- %1.5e, prob_dth = %1.5e(%1.5e)\n", uppars.chaincomment, mean_div,std_div, mean_dth,std_dth, prob_dth,1-prob_dth )
@@ -3851,7 +4371,8 @@ function getmeanstdforFrechetWeibull( pars::Union{Array{Float64,1},MArray}, cell
         end     # end if missed samples
     end     # end while still not enough samples
     #@printf( " (%s) Info - getmeanstdforFrechetWeibull (%d): End of mymean = %1.5e, mystd = %1.5e, cellfate = %d, prob_dth = %1.5e\n", uppars.chaincomment,uppars.MCit, mymean,mystd, cellfate, prob_dth )
-    if( false & (mymean>1e18) )
+    #=
+    if( (mymean>1e18) )
         xrange = collect(range(0.00000001,mymean+mystd,100000))
         yrange_dth = logFrechetWeibull_distr( pars, xrange, 1 )
         yrange_div = logFrechetWeibull_distr( pars, xrange, 2 )
@@ -3913,7 +4434,7 @@ function getmeanstdforFrechetWeibull( pars::Union{Array{Float64,1},MArray}, cell
         @printf( " (%s) Info - getmeanstdforFrechetWeibull (%d): Sleep now.\n", uppars.chaincomment,uppars.MCit ); sleep(10)
         sdfjoimc
     end     # end if pathologically large
-
+    =#
     return mymean,mystd
 end     # end of getmeanstdforFrechetWeibull function
 function getGRR( values_chains_hist::Array{Float64,2} )::Tuple{Float64,Float64,Float64,Float64}
@@ -3941,6 +4462,13 @@ function getGRR( values_chains_hist::Array{Float64,2} )::Tuple{Float64,Float64,F
     n_eff_m::Float64 = nstatsrange*nochains*(W/B)
     n_eff_p::Float64 = nstatsrange*nochains*(V_simple/B)
 
+    if( isnan(GRR_simple) && (nochains>1) )
+        @printf( " Warning - getGRR: Got GRRsimple = %1.4f, V_simple %+1.5e, W %+1.5e, B %+1.5e (nstatsrange %d, nochains %d, nonanvalues %d, %d,%d).\n", GRR_simple, V_simple,W,B, nstatsrange,nochains, sum(isnan.(values_chains_hist)),sum(isnan.(between)),sum(isnan.(within))  )
+        @printf( " Warning - getGRR:  between [ %s], within [ %s].\n", join([@sprintf("%+1.5e ",j) for j in between]), join([@sprintf("%+1.5e ",j) for j in within]) )
+        for j_chain = 1:nochains
+            @printf( " Warning - getGRR:  chain %2d: [ %s].\n", j_chain, join([@sprintf("%+1.5e ",j) for j in values_chains_hist[j_chain, 1:min(12,nstatsrange)]]) )
+        end     # end of chains loop
+    end     # end if isnan
     return GRR,GRR_simple, n_eff_m,n_eff_p
 end     # end of getGRR function
 function getinformationcriteria2( lineagetree::Lineagetree, state_chains_hist::Array{Array{Lineagestate2,1},1},target_chains_hist::Array{Array{Target2,1},1}, uppars_chains::Array{Uppars2,1}, useminimiser::UInt64=UInt64(1),MCmax_sa::UInt64=UInt64(2E4),convergencecounterthreshold::UInt64=UInt64(5) )
@@ -3993,7 +4521,7 @@ end     # end of getinformationcriteria function
 function getEulerLotkabetaetstimate( mean_div::Float64,std_div::Float64, logprob_div::Float64 )::Float64
     # estimates EulerLotka beta via power series expansion around mean of division distribution
 
-    if( isnan(std_div) | (isinf(std_div)) )             # std not really known
+    if( !isfinite(std_div) )        # std not really known
         beta_est = (log(2)+logprob_div)/mean_div
     else
         beta_est = ((log(2)+logprob_div)/mean_div)*( 1+ (log(2)+logprob_div)*((std_div/mean_div)^2)/2)
@@ -4022,15 +4550,75 @@ end     # end of get EulerLotkaeqdivprobestimate function
 function plotequilibriumsamples( unknownmothersamples::Unknownmotherequilibriumsamples,starttime::Float64, name::String, uppars::Uppars2 )::Nothing
     # plots histograms of unknownmothersamples
 
-    p1 = plot( title=@sprintf("(%s) current end-times,starttime %+1.3e, %s",uppars.chaincomment, starttime, name), xlabel="time",ylabel="freq" )
+    p1 = plot( title=@sprintf("(%s) current end-times,starttime %+1.3e, %s",uppars.chaincomment, starttime, name), xlabel="Frames",ylabel="Frequency", grid=false )
     minbin::Float64 = minimum(unknownmothersamples.time_cell_eq); maxbin::Float64 = maximum(unknownmothersamples.time_cell_eq); res::Int64 = Int64( ceil(4*uppars.nomothersamples^(1/3)) ); dbin::Float64 = (maxbin-minbin)/res; mybins::Array{Float64,1} = collect(minbin:dbin:maxbin)
-    histogram!( unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,1], bins=mybins, lw=0,fill=(0,RGBA(1.0,0.6,0.6, 0.6)),label="brth_dth" )
-    histogram!( unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,1], bins=mybins, lw=0,fill=(0,RGBA(0.6,1.0,0.6, 0.6)),label="brth_div" )
-    histogram!( unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2], bins=mybins, lw=0,fill=(0,RGBA(1.0,0.2,0.2, 0.6)),label="dth" )
-    histogram!( unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2], bins=mybins, lw=0,fill=(0,RGBA(0.2,1.0,0.2, 0.6)),label="div" )
+    histogram!( unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,1], bins=mybins, lw=0,fill=(0,RGBA(1.0,0.6,0.6, 0.6)),label="birthtime deaths" )
+    histogram!( unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,1], bins=mybins, lw=0,fill=(0,RGBA(0.6,1.0,0.6, 0.6)),label="birthtime divisions" )
+    histogram!( unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==1,2], bins=mybins, lw=0,fill=(0,RGBA(1.0,0.2,0.2, 0.6)),label="deathtime" )
+    histogram!( unknownmothersamples.time_cell_eq[unknownmothersamples.fate_cell_eq.==2,2], bins=mybins, lw=0,fill=(0,RGBA(0.2,1.0,0.2, 0.6)),label="divisiontime" )
     display( p1 )
+
+    if( uppars.nohide>0 )
+        divselect = (unknownmothersamples.fate_cell_eq[:].==2)
+        dthselect = (unknownmothersamples.fate_cell_eq[:].==1)
+        p2 = plot( title=@sprintf("(%s) current end-times_div,starttime %+1.3e, %s",uppars.chaincomment, starttime, name), xlabel="Frames", ylabel="Scale-parameter", grid=false )
+        histogram2d!( unknownmothersamples.time_cell_eq[divselect,2],unknownmothersamples.pars_evol_eq[divselect,1], lw=0, colour=mycolours(-1), show_empty_bins=true, label="" )
+        display(p2)
+        p3 = plot( title=@sprintf("(%s) current end-times_dth,starttime %+1.3e, %s",uppars.chaincomment, starttime, name), xlabel="Frames", ylabel="Scale-parameter", grid=false )
+        histogram2d!( unknownmothersamples.time_cell_eq[dthselect,2],unknownmothersamples.pars_evol_eq[dthselect,1], lw=0, colour=mycolours(-1), show_empty_bins=true, label="" )
+        display(p3)
+    end     # end if hidden factors
     return nothing
 end     # end of plotequilibriumsamples function
+function resortandupdatelist( myordering::SubArray{UInt32,1},myreordering::SubArray{UInt32,1}, oldpos::UInt32, valuelist::SubArray{Float64,1}, newvalue::Float64 )::Nothing
+    # brings ordering/reordering back into order after changing value at oldpos to newvalue
+    # valuelist[ordering] is ordered in ascending order; reordering points to sorted position of element in valuelist
+    # valuelist still contains the oldvalue (i.e. is still ordered)
+    # oldpos is ordered position before newvalue was acquired (ie valuelist[myordering[oldpos]] is oldvalue)
+    #if( (!all(myreordering[myordering].==collect(1:length(valuelist)))) || (!all(myordering[myreordering].==collect(1:length(valuelist)))) )
+    #    @printf( " Warning - resortandupdatelist: Got wrong ordering or reordering before: %d, %d, %d,%d (noel %d, oldpos %d).\n  reorderedordering = [ %s].\n", !all(newordering.==myordering),!all(newreordering.==myreordering),!all(myreordering[myordering].==collect(1:length(valuelist))),!all(myordering[myreordering].==collect(1:length(valuelist))),length(valuelist),oldpos, join([@sprintf("%3d ",j) for j in myordering[myreordering]]) )
+    #    @printf( " ...: nosamevalue = %d.\n", sum(valuelist.==newvalue) )
+    #    @printf( " Warning - resortandupdatelist: Sleep now.\n" ); sleep(10)
+    #end     # end if wrong new ordering
+    nolist::UInt32 = length(valuelist)  # number of elements
+    newpos::UInt32 = 1                  # new ordered position
+    buffer::UInt32 = myordering[oldpos] # allocate memory, so can copy over later
+    #@printf( " Info - resortandupdatelist: Before: oldpos %3d, newvalue %+1.5e.\n       valuelist = [ %s],\n sortedvaluelist = [ %s],\n reorderedordering = [ %s], ordering = [ %s], reordering = [ %s].\n", oldpos,newvalue, join([@sprintf("%+1.5e ",j) for j in valuelist]), join([@sprintf("%+1.5e ",j) for j in valuelist[myordering]]), join([@sprintf("%3d ",j) for j in myordering[myreordering]]), join([@sprintf("%3d ",j) for j in myordering]), join([@sprintf("%3d ",j) for j in myreordering]) )
+    while( (newpos<=nolist) && (valuelist[myordering[newpos]]<newvalue) )
+        newpos += 1
+    end     # end of getting new ordered position
+    if( newpos>oldpos )                 # oldpos will get removed, so have to move one to the left
+        newpos -= 1
+        # now move all inbetween values one forward:
+        myreordering[myordering[(oldpos+1):newpos]] .-= 1
+        myreordering[myordering[oldpos]] = newpos
+        for j_pos = oldpos:(newpos-1)
+            myordering[j_pos] = myordering[j_pos+1]
+        end     # end of moving loop
+        myordering[newpos] = buffer
+        valuelist[myordering[newpos]] = newvalue
+    elseif( newpos<oldpos )             # oldpos after newpos
+        myreordering[myordering[newpos:(oldpos-1)]] .+= 1
+        myreordering[myordering[oldpos]] = newpos
+        for j_pos = oldpos:(-1):(newpos+1)
+            myordering[j_pos] = myordering[j_pos-1]
+        end     # end of moving loop
+        myordering[newpos] = buffer
+        valuelist[myordering[newpos]] = newvalue
+    else                                # only need to change value, but not ordering
+        valuelist[myordering[newpos]] = newvalue
+    end     # end if beyond still existent oldpos
+    #@printf( " Info - resortandupdatelist: After:\n       valuelist = [ %s],\n sortedvaluelist = [ %s],\n reorderedordering = [ %s], ordering = [ %s], reordering = [ %s].\n", join([@sprintf("%+1.5e ",j) for j in valuelist]), join([@sprintf("%+1.5e ",j) for j in valuelist[myordering]]), join([@sprintf("%3d ",j) for j in myordering[myreordering]]), join([@sprintf("%3d ",j) for j in myordering]), join([@sprintf("%3d ",j) for j in myreordering]) )
+    # test:
+    #newordering = sortperm(valuelist); newreordering = sortperm(newordering)
+    #if( (!all(myreordering[myordering].==collect(1:length(valuelist)))) || (!all(myordering[myreordering].==collect(1:length(valuelist)))) )
+    #    #@printf( " Warning - resortandupdatelist: Got wrong ordering or reordering after : %d, %d.\n  valuelist = [ %s],\n  sortedvaluelist = [ %s],\n reorderedordering = [ %s], ordering = [ %s], reordering = [ %s].\n", !all(newordering.==myordering),!all(newreordering==myreordering), join([@sprintf("%+1.5e ",j) for j in valuelist]), join([@sprintf("%+1.5e ",j) for j in valuelist[myordering]]), join([@sprintf("%3d ",j) for j in myordering[myreordering]]), join([@sprintf("%3d ",j) for j in myordering]), join([@sprintf("%3d ",j) for j in myreordering]) )
+    #    @printf( " Warning - resortandupdatelist: Got wrong ordering or reordering after : %d, %d, %d,%d (noel %d, oldpos %d, newpos %d).\n  reorderedordering = [ %s].\n", !all(newordering.==myordering),!all(newreordering.==myreordering),!all(myreordering[myordering].==collect(1:nolist)),!all(myordering[myreordering].==collect(1:nolist)),length(valuelist),oldpos,newpos, join([@sprintf("%3d ",j) for j in myordering[myreordering]]) )
+    #    @printf( " ...: nosamevalue = %d.\n", sum(valuelist.==newvalue) )
+    #    @printf( " Warning - resortandupdatelist: Sleep now.\n" ); sleep(10)
+    #end     # end if wrong new ordering
+    return nothing
+end     # end of resortandupdatelist function
 
 
 # model 1 functions:                    (simple FrechetWeibull model)
@@ -4127,7 +4715,7 @@ end     # end of stfnctn_getcelltimes_m1 function
 function stfnctn_updateunknownmotherpars_m1( pars_glob::Union{Array{Float64,1},MArray}, unknownmothersamples::Unknownmotherequilibriumsamples, dthdivdistr::DthDivdistr, uppars::Uppars2 )::Tuple{Unknownmotherequilibriumsamples,Int64}
     # generates unknownmothersamples for model 1
 
-    convflag::Int64 = getjointequilibriumparameterswithnetgrowth( pars_glob,unknownmothersamples, stfnctn_getunknownmotherpars_m1,stfnctn_getevolpars_m1,stfnctn_getcellpars_m1, dthdivdistr, uppars )
+    convflag::Int64 = getjointequilibriumparameterswithnetgrowth( pars_glob,unknownmothersamples, stfnctn_getunknownmotherpars_m1,stfnctn_getevolpars_m1,stfnctn_getcellpars_m1, trgtfnctn_getevolpars_m1,trgtfnctn_getcellpars_m1,trgtfnctn_getcelltimes_m1, dthdivdistr, uppars )
     unknownmothersamples.nomothersamples = uppars.nomothersamples; unknownmothersamples.nomotherburnin = uppars.nomotherburnin; unknownmothersamples.weights_eq = ones(uppars.nomothersamples)
     return unknownmothersamples, convflag
 end     # end of stfnctn_updateunknownmotherpars_m1 function
@@ -4140,16 +4728,16 @@ end     # end of trgtfnctn_getevolpars_m1 function
 function trgtfnctn_getunknownmotherpars_m1( pars_glob::Union{Array{Float64,1},MArray}, pars_evol_here::Union{Array{Float64,1},MArray},pars_cell_here::Union{Array{Float64,1},MArray},times_cell_here::Union{Array{Float64,1},MArray},fate_here::Int64, fate_cond::Int64,lineagexbounds::Union{Array{Float64,1},MArray}, lineagetimes_here::Union{Array{Float64,1},MArray}, unknownmothersamples::Unknownmotherequilibriumsamples, dthdivdistr::DthDivdistr, uppars::Uppars2 )::Tuple{Float64,Float64}
     # logtargetfunctions for unknownmotherparameters for model 1
 
-    if( (fate_cond>0) & (fate_here!=fate_cond) )                        # inconsistent fate
+    if( (fate_cond>0) && (fate_here!=fate_cond) )                       # inconsistent fate
         return -Inf, -Inf
     end     # end if incorrect fate
-    if( ((times_cell_here[2]-lineagetimes_here[1])>lineagexbounds[2]) | ((times_cell_here[2]-lineagetimes_here[1])<lineagexbounds[1]) ) # disappearance time outside of given conidtional window
+    if( ((times_cell_here[2]-lineagetimes_here[1])>lineagexbounds[2]) || ((times_cell_here[2]-lineagetimes_here[1])<lineagexbounds[1]) ) # disappearance time outside of given conidtional window
         return -Inf, -Inf
     end     # end if incorrect disappearance time
     logevolcost = trgtfnctn_getcellpars_m1( pars_glob,pars_evol_here,times_cell_here, pars_cell_here, uppars )
     (beta,timerange) = getEulerLotkabeta( pars_cell_here, dthdivdistr ); dt = timerange[2]-timerange[1]
 
-    if( (fate_cond==-1) & (lineagexbounds[1]==0) & (lineagexbounds[2]==+Inf) )
+    if( (fate_cond==-1) && (lineagexbounds[1]==0) && (lineagexbounds[2]==+Inf) )
         logdthintegralterms = (-beta.*timerange) .+ dthdivdistr.get_logdistrfate( pars_cell_here, collect(timerange), Int64(1) )  # exponentially weighted deaths
         logdthintegralterm = logsumexp(logdthintegralterms) .+ log(dt)  # weighted integral over deaths
 
@@ -4165,7 +4753,7 @@ function trgtfnctn_getunknownmotherpars_m1( pars_glob::Union{Array{Float64,1},MA
             logintegral_here = logsumexp(alllogvaluesincond_here) + log(dt)
             totallognormalisation = logaddexp( logintegral_here, totallognormalisation ) + log(dt)
         end     # end of gaps loop
-        if( isnan(totallognormalisation) | isinf(totallognormalisation) )   # pathological
+        if( !isfinite(totallognormalisation) )                          # pathological
             @printf( " (%s) Warning - trgtfnctn_getunknownmotherpars_m1 (%d): Bad normalisation %+1.5e: dt = %1.5e, lineagexbounds [ %s]\n", uppars.chaincomment,uppars.MCit, totallognormalisation,dt, join([@sprintf("%1.5e ",j) for j in lineagexbounds]) )
             @printf( " (%s)  beta = %+1.5e, pars_glob = [ %s], pars_cell_here = [ %s]\n", beta, join([@sprintf("%+1.5e ",j) for j in pars_glob]), join([@sprintf("%+1.5e ",j) for j in pars_cell_here]) )
             return logevolcost, -Inf
@@ -4287,7 +4875,7 @@ end     # end of stfnctn_getcelltimes_m2 function
 function stfnctn_updateunknownmotherpars_m2( pars_glob::Union{Array{Float64,1},MArray}, unknownmothersamples::Unknownmotherequilibriumsamples, dthdivdistr::DthDivdistr, uppars::Uppars2 )::Tuple{Unknownmotherequilibriumsamples,Int64}
     # generates unknownmothersamples for model 2
 
-    convflag::Int64 = getjointequilibriumparameterswithnetgrowth( pars_glob,unknownmothersamples, stfnctn_getunknownmotherpars_m2,stfnctn_getevolpars_m2,stfnctn_getcellpars_m2, dthdivdistr, uppars )
+    convflag::Int64 = getjointequilibriumparameterswithnetgrowth( pars_glob,unknownmothersamples, stfnctn_getunknownmotherpars_m2,stfnctn_getevolpars_m2,stfnctn_getcellpars_m2, trgtfnctn_getevolpars_m2,trgtfnctn_getcellpars_m2,trgtfnctn_getcelltimes_m2, dthdivdistr, uppars )
     unknownmothersamples.nomothersamples = uppars.nomothersamples; unknownmothersamples.nomotherburnin = uppars.nomotherburnin; unknownmothersamples.weights_eq = ones(uppars.nomothersamples)
     return unknownmothersamples, convflag
 end     # end of stfnctn_updateunknownmotherpars_m2 function
@@ -4417,7 +5005,7 @@ end     # end of stfnctn_getcelltimes_m3 function
 function stfnctn_updateunknownmotherpars_m3( pars_glob::Union{Array{Float64,1},MArray}, unknownmothersamples::Unknownmotherequilibriumsamples, dthdivdistr::DthDivdistr, uppars::Uppars2 )::Tuple{Unknownmotherequilibriumsamples,Int64}
     # generates unknownmothersamples for model 3
 
-    convflag::Int64 = getjointequilibriumparameterswithnetgrowth( pars_glob,unknownmothersamples, stfnctn_getunknownmotherpars_m3,stfnctn_getevolpars_m3,stfnctn_getcellpars_m3, dthdivdistr, uppars )
+    convflag::Int64 = getjointequilibriumparameterswithnetgrowth( pars_glob,unknownmothersamples, stfnctn_getunknownmotherpars_m3,stfnctn_getevolpars_m3,stfnctn_getcellpars_m3, trgtfnctn_getevolpars_m3,trgtfnctn_getcellpars_m3,trgtfnctn_getcelltimes_m3, dthdivdistr, uppars )
     unknownmothersamples.nomothersamples = uppars.nomothersamples; unknownmothersamples.nomotherburnin = uppars.nomotherburnin; unknownmothersamples.weights_eq = ones(uppars.nomothersamples)
     return unknownmothersamples, convflag
 end     # end of stfnctn_updateunknownmotherpars_m3 function
@@ -4560,7 +5148,7 @@ function stfnctn_updateunknownmotherpars_m4( pars_glob::Union{Array{Float64,1},M
     # generates unknownmothersamples for model 4
     #@printf( " (%s) Info - stfnctn_updateunknownmotherpars_m4 (%d): Start, thread %2d/%2d (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, Threads.threadid(),Threads.nthreads(), (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
     
-    convflag::Int64 = getjointequilibriumparameterswithnetgrowth( pars_glob,unknownmothersamples, stfnctn_getunknownmotherpars_m4,stfnctn_getevolpars_m4,stfnctn_getcellpars_m4, dthdivdistr, uppars )
+    convflag::Int64 = getjointequilibriumparameterswithnetgrowth( pars_glob,unknownmothersamples, stfnctn_getunknownmotherpars_m4,stfnctn_getevolpars_m4,stfnctn_getcellpars_m4, trgtfnctn_getevolpars_m4,trgtfnctn_getcellpars_m4,trgtfnctn_getcelltimes_m4, dthdivdistr, uppars )
     unknownmothersamples.nomothersamples = uppars.nomothersamples; unknownmothersamples.nomotherburnin = uppars.nomotherburnin; unknownmothersamples.weights_eq = ones(uppars.nomothersamples)
     #@printf( " (%s) Info - stfnctn_updateunknownmotherpars_m4 (%d): Done,  thread %2d/%2d (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, Threads.threadid(),Threads.nthreads(), (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
     return unknownmothersamples, convflag
@@ -4569,8 +5157,8 @@ end     # end of stfnctn_updateunknownmotherpars_m4 function
 function trgtfnctn_getevolpars_m4( pars_glob::Union{Array{Float64,1},MArray},pars_evol_mthr::Union{Array{Float64,1},MArray}, pars_evol_here::Union{Array{Float64,1},MArray}, uppars::Uppars2 )::Float64
     # logtargetfunctions getevolpars for model 4
 
-    (hiddenmatrix, sigma) = gethiddenmatrix_m4( pars_glob, uppars )
-    mymean = 1.0 .+ hiddenmatrix*(pars_evol_mthr.-1.0)
+    (hiddenmatrix::Array{Float64,2}, sigma::Array{Float64,2}) = gethiddenmatrix_m4( pars_glob, uppars )
+    mymean::Array{Float64,1} = 1.0 .+ hiddenmatrix*(pars_evol_mthr.-1.0)
     return logmvGaussian_distr( cat(mymean,sigma,dims=2), hcat(pars_evol_here) )[1]
 end     # end of trgtfnctn_getevolpars_m4 function
 function trgtfnctn_getunknownmotherpars_m4( pars_glob::Union{Array{Float64,1},MArray}, pars_evol_here::Union{Array{Float64,1},MArray},pars_cell_here::Union{Array{Float64,1},MArray},times_cell_here::Union{Array{Float64,1},MArray},fate_here::Int64, fate_cond::Int64,lineagexbounds::Union{Array{Float64,1},MArray}, lineagetimes_here::Union{Array{Float64,1},MArray}, unknownmothersamples::Unknownmotherequilibriumsamples, dthdivdistr::DthDivdistr, uppars::Uppars2 )::Tuple{Float64,Float64}
@@ -4694,7 +5282,7 @@ end     # end of stfnctn_getcelltimes_m9 function
 function stfnctn_updateunknownmotherpars_m9( pars_glob::Union{Array{Float64,1},MArray}, unknownmothersamples::Unknownmotherequilibriumsamples, dthdivdistr::DthDivdistr, uppars::Uppars2 )::Tuple{Unknownmotherequilibriumsamples,Int64}
     # generates unknownmothersamples for model 9
 
-    convflag::Int64 = getjointequilibriumparameterswithnetgrowth( pars_glob,unknownmothersamples, stfnctn_getunknownmotherpars_m9,stfnctn_getevolpars_m9,stfnctn_getcellpars_m9, dthdivdistr, uppars )
+    convflag::Int64 = getjointequilibriumparameterswithnetgrowth( pars_glob,unknownmothersamples, stfnctn_getunknownmotherpars_m9,stfnctn_getevolpars_m9,stfnctn_getcellpars_m9, trgtfnctn_getevolpars_m9,trgtfnctn_getcellpars_m9,trgtfnctn_getcelltimes_m9, dthdivdistr, uppars )
     unknownmothersamples.nomothersamples = uppars.nomothersamples; unknownmothersamples.nomotherburnin = uppars.nomotherburnin; unknownmothersamples.weights_eq = ones(uppars.nomothersamples)
     return unknownmothersamples, convflag
 end     # end of stfnctn_updateunknownmotherpars_m9 function
@@ -4702,8 +5290,8 @@ end     # end of stfnctn_updateunknownmotherpars_m9 function
 function trgtfnctn_getevolpars_m9( pars_glob::Union{Array{Float64,1},MArray},pars_evol_mthr::Union{Array{Float64,1},MArray}, pars_evol_here::Union{Array{Float64,1},MArray}, uppars::Uppars2 )::Float64
     # logtargetfunctions getevolpars for model 9
 
-    (hiddenmatrix, sigma) = gethiddenmatrix_m4( pars_glob, uppars ) # same for model 9
-    mymean = 1.0 .+ hiddenmatrix*(pars_evol_mthr.-1.0)
+    (hiddenmatrix::Array{Float64,2}, sigma::Array{Float64,2}) = gethiddenmatrix_m4( pars_glob, uppars ) # same for model 9
+    mymean::Array{Float64,1} = 1.0 .+ hiddenmatrix*(pars_evol_mthr.-1.0)
     return logmvGaussian_distr( cat(mymean,sigma,dims=2), hcat(pars_evol_here) )[1]
 end     # end of trgtfnctn_getevolpars_m9 function
 function trgtfnctn_getunknownmotherpars_m9( pars_glob::Union{Array{Float64,1},MArray}, pars_evol_here::Union{Array{Float64,1},MArray},pars_cell_here::Union{Array{Float64,1},MArray},times_cell_here::Union{Array{Float64,1},MArray},fate_here::Int64, fate_cond::Int64,lineagexbounds::Union{Array{Float64,1},MArray}, lineagetimes_here::Union{Array{Float64,1},MArray}, unknownmothersamples::Unknownmotherequilibriumsamples, dthdivdistr::DthDivdistr, uppars::Uppars2 )::Tuple{Float64,Float64}
@@ -4822,7 +5410,7 @@ end     # end of stfnctn_getcelltimes_m11 function
 function stfnctn_updateunknownmotherpars_m11( pars_glob::Union{Array{Float64,1},MArray}, unknownmothersamples::Unknownmotherequilibriumsamples, dthdivdistr::DthDivdistr, uppars::Uppars2 )::Tuple{Unknownmotherequilibriumsamples,Int64}
     # generates unknownmothersamples for model 11
 
-    convflag::Int64 = getjointequilibriumparameterswithnetgrowth( pars_glob,unknownmothersamples, stfnctn_getunknownmotherpars_m11,stfnctn_getevolpars_m11,stfnctn_getcellpars_m11, dthdivdistr, uppars )
+    convflag::Int64 = getjointequilibriumparameterswithnetgrowth( pars_glob,unknownmothersamples, stfnctn_getunknownmotherpars_m11,stfnctn_getevolpars_m11,stfnctn_getcellpars_m11, trgtfnctn_getevolpars_m11,trgtfnctn_getcellpars_m11,trgtfnctn_getcelltimes_m11, dthdivdistr, uppars )
     unknownmothersamples.nomothersamples = uppars.nomothersamples; unknownmothersamples.nomotherburnin = uppars.nomotherburnin; unknownmothersamples.weights_eq = ones(uppars.nomothersamples)
     return unknownmothersamples, convflag
 end     # end of stfnctn_updateunknownmotherpars_m11 function
@@ -4835,17 +5423,17 @@ end     # end of trgtfnctn_getevolpars_m11 function
 function trgtfnctn_getunknownmotherpars_m11( pars_glob::Union{Array{Float64,1},MArray}, pars_evol_here::Union{Array{Float64,1},MArray},pars_cell_here::Union{Array{Float64,1},MArray},times_cell_here::Union{Array{Float64,1},MArray},fate_here::Int64, fate_cond::Int64,lineagexbounds::Union{Array{Float64,1},MArray}, lineagetimes_here::Union{Array{Float64,1},MArray}, unknownmothersamples::Unknownmotherequilibriumsamples, dthdivdistr::DthDivdistr, uppars::Uppars2 )::Tuple{Float64,Float64}
     # logtargetfunctions for unknownmotherparameters for model 11
 
-    if( (fate_cond>0) & (fate_here!=fate_cond) )                        # inconsistent fate
+    if( (fate_cond>0) && (fate_here!=fate_cond) )                       # inconsistent fate
         return -Inf, -Inf
     end     # end if incorrect fate
-    if( ((times_cell_here[2]-lineagetimes_here[1])>lineagexbounds[2]) | ((times_cell_here[2]-lineagetimes_here[1])<lineagexbounds[1]) ) # disappearance time outside of given conidtional window
+    if( ((times_cell_here[2]-lineagetimes_here[1])>lineagexbounds[2]) || ((times_cell_here[2]-lineagetimes_here[1])<lineagexbounds[1]) )# disappearance time outside of given conidtional window
         return -Inf, -Inf
     end     # end if incorrect disappearance time
     logevolcost::Float64 = trgtfnctn_getcellpars_m11( pars_glob,pars_evol_here,times_cell_here, pars_cell_here, uppars )
     (beta::Float64,timerange::Array{Float64,1}) = getEulerLotkabeta( pars_cell_here, dthdivdistr ); dt::Float64 = timerange[2]-timerange[1]
 
     local loglklh::Float64
-    if( (fate_cond==-1) & (lineagexbounds[1]==0) & (lineagexbounds[2]==+Inf) )      # i.e. effectively unconditioned
+    if( (fate_cond==-1) && (lineagexbounds[1]==0) && (lineagexbounds[2]==+Inf) )    # i.e. effectively unconditioned
         logdthintegralterms::Array{Float64,1} = (-beta.*timerange) .+ dthdivdistr.get_logdistrfate( pars_cell_here, timerange, Int64(1) )  # exponentially weighted deaths
         logdthintegralterm::Float64 = logsumexp(logdthintegralterms) .+ log(dt)     # weighted integral over deaths
 
@@ -4861,7 +5449,7 @@ function trgtfnctn_getunknownmotherpars_m11( pars_glob::Union{Array{Float64,1},M
             logintegral_here::Float64 = logsumexp(alllogvaluesincond_here) + log(dt)
             totallognormalisation = logaddexp( logintegral_here, totallognormalisation ) + log(dt)
         end     # end of gaps loop
-        if( isnan(totallognormalisation) | isinf(totallognormalisation) )   # pathological
+        if( !isfinite(totallognormalisation) )                          # pathological
             @printf( " (%s) Warning - trgtfnctn_getunknownmotherpars_m11 (%d): Bad normalisation %+1.5e: dt = %1.5e, lineagexbounds [ %s]\n", uppars.chaincomment,uppars.MCit, totallognormalisation,dt, join([@sprintf("%1.5e ",j) for j in lineagexbounds]) )
             @printf( " (%s)  beta = %+1.5e, pars_glob = [ %s], pars_cell_here = [ %s]\n", beta, join([@sprintf("%+1.5e ",j) for j in pars_glob]), join([@sprintf("%+1.5e ",j) for j in pars_cell_here]) )
             return logevolcost, -Inf
@@ -4983,7 +5571,7 @@ end     # end of stfnctn_getcelltimes_m12 function
 function stfnctn_updateunknownmotherpars_m12( pars_glob::Union{Array{Float64,1},MArray}, unknownmothersamples::Unknownmotherequilibriumsamples, dthdivdistr::DthDivdistr, uppars::Uppars2 )::Tuple{Unknownmotherequilibriumsamples,Int64}
     # generates unknownmothersamples for model 12
 
-    convflag::Int64 = getjointequilibriumparameterswithnetgrowth( pars_glob,unknownmothersamples, stfnctn_getunknownmotherpars_m12,stfnctn_getevolpars_m12,stfnctn_getcellpars_m12, dthdivdistr, uppars )
+    convflag::Int64 = getjointequilibriumparameterswithnetgrowth( pars_glob,unknownmothersamples, stfnctn_getunknownmotherpars_m12,stfnctn_getevolpars_m12,stfnctn_getcellpars_m12, trgtfnctn_getevolpars_m12,trgtfnctn_getcellpars_m12,trgtfnctn_getcelltimes_m12, dthdivdistr, uppars )
     unknownmothersamples.nomothersamples = uppars.nomothersamples; unknownmothersamples.nomotherburnin = uppars.nomotherburnin; unknownmothersamples.weights_eq = ones(uppars.nomothersamples)
     return unknownmothersamples, convflag
 end     # end of stfnctn_updateunknownmotherpars_m12 function
@@ -5113,7 +5701,7 @@ end     # end of stfnctn_getcelltimes_m13 function
 function stfnctn_updateunknownmotherpars_m13( pars_glob::Union{Array{Float64,1},MArray}, unknownmothersamples::Unknownmotherequilibriumsamples, dthdivdistr::DthDivdistr, uppars::Uppars2 )::Tuple{Unknownmotherequilibriumsamples,Int64}
     # generates unknownmothersamples for model 13
 
-    convflag::Int64 = getjointequilibriumparameterswithnetgrowth( pars_glob,unknownmothersamples, stfnctn_getunknownmotherpars_m13,stfnctn_getevolpars_m13,stfnctn_getcellpars_m13, dthdivdistr, uppars )
+    convflag::Int64 = getjointequilibriumparameterswithnetgrowth( pars_glob,unknownmothersamples, stfnctn_getunknownmotherpars_m13,stfnctn_getevolpars_m13,stfnctn_getcellpars_m13, trgtfnctn_getevolpars_m13,trgtfnctn_getcellpars_m13,trgtfnctn_getcelltimes_m13, dthdivdistr, uppars )
     unknownmothersamples.nomothersamples = uppars.nomothersamples; unknownmothersamples.nomotherburnin = uppars.nomotherburnin; unknownmothersamples.weights_eq = ones(uppars.nomothersamples)
     return unknownmothersamples, convflag
 end     # end of stfnctn_updateunknownmotherpars_m13 function
@@ -5256,7 +5844,7 @@ function stfnctn_updateunknownmotherpars_m14( pars_glob::Union{Array{Float64,1},
     # generates unknownmothersamples for model 14
     #@printf( " (%s) Info - stfnctn_updateunknownmotherpars_m14 (%d): Start, thread %2d/%2d (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, Threads.threadid(),Threads.nthreads(), (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
     
-    convflag::Int64 = getjointequilibriumparameterswithnetgrowth( pars_glob,unknownmothersamples, stfnctn_getunknownmotherpars_m14,stfnctn_getevolpars_m14,stfnctn_getcellpars_m14, dthdivdistr, uppars )
+    convflag::Int64 = getjointequilibriumparameterswithnetgrowth( pars_glob,unknownmothersamples, stfnctn_getunknownmotherpars_m14,stfnctn_getevolpars_m14,stfnctn_getcellpars_m14, trgtfnctn_getevolpars_m14,trgtfnctn_getcellpars_m14,trgtfnctn_getcelltimes_m14, dthdivdistr, uppars )
     unknownmothersamples.nomothersamples = uppars.nomothersamples; unknownmothersamples.nomotherburnin = uppars.nomotherburnin; unknownmothersamples.weights_eq = ones(uppars.nomothersamples)
     #@printf( " (%s) Info - stfnctn_updateunknownmotherpars_m14 (%d): Done,  thread %2d/%2d (after %1.3f sec).\n", uppars.chaincomment,uppars.MCit, Threads.threadid(),Threads.nthreads(), (DateTime(now())-uppars.timestamp)/Millisecond(1000) ); flush(stdout)
     return unknownmothersamples, convflag
@@ -5265,8 +5853,8 @@ end     # end of stfnctn_updateunknownmotherpars_m14 function
 function trgtfnctn_getevolpars_m14( pars_glob::Union{Array{Float64,1},MArray},pars_evol_mthr::Union{Array{Float64,1},MArray}, pars_evol_here::Union{Array{Float64,1},MArray}, uppars::Uppars2 )::Float64
     # logtargetfunctions getevolpars for model 14
 
-    (hiddenmatrix, sigma) = gethiddenmatrix_m4( pars_glob, uppars )
-    mymean = 1.0 .+ hiddenmatrix*(pars_evol_mthr.-1.0)
+    (hiddenmatrix::Array{Float64,2}, sigma::Array{Float64,2}) = gethiddenmatrix_m4( pars_glob, uppars )
+    mymean::Array{Float64,1} = 1.0 .+ hiddenmatrix*(pars_evol_mthr.-1.0)
     return logmvGaussian_distr( cat(mymean,sigma,dims=2), hcat(pars_evol_here) )[1]
 end     # end of trgtfnctn_getevolpars_m14 function
 function trgtfnctn_getunknownmotherpars_m14( pars_glob::Union{Array{Float64,1},MArray}, pars_evol_here::Union{Array{Float64,1},MArray},pars_cell_here::Union{Array{Float64,1},MArray},times_cell_here::Union{Array{Float64,1},MArray},fate_here::Int64, fate_cond::Int64,lineagexbounds::Union{Array{Float64,1},MArray}, lineagetimes_here::Union{Array{Float64,1},MArray}, unknownmothersamples::Unknownmotherequilibriumsamples, dthdivdistr::DthDivdistr, uppars::Uppars2 )::Tuple{Float64,Float64}
