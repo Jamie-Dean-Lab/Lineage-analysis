@@ -5,11 +5,10 @@ import pandas as pd
 
 from track_converter.src.utils import discard_related_cells
 
-logging.basicConfig(format="%(levelname)s: %(name)s: %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def validate_tracks_shape_dtypes(tracks: pd.DataFrame) -> None:
+def _validate_tracks_shape_dtypes(tracks: pd.DataFrame) -> None:
     """
     Validate the shape (number of rows / columns) and data types / ranges of columns.
 
@@ -62,7 +61,7 @@ def validate_tracks_shape_dtypes(tracks: pd.DataFrame) -> None:
         raise ValueError(msg)
 
 
-def validate_cell_begin_end_frames(tracks: pd.DataFrame) -> pd.DataFrame:
+def _validate_cell_begin_end_frames(tracks: pd.DataFrame) -> pd.DataFrame:
     """
     Validate the begin and end frames of the tracked cells.
 
@@ -90,7 +89,7 @@ def validate_cell_begin_end_frames(tracks: pd.DataFrame) -> pd.DataFrame:
     return tracks
 
 
-def validate_parents_in_labels(tracks: pd.DataFrame) -> pd.DataFrame:
+def _validate_parents_in_labels(tracks: pd.DataFrame) -> pd.DataFrame:
     """Validate that all parent labels (P) appear in the cell labels (L) or are 0."""
     parents_in_labels = tracks["P"].isin(tracks["L"])
     parents_are_zero = tracks["P"] == 0
@@ -109,7 +108,7 @@ def validate_parents_in_labels(tracks: pd.DataFrame) -> pd.DataFrame:
     return tracks
 
 
-def validate_parent_label_unequal(tracks: pd.DataFrame) -> pd.DataFrame:
+def _validate_parent_label_unequal(tracks: pd.DataFrame) -> pd.DataFrame:
     """Validate that no cells have a parent label (P) equal to their own label (L)."""
     cells_are_invalid = tracks["P"] == tracks["L"]
     if cells_are_invalid.any():
@@ -125,7 +124,7 @@ def validate_parent_label_unequal(tracks: pd.DataFrame) -> pd.DataFrame:
     return tracks
 
 
-def correct_missing_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
+def _correct_missing_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
     """
     Create a second daughter for any mother cells that only have one.
 
@@ -149,7 +148,7 @@ def correct_missing_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
     return tracks
 
 
-def validate_n_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
+def _validate_n_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
     """
     Validate the number of daughters produced by each cell.
 
@@ -172,7 +171,7 @@ def validate_n_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
     return tracks
 
 
-def correct_late_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
+def _correct_late_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
     """
     Ensure all pairs of daughter cells have the same begin frame (B).
 
@@ -197,7 +196,7 @@ def correct_late_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
     return tracks
 
 
-def validate_mother_daughter_frames(tracks: pd.DataFrame) -> pd.DataFrame:
+def _validate_mother_daughter_frames(tracks: pd.DataFrame) -> pd.DataFrame:
     """Validate that both daughter cells appear one frame after the mother's last frame."""
     # ignore parent ids of 0 (this means the parent is unknown)
     cells_with_parents = tracks.loc[tracks["P"] != 0, :]
@@ -222,7 +221,7 @@ def validate_mother_daughter_frames(tracks: pd.DataFrame) -> pd.DataFrame:
     return tracks
 
 
-def validate_right_censored_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
+def _validate_right_censored_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
     """Validate that all right-censored cells have no daughters."""
     right_censored_labels = tracks.loc[tracks["R"] == 1, "L"]
     cells_are_invalid = tracks["P"].isin(right_censored_labels)
@@ -240,7 +239,7 @@ def validate_right_censored_daughters(tracks: pd.DataFrame) -> pd.DataFrame:
     return tracks
 
 
-def right_censor_non_dividing_cells(tracks: pd.DataFrame) -> pd.DataFrame:
+def _right_censor_non_dividing_cells(tracks: pd.DataFrame) -> pd.DataFrame:
     """Right censor all cell tracks that don't end in cell division."""
     cells_with_daughters = tracks["L"].isin(tracks["P"])
     tracks.loc[cells_with_daughters, "R"] = 0
@@ -296,7 +295,7 @@ def preprocess_ctc_file(
 
     """
     tracks = pd.read_table(input_ctc, sep=r"\s+", header=None) if not isinstance(input_ctc, pd.DataFrame) else input_ctc
-    validate_tracks_shape_dtypes(tracks)
+    _validate_tracks_shape_dtypes(tracks)
 
     has_right_censoring_col = "R" in tracks
     if not has_right_censoring_col and not default_right_censor:
@@ -311,26 +310,26 @@ def preprocess_ctc_file(
     if not has_right_censoring_col:
         tracks["R"] = 0
 
-    tracks = validate_parents_in_labels(tracks)
-    tracks = validate_parent_label_unequal(tracks)
+    tracks = _validate_parents_in_labels(tracks)
+    tracks = _validate_parent_label_unequal(tracks)
 
     if fix_late_daughters:
-        tracks = correct_late_daughters(tracks)
+        tracks = _correct_late_daughters(tracks)
 
     if fix_missing_daughters:
-        tracks = correct_missing_daughters(tracks)
+        tracks = _correct_missing_daughters(tracks)
 
     # only handle right-censoring options if the input file doesn't have a right-censoring column already
     if not has_right_censoring_col:
         if default_right_censor:
-            tracks = right_censor_non_dividing_cells(tracks)
+            tracks = _right_censor_non_dividing_cells(tracks)
 
         if dead_cell_labels is not None:
             tracks = _mark_dead_cells_as_not_right_censored(tracks, dead_cell_labels)
 
-    tracks = validate_cell_begin_end_frames(tracks)
-    tracks = validate_n_daughters(tracks)
-    tracks = validate_mother_daughter_frames(tracks)
-    tracks = validate_right_censored_daughters(tracks)
+    tracks = _validate_cell_begin_end_frames(tracks)
+    tracks = _validate_n_daughters(tracks)
+    tracks = _validate_mother_daughter_frames(tracks)
+    tracks = _validate_right_censored_daughters(tracks)
 
     tracks.to_csv(output_ctc, sep=" ", header=False, index=False)

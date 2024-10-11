@@ -7,7 +7,6 @@ import pandas as pd
 from track_converter.src.preprocess_ctc import preprocess_ctc_file
 from track_converter.src.utils import check_dead_spots_have_no_children, convert_to_ctc
 
-logging.basicConfig(format="%(levelname)s: %(name)s: %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

@@ -9,7 +9,6 @@ from btrack.io import HDF5FileHandler
 from track_converter.src.preprocess_ctc import preprocess_ctc_file
 from track_converter.src.utils import discard_all_descendants
 
-logging.basicConfig(format="%(levelname)s: %(name)s: %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

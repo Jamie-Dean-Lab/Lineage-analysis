@@ -3,7 +3,6 @@ import logging
 import networkx as nx
 import pandas as pd
 
-logging.basicConfig(format="%(levelname)s: %(name)s: %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
