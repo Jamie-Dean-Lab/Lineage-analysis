@@ -21,3 +21,8 @@ def trackmate_test_data_dir():
 @pytest.fixture
 def mastodon_test_data_dir():
     return Path(__file__).parent.resolve() / "data" / "mastodon"
+
+
+@pytest.fixture
+def tracks_out_path(tmp_path):
+    return tmp_path / "tracks_out.txt"

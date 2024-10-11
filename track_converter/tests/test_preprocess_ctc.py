@@ -47,14 +47,15 @@ from track_converter.tests.utils import read_tracks
         ),
     ],
 )
-def test_validate_tracks(tracks_file, expected_warning, expected_remaining_labels, tmp_path, ctc_test_data_dir, caplog):
+def test_validate_tracks(
+    tracks_file, expected_warning, expected_remaining_labels, tracks_out_path, ctc_test_data_dir, caplog
+):
     """
     Test validation of tracks files with various issues.
 
     For each, check the correct cells are removed and the correct warning is given.
     """
     tracks_in_path = ctc_test_data_dir / tracks_file
-    tracks_out_path = tmp_path / "tracks_out.txt"
     preprocess_ctc_file(tracks_in_path, tracks_out_path)
 
     # Check expected warning is given
@@ -120,9 +121,8 @@ def test_valid_file_passes(tmp_path, ctc_test_data_dir):
         ),
     ],
 )
-def test_fix_late_daughters(tracks_file, expected_warning, expected_output, tmp_path, ctc_test_data_dir, caplog):
+def test_fix_late_daughters(tracks_file, expected_warning, expected_output, tracks_out_path, ctc_test_data_dir, caplog):
     tracks_in_path = ctc_test_data_dir / tracks_file
-    tracks_out_path = tmp_path / "tracks_out.txt"
     preprocess_ctc_file(tracks_in_path, tracks_out_path, fix_late_daughters=True)
 
     # Check expected warning is given
@@ -178,9 +178,10 @@ def test_fix_late_daughters(tracks_file, expected_warning, expected_output, tmp_
         ),
     ],
 )
-def test_fix_missing_daughters(tracks_file, expected_warning, expected_output, tmp_path, ctc_test_data_dir, caplog):
+def test_fix_missing_daughters(
+    tracks_file, expected_warning, expected_output, tracks_out_path, ctc_test_data_dir, caplog
+):
     tracks_in_path = ctc_test_data_dir / tracks_file
-    tracks_out_path = tmp_path / "tracks_out.txt"
     preprocess_ctc_file(tracks_in_path, tracks_out_path, fix_missing_daughters=True, default_right_censor=False)
 
     # Check expected warning is given
@@ -212,11 +213,10 @@ def test_fix_missing_daughters(tracks_file, expected_warning, expected_output, t
     ],
 )
 def test_default_right_censor(
-    dead_cell_labels, expected_right_censored, expected_not_right_censored, ctc_test_data_dir, tmp_path
+    dead_cell_labels, expected_right_censored, expected_not_right_censored, ctc_test_data_dir, tracks_out_path
 ):
     """Test setting non-dividing cells as right-censored by default (with and without specifying any dead cells)."""
     tracks_in_path = ctc_test_data_dir / "tracks_one_tree.txt"
-    tracks_out_path = tmp_path / "tracks_out.txt"
 
     if len(dead_cell_labels) > 0:
         preprocess_ctc_file(

@@ -14,7 +14,7 @@ def invalid_cell_labels():
     return (185, 177, 184)
 
 
-def test_btrack_using_terminate_fates(invalid_cell_labels, btrack_test_data_dir, tmp_path):
+def test_btrack_using_terminate_fates(invalid_cell_labels, btrack_test_data_dir, tracks_out_path):
     """
     Run a valid example file through the pre-processing with use_terminate_fates on.
 
@@ -22,7 +22,6 @@ def test_btrack_using_terminate_fates(invalid_cell_labels, btrack_test_data_dir,
     being assigned as right-censored.
     """
     tracks_in_path = btrack_test_data_dir / "tracks.h5"
-    tracks_out_path = tmp_path / "tracks_out.txt"
 
     preprocess_btrack_file(tracks_in_path, tracks_out_path, use_terminate_fates=True, remove_false_positives=False)
     ctc_table = read_tracks(tracks_out_path)
@@ -53,14 +52,13 @@ def test_btrack_using_terminate_fates(invalid_cell_labels, btrack_test_data_dir,
             assert track.ID not in ctc_table.L.to_numpy()
 
 
-def test_btrack_remove_false_positives(invalid_cell_labels, btrack_test_data_dir, tmp_path):
+def test_btrack_remove_false_positives(invalid_cell_labels, btrack_test_data_dir, tracks_out_path):
     """
     Run a valid example file through the pre-processing with remove_false_positives on.
 
     This checks all false positive cells are removed.
     """
     tracks_in_path = btrack_test_data_dir / "tracks.h5"
-    tracks_out_path = tmp_path / "tracks_out.txt"
 
     preprocess_btrack_file(tracks_in_path, tracks_out_path, use_terminate_fates=True, remove_false_positives=True)
     ctc_table = read_tracks(tracks_out_path)
