@@ -75,10 +75,12 @@ def _validate_dead_track_ids(ctc_table: pd.DataFrame, dead_track_ids: list[int])
 
 
 def preprocess_btrack_file(
-    input_btrack_filepath: Path,
+    btrack_h5_filepath: Path,
     output_ctc_filepath: Path,
     use_terminate_fates: bool = True,
     remove_false_positives: bool = True,
+    fix_late_daughters: bool = False,
+    fix_missing_daughters: bool = False,
     dead_track_ids: list[int] | None = None,
 ) -> None:
     """
@@ -100,13 +102,17 @@ def preprocess_btrack_file(
         If this is True, any dead_track_ids will be ignored.
     remove_false_positives : bool
         Remove any cells with a btrack fate of FALSE_POSITIVE, as well as all of their descendants (if any).
+    fix_late_daughters : bool, optional
+        Whether to back-date any late daughters to the start time of the earlier daughter.
+    fix_missing_daughters : bool, optional
+        Whether to create a second daughter for any mother cells that only have one.
     dead_track_ids : list[int] | None
         List of track ids (accessed via .ID for each btrack Tracklet) to consider as 'dead' cells. These will be
         marked as not right-censored.
 
     """
     # Extract LBEP table from the btrack file
-    with HDF5FileHandler(input_btrack_filepath, "r") as reader:
+    with HDF5FileHandler(btrack_h5_filepath, "r") as reader:
         tracks = reader.tracks
         tracks_lbep = reader.lbep
 
@@ -126,7 +132,13 @@ def preprocess_btrack_file(
     logger.info("Extracted CTC table from btrack .h5")
 
     if use_terminate_fates:
-        preprocess_ctc_file(ctc_table, output_ctc_filepath, default_right_censor=False)
+        preprocess_ctc_file(
+            ctc_table,
+            output_ctc_filepath,
+            fix_late_daughters=fix_late_daughters,
+            fix_missing_daughters=fix_missing_daughters,
+            default_right_censor=False,
+        )
         return
 
     if dead_track_ids is not None:
@@ -135,4 +147,11 @@ def preprocess_btrack_file(
     else:
         dead_ctc_labels = []
 
-    preprocess_ctc_file(ctc_table, output_ctc_filepath, default_right_censor=True, dead_cell_labels=dead_ctc_labels)
+    preprocess_ctc_file(
+        ctc_table,
+        output_ctc_filepath,
+        fix_late_daughters=fix_late_daughters,
+        fix_missing_daughters=fix_missing_daughters,
+        default_right_censor=True,
+        dead_cell_labels=dead_ctc_labels,
+    )

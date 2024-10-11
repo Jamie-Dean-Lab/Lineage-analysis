@@ -23,7 +23,12 @@ def _read_dead_cell_labels(spots: pd.DataFrame, edges: pd.DataFrame, dead_label:
 
 
 def preprocess_trackmate_or_mamut_files(
-    spots_csv_filepath: Path, edges_csv_filepath: Path, output_ctc_filepath: Path, dead_label: str | None = None
+    spots_csv_filepath: Path,
+    edges_csv_filepath: Path,
+    output_ctc_filepath: Path,
+    fix_late_daughters: bool = False,
+    fix_missing_daughters: bool = False,
+    dead_label: str | None = None,
 ) -> None:
     """
     Preprocess TrackMate or MaMuT format csv files.
@@ -41,6 +46,10 @@ def preprocess_trackmate_or_mamut_files(
         Path to edges csv file.
     output_ctc_filepath : Path
         Path to save output .txt file.
+    fix_late_daughters : bool, optional
+        Whether to back-date any late daughters to the start time of the earlier daughter.
+    fix_missing_daughters : bool, optional
+        Whether to create a second daughter for any mother cells that only have one.
     dead_label : str | None, optional
         Name of manually labelled 'dead' spots. If provided, these will be marked as not right-censored.
 
@@ -57,4 +66,11 @@ def preprocess_trackmate_or_mamut_files(
 
     logger.info("Extracted CTC table from trackmate files")
 
-    preprocess_ctc_file(ctc_table, output_ctc_filepath, default_right_censor=True, dead_cell_labels=dead_ctc_labels)
+    preprocess_ctc_file(
+        ctc_table,
+        output_ctc_filepath,
+        fix_late_daughters=fix_late_daughters,
+        fix_missing_daughters=fix_missing_daughters,
+        default_right_censor=True,
+        dead_cell_labels=dead_ctc_labels,
+    )

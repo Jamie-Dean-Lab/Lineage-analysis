@@ -37,6 +37,8 @@ def preprocess_mastodon_files(
     spots_csv_filepath: Path,
     links_csv_filepath: Path,
     output_ctc_filepath: Path,
+    fix_late_daughters: bool = False,
+    fix_missing_daughters: bool = False,
     dead_tagset: str | None = None,
     dead_tag: str | None = None,
 ) -> None:
@@ -55,6 +57,10 @@ def preprocess_mastodon_files(
         Path to links csv file.
     output_ctc_filepath : Path
         Path to save output .txt file.
+    fix_late_daughters : bool, optional
+        Whether to back-date any late daughters to the start time of the earlier daughter.
+    fix_missing_daughters : bool, optional
+        Whether to create a second daughter for any mother cells that only have one.
     dead_tagset : str | None, optional
         Name of tagset for manually labelled 'dead' spots (dead_tag must also be provided)
     dead_tag : str | None, optional
@@ -76,4 +82,11 @@ def preprocess_mastodon_files(
 
     logger.info("Extracted CTC table from mastodon files")
 
-    preprocess_ctc_file(ctc_table, output_ctc_filepath, default_right_censor=True, dead_cell_labels=dead_ctc_labels)
+    preprocess_ctc_file(
+        ctc_table,
+        output_ctc_filepath,
+        fix_late_daughters=fix_late_daughters,
+        fix_missing_daughters=fix_missing_daughters,
+        default_right_censor=True,
+        dead_cell_labels=dead_ctc_labels,
+    )
