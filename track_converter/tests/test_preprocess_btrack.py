@@ -104,3 +104,30 @@ def test_btrack_dead_track_ids(invalid_cell_labels, btrack_h5_path, tracks_out_p
         # all other tracks aren't right censored i.e. 0
         else:
             assert right_censor == 0
+
+
+@pytest.mark.parametrize(
+    "dead_track_ids,expected_exception",
+    [
+        pytest.param(
+            [53, 390],
+            pytest.raises(ValueError, match=r"dead_track_ids \[390\] don't match any track IDs"),
+            id="Some track ids don't exist",
+        ),
+        pytest.param(
+            [53, 48],
+            pytest.raises(ValueError, match=r"IDs \[48\] were provided as dead_track_ids, but have children."),
+            id="Some track ids have children",
+        ),
+    ],
+)
+def test_btrack_invalid_dead_track_ids(dead_track_ids, expected_exception, btrack_h5_path, tracks_out_path):
+    """Check an exception is thrown for invalid dead_track_ids."""
+    with expected_exception:
+        preprocess_btrack_file(
+            btrack_h5_path,
+            tracks_out_path,
+            use_terminate_fates=False,
+            remove_false_positives=False,
+            dead_track_ids=dead_track_ids,
+        )
