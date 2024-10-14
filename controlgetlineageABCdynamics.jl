@@ -46,6 +46,7 @@ function controlgetlineageABCdynamics(;
                                       trickycells::Maybe{Vector{<:Integer}}=nothing, # cells that need many particles to not lose them; in order of appearance in lineagetree
                                       without::Maybe{Int64}=nothing, # '0' only warnings, '1' basic output, '2' detailied output, '3' debugging
                                       withwriteoutputtext::Maybe{Bool}=nothing, # 'true' if output of textfile, 'false' otherwise
+                                      missingframes::Maybe{Vector{Int}}=nothing,
                                       )
 
     # All keyword arguments above are initialised as `nothing` to make it easier
@@ -94,7 +95,7 @@ function controlgetlineageABCdynamics(;
     if( !isempty(filename) )                        # read existing file, if filename is meaningful
         (fullfilename,lineagedata) = readlineagefile(trunkfilename,filename)
         unknownfates = -1
-        mylineagetree = initialiseLineagetree(fullfilename,lineagedata, unknownfates)
+        mylineagetree = initialiseLineagetree(fullfilename,lineagedata, unknownfates, missingframes)
         pars_glob_sim = vcat(NaN)
     else                                            # simulate, if filename is empty
         minnocells_sim::UInt64 = UInt64(150)        # approximate/minimum number of simulated cells
@@ -413,7 +414,7 @@ function simulatelineagetree2( pars_glob::Array{Float64,1}, model::UInt64, nobra
     timestamp = DateTime(now())                             # timestamp for when simulation was created
     fullfilename::String = @sprintf( "%04d-%02d-%02d_%02d-%02d-%02d_Simulation2_cells=%d,model=%d,pars=[ %s].txt", year(timestamp),month(timestamp),day(timestamp), hour(timestamp),minute(timestamp),second(timestamp), j_cell,model, join([@sprintf("%+1.5e ",j) for j in pars_glob[:,1] ]) )
     lineagedata::Array{Int64,2} = Int64.( cat( round.(datawd[:,1]), ceil.(datawd[:,2]),min.(floor(totalsimulationtime),floor.(datawd[:,3])), max.(0,round.(datawd[:,4])), dims=2 ) )
-    mylineagetree::Lineagetree =  initialiseLineagetree(fullfilename,lineagedata, -1)      # lineagetree
+    mylineagetree::Lineagetree =  initialiseLineagetree(fullfilename,lineagedata, nothing)      # lineagetree
     if( without>=1 )
         @printf( " Info - simulatelineagetree2: Done simulating %s (after %1.3f sec).\n", fullfilename, (DateTime(now())-t1)/Millisecond(1000) )
     end     # end if without
