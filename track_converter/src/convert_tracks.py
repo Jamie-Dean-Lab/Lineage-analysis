@@ -4,6 +4,7 @@ from typing import ClassVar
 import click
 
 from track_converter.src.preprocess_btrack import preprocess_btrack_file
+from track_converter.src.preprocess_mastodon import preprocess_mastodon_files
 from track_converter.src.preprocess_trackmate_or_mamut import preprocess_trackmate_or_mamut_files
 
 
@@ -129,7 +130,7 @@ def trackmate(
 
     TrackMate and MaMuT share the same output csv file formats and so can be processed in the
     same way. All cells that don't end in cell division will be marked as right-censored, except for (optionally)
-    those manually labelled as dead in with dead_label.
+    those manually labelled as dead with dead_label.
     """
     preprocess_trackmate_or_mamut_files(
         Path(spots_csv_path),
@@ -141,8 +142,59 @@ def trackmate(
     )
 
 
+@click.command()
+@click.argument("spots-csv-path")
+@click.argument("links-csv-path")
+@click.argument("output-txt-path")
+@click.option(
+    "--fix-late-daughters",
+    is_flag=True,
+    default=False,
+    help="Back-date any late daughters to the start time of the earlier daughter.",
+)
+@click.option(
+    "--fix-missing-daughters",
+    is_flag=True,
+    default=False,
+    help="Create a second daughter for any mother cells that only have one.",
+)
+@click.option(
+    "--dead-tagset",
+    help="Name of tagset for manually labelled 'dead' spots (dead_tag must also be provided)",
+)
+@click.option(
+    "--dead-tag",
+    help="Name of tag (inside dead-tagset) for manually labelled 'dead' spots (dead_tagset must also be provided)",
+)
+def mastodon(
+    spots_csv_path: str,
+    links_csv_path: str,
+    output_txt_path: str,
+    fix_late_daughters: bool,
+    fix_missing_daughters: bool,
+    dead_tagset: str,
+    dead_tag: str,
+) -> None:
+    """
+    Convert Mastodon csv files into a text file.
+
+    All cells that don't end in cell division will be marked as right-censored, except for (optionally) those manually
+    tagged as dead in Mastodon (indicated with dead_tagset and dead_tag).
+    """
+    preprocess_mastodon_files(
+        Path(spots_csv_path),
+        Path(links_csv_path),
+        Path(output_txt_path),
+        fix_late_daughters,
+        fix_missing_daughters,
+        dead_tagset,
+        dead_tag,
+    )
+
+
 convert_tracks.add_command(btrack)
 convert_tracks.add_command(trackmate)
+convert_tracks.add_command(mastodon)
 
 
 if __name__ == "__main__":
