@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import ClassVar
 
@@ -30,6 +31,17 @@ class AliasedGroup(click.Group):
         commands = super().list_commands(ctx)
         commands.extend(self.aliases.keys())
         return commands
+
+
+def _set_logging_config(verbose: bool = False) -> None:
+    if verbose:
+        level = logging.INFO
+        logging.getLogger("btrack").setLevel(logging.INFO)
+    else:
+        level = logging.WARNING
+        logging.getLogger("btrack").setLevel(logging.WARNING)
+
+    logging.basicConfig(format="%(levelname)s: %(name)s: %(message)s", level=level, force=True)
 
 
 @click.group(cls=AliasedGroup)
@@ -70,6 +82,13 @@ def convert_tracks() -> None:
     type=int,
     help="List of track ids (.ID for each btrack Tracklet) to consider as 'dead' cells (i.e. not right-censored)",
 )
+@click.option(
+    "-v",
+    "--verbose",
+    is_flag=True,
+    default=False,
+    help="Verbose. Will print info messages as well as warnings / errors.",
+)
 def btrack(
     h5_path: str,
     output_txt_path: str,
@@ -78,6 +97,7 @@ def btrack(
     fix_late_daughters: bool,
     fix_missing_daughters: bool,
     dead_track_ids: tuple[int],
+    verbose: bool,
 ) -> None:
     """
     Convert a btrack output file (.h5) into a text file.
@@ -87,6 +107,8 @@ def btrack(
     options. With --no-terminate-fates, all cells that don't end in cell division will be marked as right-censored
     except for (optionally) those provided with --dead-track-ids.
     """
+    _set_logging_config(verbose)
+
     preprocess_btrack_file(
         Path(h5_path),
         Path(output_txt_path),
@@ -118,6 +140,13 @@ def btrack(
     "--dead-label",
     help="Name of manually labelled 'dead' spots (will be marked as not right-censored)",
 )
+@click.option(
+    "-v",
+    "--verbose",
+    is_flag=True,
+    default=False,
+    help="Verbose. Will print info messages as well as warnings / errors.",
+)
 def trackmate(
     spots_csv_path: str,
     edges_csv_path: str,
@@ -125,6 +154,7 @@ def trackmate(
     fix_late_daughters: bool,
     fix_missing_daughters: bool,
     dead_label: str,
+    verbose: bool,
 ) -> None:
     """
     Convert Trackmate or MaMuT csv files into a text file.
@@ -133,6 +163,8 @@ def trackmate(
     same way. All cells that don't end in cell division will be marked as right-censored, except for (optionally)
     those manually labelled as dead with dead_label.
     """
+    _set_logging_config(verbose)
+
     preprocess_trackmate_or_mamut_files(
         Path(spots_csv_path),
         Path(edges_csv_path),
@@ -167,6 +199,13 @@ def trackmate(
     "--dead-tag",
     help="Name of tag (inside dead-tagset) for manually labelled 'dead' spots (dead_tagset must also be provided)",
 )
+@click.option(
+    "-v",
+    "--verbose",
+    is_flag=True,
+    default=False,
+    help="Verbose. Will print info messages as well as warnings / errors.",
+)
 def mastodon(
     spots_csv_path: str,
     links_csv_path: str,
@@ -175,6 +214,7 @@ def mastodon(
     fix_missing_daughters: bool,
     dead_tagset: str,
     dead_tag: str,
+    verbose: bool,
 ) -> None:
     """
     Convert Mastodon csv files into a text file.
@@ -182,6 +222,8 @@ def mastodon(
     All cells that don't end in cell division will be marked as right-censored, except for (optionally) those manually
     tagged as dead in Mastodon (indicated with dead_tagset and dead_tag).
     """
+    _set_logging_config(verbose)
+
     preprocess_mastodon_files(
         Path(spots_csv_path),
         Path(links_csv_path),
@@ -220,6 +262,13 @@ def mastodon(
     type=int,
     help="List of cell labels to consider as dead cells (i.e mark as not right-censored)",
 )
+@click.option(
+    "-v",
+    "--verbose",
+    is_flag=True,
+    default=False,
+    help="Verbose. Will print info messages as well as warnings / errors.",
+)
 def ctc(
     input_txt_path: str,
     output_txt_path: str,
@@ -227,6 +276,7 @@ def ctc(
     fix_missing_daughters: bool,
     no_right_censor: bool,
     dead_cell_labels: tuple[int],
+    verbose: bool,
 ) -> None:
     """
     Validate a Cell Tracking Challenge (CTC) text file and save a new processed version.
@@ -236,6 +286,8 @@ def ctc(
     already contains a right-censoring column (5th column) then this will be used directly and any --no-right-censor /
     --dead-cell-labels ignored.
     """
+    _set_logging_config(verbose)
+
     preprocess_ctc_file(
         Path(input_txt_path),
         Path(output_txt_path),
