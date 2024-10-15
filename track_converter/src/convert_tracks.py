@@ -47,7 +47,7 @@ def _set_logging_config(verbose: bool = False) -> None:
 
 @click.group(cls=AliasedGroup)
 def convert_tracks() -> None:
-    """Overall CLI entry point - sub-commands for each file type are assigned to this group."""
+    """Convert/validate files from various cell tracking software."""
 
 
 @click.command()

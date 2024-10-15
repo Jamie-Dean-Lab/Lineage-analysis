@@ -8,7 +8,7 @@ This tool is compatible with the output of the following software:
 
 or any files in the [cell tracking challenge format](https://celltrackingchallenge.net/datasets/).
 
-Instructions for exporting the required files from each are provided below:
+# Exporting the required files
 
 ## TrackMate
 
@@ -85,3 +85,44 @@ The tool expects the standard `.h5` output from btrack e.g. from
 If your files are already in the cell tracking challenge format, then no further conversion is necessary. The tool only 
 requires the txt file representing an acyclic graph for the whole video (e.g. `man_track.txt` / `res_track.txt`).
 
+# Running the track converter CLI
+
+To convert/validate your tracks, you will first need to install the required python dependencies.
+
+- Clone the repository
+```bash
+git clone https://github.com/Jamie-Dean-Lab/Lineage-analysis.git
+```
+
+- Inside the cloned repo, run:
+```bash
+pip install -e .
+```
+
+To run the tool, make sure you are inside `/track_converter/src` then:
+```bash
+python convert_tracks.py --help
+```
+
+The tool has one command per file format, to see the help for each run:
+```bash
+# For btrack files...
+python convert_tracks.py btrack --help
+
+# For trackmate files...
+python convert_tracks.py trackmate --help
+
+# For mamut files...
+python convert_tracks.py mamut --help
+
+# For mastodon files...
+python convert_tracks.py mastodon --help
+
+# For cell tracking challenge (CTC) files...
+python convert_tracks.py ctc --help
+```
+
+An example call for a btrack file:
+```bash
+python convert_tracks.py btrack tracks.h5 --no-terminate-fates --dead-track-ids "[53, 49, 38]"
+```
