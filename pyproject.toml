@@ -17,7 +17,7 @@ classifiers = [
 dependencies = [
   "pandas",
   "btrack",
-  "click"
+  "click",
 ]
 description = "A package to convert track formats"
 dynamic = ["version"]
