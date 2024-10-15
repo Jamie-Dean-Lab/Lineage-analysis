@@ -2,6 +2,20 @@ using Printf
 using Dates
 using LogExpFunctions
 
+# This is a mapping betweene supported model names and an integer number
+# representing that model.
+const ALLOWED_MODELS = Dict{String,UInt64}(
+    "perfect_FW" => 1, # simple FrechetWeibull model with global parameters
+    "clock_FW" => 2, # clock-modulated FrechetWeibull model
+    "RW_FW" => 3, # FrechetWeibull model with rw-inheritance
+    "2DRW_FW" => 4, # FrechetWeibull model with 2d rw-inheritance
+    "2DRW_F" => 9, # FrechetWeibull model with 2d rw-inheritance, divisions-only
+    "perfect_GE" => 11, # simple GammaExponetial model with global parameters
+    "clock_GE" => 12, # clock-modulated GammaExponetial model
+    "RW_GE" => 13, # GammaExponetial model with rw-inheritance
+    "2DRW_GE" => 14, # GammaExponetial model with2d rw-inheritance
+)
+
 include("readlineagefile.jl")
 include("Lineagetree.jl")
 include("mydistributions.jl")
@@ -9,34 +23,36 @@ include("LineageMCmodel2.jl")
 include("LineageABCmodel.jl")
 #plotlyjs()
 
+# Helper type to define a sentinel for default values of keyword options (`nothing` being
+# the abscence of an explicit value).
 const Maybe{T} = Union{T, Nothing}
 
 function controlgetlineageABCdynamics(;
                                       trunkfilename::Maybe{String}=nothing,
                                       filename::Maybe{String}=nothing,
                                       comment::Maybe{String}=nothing,
-                                      nochains::Maybe=nothing, # number of independent chains for convergence statistic.  Must be a number convertable to `UInt64`o
-                                      model::Maybe{Integer}=nothing, # Must be set by the user! '1' for FrechWeib-model with global paramters, '2' for FrechWeib-model with clock, '3' for FrechWeib-model with rw-inheritance, '4' for FrechWeib-model with 2d rw-inheritance, '11' fr GammaExponential with global parameters, '12' for GammaExponential with clock, '13' for GammaExponential with rw-inheritance, '14' for GammaExponential with 2d rw-inheritance
-                                      timeunit::Maybe{Float64}=nothing, # for getting priors right; in relation to hours.  Must be set by users!
+                                      nochains::Maybe{Integer}=nothing, # number of independent chains for convergence statistic.  Must be a number convertable to `UInt64`o
+                                      model::Maybe{String}=nothing, # Must be set by the user!
+                                      timeresolution::Maybe{Float64}=nothing, # for getting priors right; in relation to hours.  Must be set by users!
                                       MCmax::Maybe{Integer}=nothing, # last iteration
                                       subsample::Maybe{Integer}=nothing, # subsampling frequency
                                       nomothersamples::Maybe{Integer}=nothing, # number of samples for sampling empirically from unknownmotherdistribution
                                       nomotherburnin::Maybe{Integer}=nothing, # burnin for sampling empirically from unknownmotherdistribution
                                       nolevels::Maybe{Integer}=nothing, # number of levels before posterior, first one is prior
-                                      notreeparticles::Maybe{UInt64}=nothing, # number of particles to estimate effect of nuisance parameters
+                                      notreeparticles::Maybe{Integer}=nothing, # number of particles to estimate effect of nuisance parameters
                                       auxiliaryfoldertrunkname::Maybe{String}=nothing, # trunkname of folder, where auxiliary files are saved, if useRAM is 'false'
                                       useRAM::Maybe{Bool}=nothing, # 'true' for saving variables into workspace, 'false' for saving in external textfiles
                                       withCUDA::Maybe{Bool}=nothing, # 'true' for using GPU, 'false' for without using GPU
                                       trickycells::Maybe{Vector{<:Integer}}=nothing, # cells that need many particles to not lose them; in order of appearance in lineagetree
                                       without::Maybe{Int64}=nothing, # '0' only warnings, '1' basic output, '2' detailied output, '3' debugging
                                       withwriteoutputtext::Maybe{Bool}=nothing, # 'true' if output of textfile, 'false' otherwise
+                                      missingframes::Maybe{Vector{Int}}=nothing,
                                       )
 
     # All keyword arguments above are initialised as `nothing` to make it easier
     # to call this from an external driver script and not having to keep in-sync
     # default values of arguments in multiple places.
     trunkfilename = something(trunkfilename, "")
-    filename = something(filename, "2024-04-08_13-03-47_Simulation2_cells=3,model=2,pars=[ +4.52000e+02 +5.00000e+00 +3.00000e+03 +2.00000e+00 +5.00000e-01 +2.88000e+02 +0.")
     comment = something(comment, "for_m2extrasmalltestdata")
     auxiliaryfoldertrunkname::String="Auxfiles"
     useRAM = something(useRAM, true)
@@ -44,14 +60,22 @@ function controlgetlineageABCdynamics(;
     without = something(without, 1)
     withwriteoutputtext = something(withwriteoutputtext, true)
 
+    if isnothing(filename)
+        error("The input `filename` must be set explicitly")
+    end
+
     if isnothing(model)
         error("`model` must be set explicitly")
     end
-    if isnothing(timeunit)
-        error("`timeunit` must be set explicitly")
+    if !(model in keys(ALLOWED_MODELS))
+        error("`model` is \"$(model)\", allowed models are $(join(keys(ALLOWED_MODELS), ", ", " and "))")
     end
-    # TODO: change the type of `model` to a custom datatype.
-    model = UInt64(model)
+    # Map the `model` string to the corresponding number.
+    model = ALLOWED_MODELS[model]
+
+    if isnothing(timeresolution)
+        error("`timeresolution` must be set explicitly")
+    end
 
     # For some input arguments we allow any `Integer` type, but we want to
     # convert them to `UInt64` for the rest of the work.
@@ -71,14 +95,13 @@ function controlgetlineageABCdynamics(;
     if( !isempty(filename) )                        # read existing file, if filename is meaningful
         (fullfilename,lineagedata) = readlineagefile(trunkfilename,filename)
         unknownfates = -1
-        mylineagetree = initialiseLineagetree(fullfilename,lineagedata, unknownfates)
+        mylineagetree = initialiseLineagetree(fullfilename,lineagedata, unknownfates, missingframes)
         pars_glob_sim = vcat(NaN)
     else                                            # simulate, if filename is empty
         minnocells_sim::UInt64 = UInt64(150)        # approximate/minimum number of simulated cells
         nobranches_sim::UInt64 = UInt64(5)          # number of initial cells/branches
         without_sim::Bool = true                    # 'true' for output of simulation function, 'false' otherwise
         
-        local pars_glob_sim::Array{Float64,1} = 
         #pars_glob_sim = [ 452.0, 5.0, 3000.0, 2.0 ]
         #model2_sim::UInt64 = UInt64(1);         pars_glob2_sim::Array{Float64,1} = pars_glob_sim
         #model2_sim::UInt64 = UInt64(2);         pars_glob2_sim::Array{Float64,1} = vcat(pars_glob_sim,[ 0.5, 12*24.0, 0.0 ])         # clock parameters extra
@@ -133,7 +156,7 @@ function controlgetlineageABCdynamics(;
     unknownmothersamples::Unknownmotherequilibriumsamples = Unknownmotherequilibriumsamples(0.0,nomothersamples,nomotherburnin,zeros(nomothersamples,nohide),zeros(nomothersamples,nolocpars),zeros(nomothersamples,2),zeros(Int64,nomothersamples),zeros(nomothersamples))   # initialise
     state_init2::Lineagestate2 = Lineagestate2( NaN*ones(noglobpars), NaN*ones(nocells,nohide), NaN*ones(nocells,nolocpars), NaN*ones(nocells,2), [unknownmothersamples] )  # will get set randomly for each chain, if it contains NaN
     pars_stps::Array{Float64,1} = 1*ones(noups)
-    runmultiplelineageABCmodels( mylineagetree, nochains, model,timeunit,"none", comment,timestamp, UInt64(1),UInt64(0),MCmax,subsample, state_init2,pars_stps, nomothersamples,nomotherburnin, nolevels,notreeparticles,auxiliaryfoldertrunkname,useRAM,withCUDA,trickycells, without,withwriteoutputtext )
+    runmultiplelineageABCmodels( mylineagetree, nochains, model,timeresolution,"none", comment,timestamp, UInt64(1),UInt64(0),MCmax,subsample, state_init2,pars_stps, nomothersamples,nomotherburnin, nolevels,notreeparticles,auxiliaryfoldertrunkname,useRAM,withCUDA,trickycells, without,withwriteoutputtext )
 
     @printf( " Info - controlgetlineageABCdynamics: Done now %1.3f sec.\n", (DateTime(now())-t1)/Millisecond(1000) )
 end   # end of controlgetlineageABCdynamics function
@@ -267,6 +290,7 @@ function getcov( parlist1::Array{Float64,1}, parlist2::Array{Float64,1}, issymme
 
     return mean(C_r), std(C_r), p_here, C_r
 end     # end of getcov function
+
 function simulatelineagetree2( pars_glob::Array{Float64,1}, model::UInt64, nobranches::UInt64,nocells::UInt64, without::Int64=0 )
     # simulates lineagetrees with given model according to LineageMCmodel2
     if( without>=1 )
@@ -390,7 +414,7 @@ function simulatelineagetree2( pars_glob::Array{Float64,1}, model::UInt64, nobra
     timestamp = DateTime(now())                             # timestamp for when simulation was created
     fullfilename::String = @sprintf( "%04d-%02d-%02d_%02d-%02d-%02d_Simulation2_cells=%d,model=%d,pars=[ %s].txt", year(timestamp),month(timestamp),day(timestamp), hour(timestamp),minute(timestamp),second(timestamp), j_cell,model, join([@sprintf("%+1.5e ",j) for j in pars_glob[:,1] ]) )
     lineagedata::Array{Int64,2} = Int64.( cat( round.(datawd[:,1]), ceil.(datawd[:,2]),min.(floor(totalsimulationtime),floor.(datawd[:,3])), max.(0,round.(datawd[:,4])), dims=2 ) )
-    mylineagetree::Lineagetree =  initialiseLineagetree(fullfilename,lineagedata, -1)      # lineagetree
+    mylineagetree::Lineagetree =  initialiseLineagetree(fullfilename,lineagedata, nothing)      # lineagetree
     if( without>=1 )
         @printf( " Info - simulatelineagetree2: Done simulating %s (after %1.3f sec).\n", fullfilename, (DateTime(now())-t1)/Millisecond(1000) )
     end     # end if without

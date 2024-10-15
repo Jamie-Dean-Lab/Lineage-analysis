@@ -46,8 +46,9 @@ jobs:
         run: |
           include(joinpath(pwd(), "controlgetlineageABCdynamics.jl"))
           controlgetlineageABCdynamics(;
-              model=UInt64(11),
-              timeunit=4.0/60,
+              filename="2024-04-08_13-03-47_Simulation2_cells=3,model=2,pars=[ +4.52000e+02 +5.00000e+00 +3.00000e+03 +2.00000e+00 +5.00000e-01 +2.88000e+02 +0.",
+              model="perfect_GE",
+              timeresolution=4.0/60,
               nochains=UInt(2),
               MCmax=UInt(30),
               subsample=UInt(2),

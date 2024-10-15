@@ -16,7 +16,7 @@ struct Lineagetree
     missingframes::Array{Bool,1}# noframes
 end     # end of lineagetree struct
 
-function initialiseLineagetree(name::String,data::Array{Int64,2}, unknownfates=-1,missingframes=-1)
+function initialiseLineagetree(name::String,data::Array{Int64,2}, unknownfates=-1,missingframes=nothing)
     # creates Lineagetree based on name and data
     
     # get derived parameters:
@@ -33,12 +33,13 @@ function initialiseLineagetree(name::String,data::Array{Int64,2}, unknownfates=-
             unknownfates = falses(nocells)  # no unknown fates by default
         end     # end if unknownfates given in fifth column
     end     # end if unknownfates not given
-    if( missingframes==-1 )
+    if isnothing(missingframes)
         missingframes = falses( lastframe - firstframe + 1 ) # no missing frames by default
     end     # end if missingframes not given
 
     return Lineagetree(name,data,nocells,cellindices, datawd, firstframe,lastframe,lastcell, unknownfates,missingframes)
 end     # end of initialiseLineagetree function
+
 function setdatawd(data)
     # creates more comprehensive version datawd by adding daughter cells
     # for each cell [ cellid, firstframe,lastframe, motherid,daughter1id,daughter2id, motherlistid,daughter1listid,daughter2listid ]
