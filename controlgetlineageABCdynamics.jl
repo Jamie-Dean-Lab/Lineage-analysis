@@ -31,7 +31,7 @@ function controlgetlineageABCdynamics(;
                                       trunkfilename::Maybe{String}=nothing,
                                       filename::Maybe{String}=nothing,
                                       comment::Maybe{String}=nothing,
-                                      nochains::Maybe=nothing, # number of independent chains for convergence statistic.  Must be a number convertable to `UInt64`o
+                                      nochains::Maybe{Integer}=nothing, # number of independent chains for convergence statistic.  Must be a number convertable to `UInt64`o
                                       model::Maybe{String}=nothing, # Must be set by the user!
                                       timeresolution::Maybe{Float64}=nothing, # for getting priors right; in relation to hours.  Must be set by users!
                                       MCmax::Maybe{Integer}=nothing, # last iteration
