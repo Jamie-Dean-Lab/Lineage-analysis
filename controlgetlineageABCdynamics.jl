@@ -39,7 +39,7 @@ function controlgetlineageABCdynamics(;
                                       nomothersamples::Maybe{Integer}=nothing, # number of samples for sampling empirically from unknownmotherdistribution
                                       nomotherburnin::Maybe{Integer}=nothing, # burnin for sampling empirically from unknownmotherdistribution
                                       nolevels::Maybe{Integer}=nothing, # number of levels before posterior, first one is prior
-                                      notreeparticles::Maybe{UInt64}=nothing, # number of particles to estimate effect of nuisance parameters
+                                      notreeparticles::Maybe{Integer}=nothing, # number of particles to estimate effect of nuisance parameters
                                       auxiliaryfoldertrunkname::Maybe{String}=nothing, # trunkname of folder, where auxiliary files are saved, if useRAM is 'false'
                                       useRAM::Maybe{Bool}=nothing, # 'true' for saving variables into workspace, 'false' for saving in external textfiles
                                       withCUDA::Maybe{Bool}=nothing, # 'true' for using GPU, 'false' for without using GPU
