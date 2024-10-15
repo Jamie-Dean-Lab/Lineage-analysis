@@ -1,4 +1,5 @@
 import logging
+from ast import literal_eval
 from pathlib import Path
 from typing import ClassVar
 
@@ -78,9 +79,8 @@ def convert_tracks() -> None:
 )
 @click.option(
     "--dead-track-ids",
-    multiple=True,
-    type=int,
-    help="List of track ids (.ID for each btrack Tracklet) to consider as 'dead' cells (i.e. not right-censored)",
+    help="""List of track ids (.ID for each btrack Tracklet) to consider as dead cells i.e. not right-censored. Must be
+    provided in quotes - e.g. "[1, 3, 5]" """,
 )
 @click.option(
     "-v",
@@ -96,7 +96,7 @@ def btrack(
     keep_false_positives: bool,
     fix_late_daughters: bool,
     fix_missing_daughters: bool,
-    dead_track_ids: tuple[int],
+    dead_track_ids: str,
     verbose: bool,
 ) -> None:
     """
@@ -109,6 +109,8 @@ def btrack(
     """
     _set_logging_config(verbose)
 
+    dead_track_list: list[int] = literal_eval(dead_track_ids)
+
     preprocess_btrack_file(
         Path(h5_path),
         Path(output_txt_path),
@@ -116,7 +118,7 @@ def btrack(
         not keep_false_positives,
         fix_late_daughters,
         fix_missing_daughters,
-        dead_track_ids,
+        dead_track_list,
     )
 
 
