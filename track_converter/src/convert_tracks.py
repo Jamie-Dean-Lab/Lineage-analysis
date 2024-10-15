@@ -4,6 +4,7 @@ from typing import ClassVar
 import click
 
 from track_converter.src.preprocess_btrack import preprocess_btrack_file
+from track_converter.src.preprocess_ctc import preprocess_ctc_file
 from track_converter.src.preprocess_mastodon import preprocess_mastodon_files
 from track_converter.src.preprocess_trackmate_or_mamut import preprocess_trackmate_or_mamut_files
 
@@ -192,9 +193,63 @@ def mastodon(
     )
 
 
+@click.command()
+@click.argument("input-txt-path")
+@click.argument("output-txt-path")
+@click.option(
+    "--fix-late-daughters",
+    is_flag=True,
+    default=False,
+    help="Back-date any late daughters to the start time of the earlier daughter.",
+)
+@click.option(
+    "--fix-missing-daughters",
+    is_flag=True,
+    default=False,
+    help="Create a second daughter for any mother cells that only have one.",
+)
+@click.option(
+    "--no-right-censor",
+    is_flag=True,
+    default=False,
+    help="Stop cell tracks that don't end in cell division from being marked as right-censored",
+)
+@click.option(
+    "--dead-cell-labels",
+    multiple=True,
+    type=int,
+    help="List of cell labels to consider as dead cells (i.e mark as not right-censored)",
+)
+def ctc(
+    input_txt_path: str,
+    output_txt_path: str,
+    fix_late_daughters: bool,
+    fix_missing_daughters: bool,
+    no_right_censor: bool,
+    dead_cell_labels: tuple[int],
+) -> None:
+    """
+    Validate a Cell Tracking Challenge (CTC) text file and save a new processed version.
+
+    By default, all cells that don't end in cell division will be marked as right censored, except for (optionally)
+    those provided in dead-cell-labels. To disable this, use the --no-right-censor option. If your input txt file
+    already contains a right-censoring column (5th column) then this will be used directly and any --no-right-censor /
+    --dead-cell-labels ignored.
+    """
+    preprocess_ctc_file(
+        Path(input_txt_path),
+        Path(output_txt_path),
+        fix_late_daughters,
+        fix_missing_daughters,
+        not no_right_censor,
+        dead_cell_labels,
+    )
+
+
 convert_tracks.add_command(btrack)
 convert_tracks.add_command(trackmate)
 convert_tracks.add_command(mastodon)
+convert_tracks.add_command(ctc)
 
 
 if __name__ == "__main__":
