@@ -109,7 +109,10 @@ def btrack(
     """
     _set_logging_config(verbose)
 
-    dead_track_list: list[int] = literal_eval(dead_track_ids)
+    if dead_track_ids is not None:
+        dead_track_list: list[int] = literal_eval(dead_track_ids)
+    else:
+        dead_track_list = None
 
     preprocess_btrack_file(
         Path(h5_path),
@@ -289,7 +292,10 @@ def ctc(
     """
     _set_logging_config(verbose)
 
-    dead_cells_list: list[int] = literal_eval(dead_cell_labels)
+    if dead_cell_labels is not None:
+        dead_cells_list: list[int] = literal_eval(dead_cell_labels)
+    else:
+        dead_cells_list = None
 
     preprocess_ctc_file(
         Path(input_txt_path),
