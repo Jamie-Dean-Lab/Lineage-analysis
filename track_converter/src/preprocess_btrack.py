@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Iterable
 from pathlib import Path
 
 import pandas as pd
@@ -51,7 +52,7 @@ def _discard_false_positives(tracks: list[Tracklet], ctc_table: pd.DataFrame) ->
     return ctc_table
 
 
-def _validate_dead_track_ids(ctc_table: pd.DataFrame, dead_track_ids: list[int]) -> None:
+def _validate_dead_track_ids(ctc_table: pd.DataFrame, dead_track_ids: Iterable[int]) -> None:
     # check all dead_track_ids appear in the table (L)
     dead_ids_series = pd.Series(dead_track_ids)
     ids_are_valid = dead_ids_series.isin(ctc_table.L)
@@ -80,7 +81,7 @@ def preprocess_btrack_file(
     remove_false_positives: bool = True,
     fix_late_daughters: bool = False,
     fix_missing_daughters: bool = False,
-    dead_track_ids: list[int] | None = None,
+    dead_track_ids: Iterable[int] | None = None,
 ) -> None:
     """
     Preprocess btrack format (.h5) file.
@@ -105,7 +106,7 @@ def preprocess_btrack_file(
         Whether to back-date any late daughters to the start time of the earlier daughter.
     fix_missing_daughters : bool, optional
         Whether to create a second daughter for any mother cells that only have one.
-    dead_track_ids : list[int] | None
+    dead_track_ids : Iterable[int] | None
         List of track ids (accessed via .ID for each btrack Tracklet) to consider as 'dead' cells. These will be
         marked as not right-censored.
 
