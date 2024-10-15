@@ -125,3 +125,38 @@ def test_mastodon_cli(mastodon_test_data_dir, tracks_out_path):
             dead_tagset="dead_cells",
             dead_tag="dead",
         )
+
+
+def test_ctc_cli(ctc_test_data_dir, tracks_out_path):
+    """Test CLI call to CTC calls preprocess_ctc_file with correct parameters."""
+    runner = CliRunner()
+
+    with mock.patch("track_converter.src.convert_tracks.preprocess_ctc_file", autospec=True) as preprocess_ctc_file:
+        input_txt_path = ctc_test_data_dir / "tracks_two_trees.txt"
+        input_txt_str = str(input_txt_path.resolve())
+        output_path_str = str(tracks_out_path.resolve())
+
+        result = runner.invoke(
+            convert_tracks,
+            [
+                "ctc",
+                input_txt_str,
+                output_path_str,
+                "--fix-late-daughters",
+                "--fix-missing-daughters",
+                "--no-right-censor",
+                "--dead-cell-labels",
+                "[2, 5]",
+                "-v",
+            ],
+        )
+
+        assert result.exit_code == 0
+        preprocess_ctc_file.assert_called_once_with(
+            input_txt_path,
+            tracks_out_path,
+            fix_late_daughters=True,
+            fix_missing_daughters=True,
+            default_right_censor=False,
+            dead_cell_labels=[2, 5],
+        )

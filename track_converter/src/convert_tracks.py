@@ -260,9 +260,8 @@ def mastodon(
 )
 @click.option(
     "--dead-cell-labels",
-    multiple=True,
-    type=int,
-    help="List of cell labels to consider as dead cells (i.e mark as not right-censored)",
+    help="""List of cell labels to consider as dead cells (i.e mark as not right-censored).
+    Must be provided in quotes - e.g. "[2, 5]" """,
 )
 @click.option(
     "-v",
@@ -277,7 +276,7 @@ def ctc(
     fix_late_daughters: bool,
     fix_missing_daughters: bool,
     no_right_censor: bool,
-    dead_cell_labels: tuple[int],
+    dead_cell_labels: str,
     verbose: bool,
 ) -> None:
     """
@@ -290,13 +289,15 @@ def ctc(
     """
     _set_logging_config(verbose)
 
+    dead_cells_list: list[int] = literal_eval(dead_cell_labels)
+
     preprocess_ctc_file(
         Path(input_txt_path),
         Path(output_txt_path),
         fix_late_daughters,
         fix_missing_daughters,
         not no_right_censor,
-        dead_cell_labels,
+        dead_cells_list,
     )
 
 
