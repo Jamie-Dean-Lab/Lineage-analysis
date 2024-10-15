@@ -4,3 +4,5 @@ tmp/
 .vscode/
 __pycache__/
 .coverage
+/runinfo/
+/logdir/
