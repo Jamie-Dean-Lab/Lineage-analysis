@@ -19,6 +19,8 @@ from parsl.usage_tracking.levels import LEVEL_1
 this_dir = os.path.dirname(os.path.realpath(__file__))
 
 
+# Command to source the bashrc script on the compute nodes of the system, if
+# necessary.
 def source_bashrc(system):
     # On some systems it may be necessary to load the shell init script to be
     # able to run commands like `module` and such.  But if it's not necessary we
@@ -29,6 +31,7 @@ def source_bashrc(system):
         return ''
 
 
+# Command to run to load the Python module on the system, if necessary.
 def module_load_python(system):
     if system == 'myriad.rc.ucl.ac.uk':
         return 'module load python/3.11.3'
@@ -80,6 +83,8 @@ def install_juliaup():
     '''
 
 
+# Command to load the Julia module, if available.  If not available, simply use
+# juliaup to install Julia.
 def module_load_julia(system):
     if system == 'myriad.rc.ucl.ac.uk':
         return 'module load julia/1.10.1'
@@ -106,11 +111,15 @@ def get_scheduler_options(system):
 
 
 def get_htc_executor(system, walltime, logdir):
+
+    if system == 'myriad.rc.ucl.ac.ul':
+        provider_type = GridEngineProvider
+
     return HighThroughputExecutor(
         label=system,
         max_workers_per_node=1,
         worker_logdir_root=logdir if logdir else os.path.join(this_dir, 'logdir'),
-        provider=GridEngineProvider(
+        provider=provider_type(
             channel=LocalChannel(),
             nodes_per_block=1,
             init_blocks=1,
@@ -180,6 +189,8 @@ def main(system, walltime, logdir, trunkfilename, comment, nochains, model,
          nolevels, notreeparticles, auxiliaryfoldertrunkname, useram, withcuda,
          trickycells, without, withwriteoutputtext, input_file):
 
+    # If you want to support a new system, set the `system` name based on the
+    # hostname.
     if system == 'auto':
         if 'myriad.ucl.ac.uk' in socket.gethostname():
             system = 'myriad.rc.ucl.ac.uk'
