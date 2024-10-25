@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Iterable
 from pathlib import Path
 
 import pandas as pd
@@ -245,12 +246,14 @@ def _right_censor_non_dividing_cells(tracks: pd.DataFrame) -> pd.DataFrame:
     tracks.loc[cells_with_daughters, "R"] = 0
     tracks.loc[~cells_with_daughters, "R"] = 1
 
+    logger.info("Marking all tracks that don't end in cell division as right-censored... Passed")
     return tracks
 
 
-def _mark_dead_cells_as_not_right_censored(tracks: pd.DataFrame, dead_cell_labels: list[int]) -> pd.DataFrame:
+def _mark_dead_cells_as_not_right_censored(tracks: pd.DataFrame, dead_cell_labels: Iterable[int]) -> pd.DataFrame:
     tracks.loc[tracks.L.isin(dead_cell_labels), "R"] = 0
 
+    logger.info("Marking dead_cell_labels as not right-censored... Passed")
     return tracks
 
 
@@ -260,7 +263,7 @@ def preprocess_ctc_file(
     fix_late_daughters: bool = False,
     fix_missing_daughters: bool = False,
     default_right_censor: bool = True,
-    dead_cell_labels: list[int] | None = None,
+    dead_cell_labels: Iterable[int] | None = None,
 ) -> None:
     """
     Preprocess Cell Tracking Challenge (CTC) format files.
@@ -289,7 +292,7 @@ def preprocess_ctc_file(
         Whether to right censor all cell tracks that don't end in cell division. Any cells provided as
         'dead_cell_labels' will be excluded from this. Note that if your input CTC file already contains a
         right-censoring column (5th column) this setting will be ignored.
-    dead_cell_labels : list[int] | None, optional
+    dead_cell_labels : Iterable[int] | None, optional
         List of cell labels (L) to consider as dead cells (i.e mark as not right-censored). Note that if your input
         CTC file already contains a right-censoring column (5th column) this setting will be ignored.
 
