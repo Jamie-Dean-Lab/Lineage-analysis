@@ -112,7 +112,7 @@ def get_scheduler_options(system):
 
 def get_htc_executor(system, walltime, logdir):
 
-    if system == 'myriad.rc.ucl.ac.ul':
+    if system == 'myriad.rc.ucl.ac.uk':
         provider_type = GridEngineProvider
 
     return HighThroughputExecutor(
