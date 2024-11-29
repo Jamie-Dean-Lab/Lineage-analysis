@@ -214,7 +214,7 @@ def main(system, walltime, logdir, trunkfilename, comment, nochains, model,
     Pkg.resolve()
     Pkg.instantiate()
 
-    include("{this_dir}/controlgetlineageABCdynamics.jl"); controlgetlineageABCdynamics(;
+    include("{this_dir}/controlgetlineageABCdynamics.jl"); control_get_lineage_abc_dynamics(;
         trunkfilename = {nothing_or_string(trunkfilename)},
         filename = {nothing_or_string(input_file)},
         comment = {nothing_or_string(comment)},
