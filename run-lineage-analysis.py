@@ -170,7 +170,7 @@ def nothing_or_string(str):
 @click.option("--comment", default="nothing")
 @click.option("--nochains", default="nothing", help="Number of independent chains for convergence statistic")
 @click.option("--model", default="nothing")
-@click.option("--timeresolution", default="nothing")
+@click.option("--timeresolution", default="nothing", help="Time resolution of timelapse microscopy movie")
 @click.option("--mcmax", default="nothing", help="Last iteration")
 @click.option("--subsample", default="nothing", help="Subsampling frequency")
 @click.option("--nomothersamples", default="nothing", help="Number of samples for sampling empirically from unknownmotherdistribution")
