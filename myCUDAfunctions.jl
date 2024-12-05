@@ -248,7 +248,7 @@ function cuda_log_inverse_gamma_exponential_cdf(par::Union{Array{Float32, 1}, MA
 end     # end of cuda_log_inverse_gamma_exponential_cdf function
 
 function cuda_log_inverse_gamma_exponential_cdf(par::Union{Array{Float32, 1}, MArray, CuArray, CuDeviceArray, SubArray}, data::Float32, fate::Int32)::Float32
-	# same as loginvGammaExponential_cdf but only accumulated over one fate (non-conditional)
+	# same as log_inverse_gamma_exponential_cdf but only accumulated over one fate (non-conditional)
 
 	if (fate == -1)                                  # unknown fate
 		return cuda_log_inverse_gamma_exponential_cdf(par, data)
@@ -264,7 +264,7 @@ function cuda_log_inverse_gamma_exponential_cdf(par::Union{Array{Float32, 1}, MA
 		end     # end if death
 	end     # end if pathological
 	return value
-end     # end of loginvGammaExponential_cdf function
+end     # end of cuda_log_inverse_gamma_exponential_cdf function
 
 function cuda_sample_exponential(par1::Float32, timesample::SubArray{Float32, 0})::Nothing
 	# samples from exponential distribution

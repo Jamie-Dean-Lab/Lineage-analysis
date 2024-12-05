@@ -3453,7 +3453,7 @@ function get_known_mother_propagation(
 					dthdivdistr.get_logdistrwindowfate(Array{Float64, 1}(pars_cell_here_part), [times_cell_here_part[2] - times_cell_here_part[1]], Float64.(xbounds_here), cellfate)[1] # work-around to get integral over xbounds
 			end     # end if reject_this_for_sure
 		elseif (uppars.model in (11, 12, 13, 14))         # GammaExponential models
-			probvals = loginvGammaExponential_cdf(Array{Float64, 1}(pars_cell_here_part), xbounds_here, cellfate)
+			probvals = log_inverse_gamma_exponential_cdf(Array{Float64, 1}(pars_cell_here_part), xbounds_here, cellfate)
 			probval_here = logsubexp(probvals[1], probvals[2])
 			if (probval_here == -Inf)                    # impossible
 				particlelogweights_here_part[1] = -Inf  # impossible
