@@ -9,7 +9,7 @@ import sys
 import click
 import parsl
 from parsl import bash_app
-from parsl.channels import LocalChannel
+#from parsl.channels import LocalChannel
 from parsl.config import Config
 from parsl.executors import HighThroughputExecutor
 from parsl.providers import GridEngineProvider
@@ -29,6 +29,14 @@ def source_bashrc(system):
         return f'source {str(Path.home())}/.bashrc'
     else:
         return ''
+
+# Command to unload any existing python/julia module 
+def unload_package(system):
+    if system == 'myriad.rc.ucl.ac.uk':
+        return f'module unload python\nmodule unload julia'
+    else:
+        return ''
+
 
 
 # Command to run to load the Python module on the system, if necessary.
@@ -96,8 +104,9 @@ def module_load_julia(system):
 
 def get_worker_init(system):
     return f'''
-    {source_bashrc(system)}
+    {unload_package(system)}
     {module_load_python(system)}
+    {source_bashrc(system)}
     {python_path()}
     {module_load_julia(system)}
     '''
@@ -105,14 +114,14 @@ def get_worker_init(system):
 
 def get_scheduler_options(system):
     if system == 'myriad.rc.ucl.ac.uk':
-        return '#$ -pe smp 8'
+        return f'#$ -pe smp 16\n#$ -l mem=6G\n#$ -M {os.getlogin()}@ucl.ac.uk\n#$ -m bea'
     else:
         return ''
 
 
 def get_htc_executor(system, walltime, logdir):
 
-    if system == 'myriad.rc.ucl.ac.ul':
+    if system == 'myriad.rc.ucl.ac.uk':
         provider_type = GridEngineProvider
 
     return HighThroughputExecutor(
@@ -120,7 +129,7 @@ def get_htc_executor(system, walltime, logdir):
         max_workers_per_node=1,
         worker_logdir_root=logdir if logdir else os.path.join(this_dir, 'logdir'),
         provider=provider_type(
-            channel=LocalChannel(),
+#            channel=LocalChannel(),
             nodes_per_block=1,
             init_blocks=1,
             max_blocks=1,
@@ -164,7 +173,7 @@ def nothing_or_string(str):
 
 @click.command()
 @click.option("--system", default="auto", help="Name of the system where to run the pipeline")
-@click.option("--walltime", default="00:20:00", help="Walltime for jobs sent to the scheduler")
+@click.option("--walltime", default="12:00:00", help="Walltime for jobs sent to the scheduler")
 @click.option("--logdir", default="", help="Directory where to store the Parsl log files")
 @click.option("--trunkfilename", default="nothing")
 @click.option("--comment", default="nothing")
@@ -183,11 +192,12 @@ def nothing_or_string(str):
 @click.option("--trickycells", default="nothing", help="Cells that need many particles to not lose them; in order of appearance in lineagetree")
 @click.option("--without", default="nothing", help="'0' only warnings, '1' basic output, '2' detailied output, '3' debugging")
 @click.option("--withwriteoutputtext", default="nothing", help="'true' if output of textfile, 'false' otherwise")
+@click.option("--plotgraph", default="", help="'Read and analysis the result of the simulation'")
 @click.argument("input_file")
 def main(system, walltime, logdir, trunkfilename, comment, nochains, model,
          timeresolution, mcmax, subsample, nomothersamples, nomotherburnin,
          nolevels, notreeparticles, auxiliaryfoldertrunkname, useram, withcuda,
-         trickycells, without, withwriteoutputtext, input_file):
+         trickycells, without, withwriteoutputtext, plotgraph, input_file):
 
     # If you want to support a new system, set the `system` name based on the
     # hostname.

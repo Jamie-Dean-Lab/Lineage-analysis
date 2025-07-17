@@ -20,6 +20,8 @@ dependencies = [
   "btrack>=0.6.5, <1",
   "click>=8.1.7, <9",
   "parsl>=2024.06.24",
+  "numpy<=2.1",
+  "pyzmq<=27.0"
 ]
 description = "A package to convert track formats"
 dynamic = ["version"]
