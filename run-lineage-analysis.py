@@ -114,7 +114,7 @@ def get_worker_init(system):
 
 def get_scheduler_options(system):
     if system == 'myriad.rc.ucl.ac.uk':
-        return f'#$ -pe smp 16\n#$ -l mem=6G\n#$ -M {os.getlogin()}@ucl.ac.uk\n#$ -m bea'
+        return f'#$ -pe smp 8\n#$ -M {os.getlogin()}@ucl.ac.uk\n#$ -m bea'
     else:
         return ''
 
