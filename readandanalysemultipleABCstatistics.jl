@@ -22,12 +22,13 @@ function readandanalysemultipleABCstatistics()
         trunkfilename::String = "2024-07-01_09-26-53_LineageMCoutput_(clock-GE-model_for_m2extrasmalltestdata)"
         suffix::Vector{String} = [@sprintf("(%d)",j_chain) for j_chain=readchains]
         for j_chain in eachindex(readchains)
-            push!(filenames, @sprintf( "%s_%s.txt", trunkfilename,suffix[j_chain] ) )
+            push!(filenames, @sprintf( "%s_%s", trunkfilename,suffix[j_chain] ) )
         end     # end of chains loop
     elseif( mode==2 )                           # individual filenames
-        push!(filenames, "lininf results/m12inf_m12sim/50-500 part, 3000x5 mpart, 2000 tpart, 30 ss, 40 lev/2024-06-22_15-57-27_LineageMCoutput_(clock-GE-model_for_m11sim-data)_(1).txt")
-        push!(filenames, "lininf results/m12inf_m12sim/50-500 part, 3000x5 mpart, 2000 tpart, 30 ss, 40 lev/2024-06-22_15-57-27_LineageMCoutput_(clock-GE-model_for_m11sim-data)_(2).txt")
-        push!(filenames, "lininf results/m12inf_m12sim/50-500 part, 3000x5 mpart, 2000 tpart, 30 ss, 40 lev/2024-06-24_08-34-17_LineageMCoutput_(clock-GE-model_for_m11sim-data)_(1).txt")
+#        push!(filenames, "lininf results/m12inf_m12sim/50-500 part, 3000x5 mpart, 2000 tpart, 30 ss, 40 lev/2024-06-22_15-57-27_LineageMCoutput_(clock-GE-model_for_m11sim-data)_(1).txt")
+#        push!(filenames, "lininf results/m12inf_m12sim/50-500 part, 3000x5 mpart, 2000 tpart, 30 ss, 40 lev/2024-06-22_15-57-27_LineageMCoutput_(clock-GE-model_for_m11sim-data)_(2).txt")
+#        push!(filenames, "lininf results/m12inf_m12sim/50-500 part, 3000x5 mpart, 2000 tpart, 30 ss, 40 lev/2024-06-24_08-34-17_LineageMCoutput_(clock-GE-model_for_m11sim-data)_(1).txt")
+	push!(filenames, "/home/rmaphww/py_script/Lineage-analysis/20250712.txt")
     else                                        # unknown mode
         @printf( " Warning - readandanalysemultipleABCstatistics: Unknown mode %d.\n", mode )
     end     # end of distinguishing modes

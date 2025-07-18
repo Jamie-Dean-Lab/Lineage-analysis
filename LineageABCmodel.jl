@@ -3104,7 +3104,8 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
                 end     # end if angle-dimension
             end     # end if hidden matrix entry
             plot!( mysubbins_here, mypriorvalues.*(dvalue*nosamples*nochains/unit_here), color=mycolours(0), label="prior",lw=2 )
-            display(p1)
+            #display(p1)
+	    savefig(p1,"pdf/p1.pdf")
             # ....individual chains:
             dvalue = max(1E-10,(maxvalue-minvalue)/myres_stats); mybins_here = collect(minvalue:dvalue:maxvalue); mysubbins_here = collect(minvalue:(dvalue/20):maxvalue)
             mytitle = ""#@sprintf("%s, individual chains", namepar[j_globpar])
@@ -3123,7 +3124,8 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
                 end     # end if angle-dimension
             end     # end if hidden matrix entry
             plot!( mysubbins_here, mypriorvalues.*(dvalue*nosamples/unit_here), color=mycolours(0), label="prior",lw=2 )
-            display(p2)
+            #display(p2)
+	    savefig(p2,"pdf/p2.pdf")
             # ....joint plots of shape and scale, if GammaExponential model:
             if( mymodel in (11,12,13,14) )              # ie GammaExponential model
                 if( j_globpar==1 )                      # scale parameter
@@ -3131,14 +3133,16 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
                 elseif( j_globpar==2 )                  # shape parameter
                     p3 = plot( xlabel="Scale parameter (h)", ylabel="Shape parameter", grid=false )
                     histogram2d!( values1_chains_hist[:].*unit_here, values_chains_hist[:], color=mycolours(-1), lw=0, show_empty_bins=true )    # scale vs shape parameter
-                    display(p3)
+                    #display(p3)
+	    	    savefig(p3,"pdf/p3.pdf")
                     p4 = plot( xlabel="Gamma mean (h)", ylabel="Log scale/shape-ratio - log(h)", grid=false )
                     newpar::Array{Float64,2} = zeros(mynoglobpars,length(values1_chains_hist))    # new parameters (after reparametrisation)
                     for j_sample in eachindex(values1_chains_hist)
                         getoldtonewparameters( vcat([values1_chains_hist[j_sample],values_chains_hist[j_sample]],zeros(mynoglobpars-2)), view(newpar, :,j_sample), uppars_chains[1] )
                     end     # end of samples loop
                     histogram2d!( newpar[1,:].*unit_here, newpar[2,:].-log(unit_here), color=mycolours(-1), lw=0, show_empty_bins=true ) # mean vs std
-                    display(p4)
+                    #display(p4)
+	    	    savefig(p4,"pdf/p4.pdf")
                 end     # end if first parameters
             end     # end if a GammaExponential model
         end     # end if withgraphical
@@ -3234,23 +3238,29 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
             # ...plot eigenvalue catergory pies:
             p1 = plot( title=@sprintf("eigenvalue categories"), legend=:outerright )
             pie!( ["all>=0","some<0","complex"], dropdims(mean(categories_chains_mean,dims=1),dims=1), color=[mycolours(1),mycolours(2),mycolours(3)], lw=0, aspect_ratio=:square  )
-            display(p1)
+            #display(p1)
+	    savefig(p1,"pdf/p1_lambda.pdf")
             p2 = plot( title=@sprintf("renormalised eigenvalue categories"), legend=:outerright )
             pie!( ["all>=0","some<0","complex"], dropdims(mean(categories_chains_mean,dims=1),dims=1)./categories_prs, color=[mycolours(1),mycolours(2),mycolours(3)], lw=0, aspect_ratio=:square  )
-            display(p2)
+            #display(p2)
+	    savefig(p2,"pdf/p2_lambda.pdf")
             # ...plot eigenvalue statistics:
             p3 = plot( title=@sprintf(""), xlabel="Smaller eigenvalue", ylabel="Larger eigenvalue", grid=false, aspect_ratio=:equal, xlim=(-1,+1),ylim=(-1,+1), background_color_inside=mycolours(3) )   # prior real eigenvalues
             histogram2d!( cat12eigenvalues_prs[1,:],cat12eigenvalues_prs[2,:], color=mycolours(-1), lw=0, show_empty_bins=true )
-            display(p3)
+            #display(p3)
+	    savefig(p3,"pdf/p3_lambda.pdf")
             p4 = plot( title=@sprintf(""), xlabel="Real part", ylabel="Imaginary part", grid=false, aspect_ratio=:equal, xlim=(-1,+1),ylim=(0,+1), background_color_inside=mycolours(3) )    # prior complex eigenvalues
             histogram2d!( cat3eigenvalues_prs[1,:],cat3eigenvalues_prs[2,:], color=mycolours(-1), lw=0, show_empty_bins=true )
-            display(p4)
+            #display(p4)
+	    savefig(p4,"pdf/p4_lambda.pdf")
             p5 = plot( title=@sprintf(""), xlabel="Smaller eigenvalue", ylabel="Larger eigenvalue", grid=false, aspect_ratio=:equal, xlim=(-1,+1),ylim=(-1,+1), background_color_inside=mycolours(3) )  # stacked real eigenvalues
             histogram2d!( cat12eigenvalues[1,:],cat12eigenvalues[2,:], color=mycolours(-1), lw=0, show_empty_bins=true )
-            display(p5)
+            #display(p5)
+	    savefig(p5,"pdf/p5_lambda.pdf")
             p6 = plot( title=@sprintf(""), xlabel="Real part", ylabel="Imaginary part", grid=false, aspect_ratio=:equal, xlim=(-1,+1),ylim=(0,+1), background_color_inside=mycolours(3) )   # stacked complex eigenvalues
             histogram2d!( cat3eigenvalues[1,:],cat3eigenvalues[2,:], color=mycolours(-1), lw=0, show_empty_bins=true )
-            display(p6)
+            #display(p6)
+	    savefig(p6,"pdf/p6_lambda.pdf")
             # ...plot largest absolute eigenvalue:
             minvalue = max(0.0,minimum(largestabseigenvalues)); maxvalue = min(maximum(largestabseigenvalues),1.0)
             dvalue_prs = (maxvalue-minvalue)/myres_stats_prs; mysubedges_prs_here = max(0.0,minvalue-dvalue_prs/2):dvalue_prs:min(maxvalue + dvalue_prs/2,1.0)
@@ -3262,7 +3272,8 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
             if( (1.0-dvalue_prs)<=mysubbins_here[end]<1.0 )     # add 0.0 at 1.0
                 plot!( [mysubbins_here[end],1], [mypriorvalues[end]*(dvalue*nochains*nosamples),0.0], colour=mycolours(0), label="",lw=2 )
             end     # end if close to 1.0
-            display(p7)
+            #display(p7)
+	    savefig(p7,"pdf/p7_lambda.pdf")
             # ...plot complex phase:
             minvalue = max(0.0,minimum(phaseofeigenvalues)); maxvalue = min(maximum(phaseofeigenvalues),pi)
             dvalue_prs = (maxvalue-minvalue)/myres_stats_prs; mysubedges_prs_here = max(0.0,(minvalue-dvalue_prs/2)):dvalue_prs:min((maxvalue + dvalue_prs/2),pi)
@@ -3277,7 +3288,8 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
             if( (pi-dvalue_prs)<=mysubbins_here[end]<pi )    # add peak at pi
                 plot!( [mysubbins_here[end]*(180/pi),180], [mypriorvalues[end]*(dvalue*nochains*nosamples),categories_prs[2]*(nochains*nosamples)], colour=mycolours(0), label="",lw=2 )
             end     # end if close to pi
-            display(p8)
+            #display(p8)
+	    savefig(p8,"pdf/p8_lambda.pdf")
             # ....plot largest absolute eigenvalue vs complex phase:
             minvalue = minimum(largestabseigenvalues); maxvalue = maximum(largestabseigenvalues)
             dvalue = max(1E-10,(maxvalue-minvalue)/myres_stats_all)
@@ -3299,7 +3311,8 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
             mybins_here_y::Array{Float64,1} = collect(minvalue:dvalue:maxvalue)
             p9 = plot( title=@sprintf(""), xlabel="Largest absolute eigenvalues", ylabel="Complex phase of eigenvalues (deg)", grid=false, background_color_inside=mycolours(3) )
             histogram2d!( largestabseigenvalues,phaseofeigenvalues.*(180/pi), bins=(mybins_here_x,mybins_here_y), color=mycolours(-1), lw=0, show_empty_bins=true )
-            display(p9)
+            #display(p9)
+	    savefig(p9,"pdf/p9_lambda.pdf")
         end     # end if withgraphical
     end     # end if model with hiddenmatrix
     # ...for standardised event-times histogram:
@@ -3371,7 +3384,8 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
             histogram!( (lifetimes[:,mystatsrange,fateandcensoring.==2].*unit_here)[:], bins=mybins_here, label="", color=mycolours(1), opacity=0.5, lw=0 )
             plot!( mysubbins_here, exp.( [targetfunctions.getcelltimes(pars_cell_std,[0.0,j/unit_here],1,uppars_chains[1]) for j in mysubbins_here] ).*(dvalue*nosamples*nochains*nouncensoredcells/unit_here), label="deaths", color=mycolours(2),lw=2 )
             plot!( mysubbins_here, exp.( [targetfunctions.getcelltimes(pars_cell_std,[0.0,j/unit_here],2,uppars_chains[1]) for j in mysubbins_here] ).*(dvalue*nosamples*nochains*nouncensoredcells/unit_here), label="divisions", color=mycolours(1),lw=2 )
-            display(p1)
+            #display(p1)
+	    savefig(p1,"pdf/p1_eventtime.pdf")
             minvalue = 0.0; maxvalue = 1.0
             dvalue = max(1E-10,(maxvalue-minvalue)/myres_data); mybins_here = collect(minvalue:dvalue:maxvalue)
             p2 = plot( xlabel="Cdf-value of lifetimes", ylabel="Frequency", grid=false )
@@ -3380,7 +3394,8 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
             dthprob::Float64 = sum(fateandcensoring.==1)/sum(fateandcensoring.>=1)
             plot!( [minvalue,maxvalue], dthprob*ones(2).*(dvalue*nosamples*nochains*nouncensoredcells), label="deaths", color=mycolours(2),lw=2 )
             plot!( [minvalue,maxvalue], (1-dthprob)*ones(2).*(dvalue*nosamples*nochains*nouncensoredcells), label="divisions", color=mycolours(1),lw=2 )
-            display(p2)
+            #display(p2)
+	    savefig(p2,"pdf/p2_eventtime.pdf")
         end     # end of distinguishing models
     end     # end if withgraphical
 
@@ -3459,25 +3474,32 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
         mysignsqrt = (x::Array{Float64,1} -> sign.(x).*sqrt.(abs.(x)))
         p1 = plot( xlabel="a11",ylabel="a22", grid=false, aspect_ratio=:equal )
         histogram2d!( a11, a22, color=mycolours(-1), lw=0, show_empty_bins=true  )
-        display(p1)
+        #display(p1)
+	savefig(p1,"pdf/p1_posterior.pdf")
         p2 = plot( xlabel="a12",ylabel="a21", grid=false, aspect_ratio=:equal )
         histogram2d!( a12, a21, color=mycolours(-1), lw=0, show_empty_bins=true  )
-        display(p2)
+        #display(p2)
+	savefig(p2,"pdf/p2_posterior.pdf")
         p3 = plot( xlabel="a11 + a22",ylabel="a11 - a22", grid=false )
         histogram2d!( a11.+a22, a11.-a22, color=mycolours(-1), lw=0, show_empty_bins=true  )
-        display(p3)
+        #display(p3)
+	savefig(p3,"pdf/p3_posterior.pdf")
         p4 = plot( xlabel="a12 + a21",ylabel="a12 - a21", grid=false, aspect_ratio=:equal )
         histogram2d!( a12.+a21, a12.-a21, color=mycolours(-1), lw=0, show_empty_bins=true  )
-        display(p4)
+        #display(p4)
+	savefig(p4,"pdf/p4_posterior.pdf")
         p5 = plot( xlabel="a11",ylabel="a11 + a22", grid=false )
         histogram2d!( a11, a11.+a22, color=mycolours(-1), lw=0, show_empty_bins=true  )
-        display(p5)
+        #display(p5)
+	savefig(p5,"pdf/p5_posterior.pdf")
         p6 = plot( xlabel="a11*a22",ylabel="a12*a21", grid=false )
         histogram2d!( a11.*a22, a12.*a21, color=mycolours(-1), lw=0, show_empty_bins=true  )
-        display(p6)
+        #display(p6)
+	savefig(p6,"pdf/p6_posterior.pdf")
         p7 = plot( xlabel="a12*a21",ylabel="atan(a12/a21)*sign(a21)", grid=false )
         histogram2d!( a12.*a21, (1/4).*((pi/2).+atan.(a12./a21)).*sign.(a21), color=mycolours(-1), lw=0, show_empty_bins=true  )
-        display(p7)
+        #display(p7)
+	savefig(p7,"pdf/p7_posterior.pdf")
         flush(stdout)
         mysamples::Int64 = 1e7
         oldoffdiagpar = zeros(2,mysamples); newoffdiagpar = zeros(2,mysamples); weights = zeros(mysamples); resampledoldoffdiagpar = zeros(2,mysamples)
@@ -3538,23 +3560,28 @@ function analysemultipleABCstatistics( lineagetree::Lineagetree, state_chains_hi
         @printf( " rejrate = %1.5f, %1.5f.\n", rejcounter1/((mysamples-1)), rejcounter2/((mysamples-1)) )
         p8 = plot( xlabel="abs(newpar 1)",ylabel="abs(newpar 2)", grid=false, aspect_ratio=:equal )
         histogram2d!( abs.(newoffdiagpar[1,:]),abs.(newoffdiagpar[2,:]), color=mycolours(-1), lw=0, show_empty_bins=true )
-        display(p8)
+        #display(p8)
+	savefig(p8,"pdf/p8_posterior.pdf")
         p9 = plot( xlabel="abs(oldpar 1)",ylabel="abs(oldpar 2)", grid=false, aspect_ratio=:equal )
         histogram2d!( abs.(oldoffdiagpar[1,:]),abs.(oldoffdiagpar[2,:]), color=mycolours(-1), lw=0, show_empty_bins=true )
-        display(p9)
+        #display(p9)
+	savefig(p9,"pdf/p9_posterior.pdf")
         p10 = plot( xlabel="abs(reoldpar 1)",ylabel="abs(reoldpar 2)", grid=false, aspect_ratio=:equal )
         myselection = (abs.(resampledoldoffdiagpar[1,:]).<(outerboundary+1)) .& (abs.(resampledoldoffdiagpar[2,:]).<(outerboundary+1))
         histogram2d!( abs.(resampledoldoffdiagpar[1,myselection]),abs.(resampledoldoffdiagpar[2,myselection]), color=mycolours(-1), lw=0, show_empty_bins=true )
-        display(p10)
+        #display(p10)
+	savefig(p10,"pdf/p10_posterior.pdf")
         p11 = plot( xlabel="(reoldpar 1)",ylabel="(reoldpar 2)", grid=false, aspect_ratio=:equal )
         histogram2d!( (resampledoldoffdiagpar[1,myselection]),(resampledoldoffdiagpar[2,myselection]), color=mycolours(-1), lw=0, show_empty_bins=true )
-        display(p11)
+        #display(p11)
+	savefig(p11,"pdf/p11_posterior.pdf")
         p12 = plot( xlabel="oldpar 1/oldpar 2", ylabel="freq", grid=false )
         myratio = oldoffdiagpar[1,:]./oldoffdiagpar[2,:]; myselection = (abs.(myratio).<3)
         histogram!( myratio[myselection], color=mycolours(1), lw=0 )
         xrange = collect(-3:0.1:+3); height = 0.13*sum(myselection)/pi
         plot!( xrange, height./(1.0 .+(xrange).^2), color=mycolours(2), lw=2 )
-        display(p12)
+        #display(p12)
+	savefig(p12,"pdf/p12_posterior.pdf")
     end     # end if hiddenmatrix model
     return nothing
 end     # end of analysemultipleABCstatistics function
@@ -3723,7 +3750,7 @@ function ABCreadlineagestatefromtext( fullfilename::String )::Tuple{Array{Lineag
         pars_stps = ones(noups); pars_stps[2] = 2E-4
         without = 0                         # no control-window output, except warnings
         withwriteoutputtext = false         # no text output
-        (fullfilename,lineagedata) = readlineagefile("",lineagename[1:(end-4)]); lineagetree = initialiseLineagetree(fullfilename,lineagedata, unknownfates)
+        (fullfilename,lineagedata) = readlineagefile("",lineagename); lineagetree = initialiseLineagetree(fullfilename,lineagedata, unknownfates)
         unknownmothersamples::Unknownmotherequilibriumsamples = Unknownmotherequilibriumsamples(0.0,nomothersamples,nomotherburnin,zeros(nomothersamples,nohide),zeros(nomothersamples,nolocpars),zeros(nomothersamples,2),zeros(Int64,nomothersamples),zeros(nomothersamples))   # initialise
         state_init2::Lineagestate2 = Lineagestate2( NaN*ones(noglobpars), NaN*ones(nocells,nohide), NaN*ones(nocells,nolocpars), NaN*ones(nocells,2), [unknownmothersamples] )  # will get set randomly for each chain, if it contains NaN
         (_, statefunctions,_,_, uppars) = ABCinitialiseLineageMCmodel( lineagetree, model,timeunit,"none", comment,chaincomment,timestamp, UInt64(1),UInt64(1),noparticles,subsample, state_init2,pars_stps, nomothersamples,nomotherburnin, without,withwriteoutputtext )

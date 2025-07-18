@@ -7,9 +7,9 @@ function readlineagefile( trunkfilename::String, filename::String )
 
     # get full name:
     if( !isempty(trunkfilename) )
-        fullfilename = @sprintf( "%s/%s.txt", trunkfilename,filename )
+        fullfilename = @sprintf( "%s/%s", trunkfilename,filename )
     else
-        fullfilename = @sprintf( "%s.txt", filename )
+        fullfilename = @sprintf( "%s", filename )
     end     # end if path given
     @printf( " Info - readlineagefile: Try to read:\n" )
     @printf( "  %s\n", fullfilename )
